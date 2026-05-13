@@ -219,16 +219,19 @@ There's no `[update_manager klipper]` block in `moonraker.conf`, **and that's by
 ### Before changing anything
 1. **Always grep the vendored docs first** before web-searching for Klipper / Voron / Happy-Hare / Eddy facts:
    ```sh
-   # Klipper docs
-   grep -rin "<topic>" vendor/klipper-docs/docs/
-   # Voron 2 manual / BOM / sourcing
-   grep -rin "<topic>" vendor/voron-2-docs/
-   # Happy Hare
+   grep -rin "<topic>" vendor/klipper/docs/ vendor/klipper/klippy/extras/
+   grep -rin "<topic>" vendor/voron-2/Manual/
    grep -rin "<topic>" vendor/happy-hare/
-   # Eddy-NG
    grep -rin "<topic>" vendor/eddy-ng/
+   grep -rin "<topic>" vendor/moonraker/docs/
    ```
-   The vendored sources are pinned to versions that match what's running on the Pi, so they're authoritative for Ben's machine — more so than a web result.
+   The vendored sources are pinned to versions running on the Pi — authoritative for this machine.
+
+   For **BTT hardware-specific** docs (SKR 1.4 jumpers, EBB pinouts, Eddy probe wiring, firmware build flags): the BTT wiki is mirrored on GitHub and vendored here:
+   ```sh
+   grep -rin "<topic>" vendor/btt-docs/
+   ```
+   Web version (same content): https://global.bttwiki.com/BIGTREETECH_ViViD.html. Grep the vendored copy first.
 
 2. **Never edit `printer.cfg` (or any tracked `.cfg`) without showing the diff first.** Propose the change, show the unified diff, and wait for Ben to confirm before writing.
 

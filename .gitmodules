@@ -16,3 +16,6 @@
 [submodule "vendor/moonraker"]
 	path = vendor/moonraker
 	url = https://github.com/Arksine/moonraker.git
+[submodule "vendor/btt-docs"]
+	path = vendor/btt-docs
+	url = https://github.com/bigtreetech/docs.git
