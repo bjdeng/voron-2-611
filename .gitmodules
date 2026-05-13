@@ -1,0 +1,18 @@
+[submodule "vendor/klipper"]
+	path = vendor/klipper
+	url = https://github.com/Klipper3d/klipper.git
+[submodule "vendor/happy-hare"]
+	path = vendor/happy-hare
+	url = https://github.com/moggieuk/Happy-Hare.git
+[submodule "vendor/eddy-ng"]
+	path = vendor/eddy-ng
+	url = https://github.com/vvuk/eddy-ng.git
+[submodule "vendor/voron-2"]
+	path = vendor/voron-2
+	url = https://github.com/VoronDesign/Voron-2.git
+[submodule "vendor/mainsail-config"]
+	path = vendor/mainsail-config
+	url = https://github.com/mainsail-crew/mainsail-config.git
+[submodule "vendor/moonraker"]
+	path = vendor/moonraker
+	url = https://github.com/Arksine/moonraker.git

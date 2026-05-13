@@ -1,0 +1,26 @@
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Klipper auto-rotated config backups on Pi (printer-YYYYMMDD_HHMMSS.cfg) — never copied into repo
+printer-2*.cfg
+mmu-2*
+
+# Logs and run-time state from the Pi (not config)
+klippy.log
+moonraker.log
+crowsnest.log
+sonar.log
+*.bak
+
+# Local working scratch
+_pull_staging/
+/tmp_*
+
+# Vendored doc/source submodules — git tracks the submodule pointer, not contents
+# (No need to ignore vendor/ — submodules are explicit)
