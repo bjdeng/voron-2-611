@@ -11,6 +11,7 @@ fi
 remote_cmd="${*: -1}"
 case "$remote_cmd" in
   true) exit 0 ;;
+  *find*-type*l*) printf '%s\n' "${FAKE_PI_SYMLINKS:-}" ;;
   *sed*SAVE_CONFIG*) printf '%s\n' "${FAKE_SAVE_CONFIG_BLOCK:-#*# <---------------------- SAVE_CONFIG ---------------------->}" ;;
   # Marker write: must match before the generic *last-deploy-sha* read pattern.
   # The script issues `echo '<sha>' > ~/printer_data/config/.last-deploy-sha`.
