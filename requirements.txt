@@ -1,0 +1,10 @@
+# Python deps for CI checks + local dev.
+# Pin versions for reproducibility — bump deliberately.
+#
+# Used by:
+# - vendor/klipper/scripts/test_klippy.py (cffi, jinja2)
+# - scripts/macro_refcheck.py (stdlib only)
+# - tests/ pytest suite (pytest)
+cffi==1.17.1
+jinja2==3.1.4
+pytest==8.3.3

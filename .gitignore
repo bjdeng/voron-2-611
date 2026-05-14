@@ -27,3 +27,6 @@ _pull_staging/
 
 # Local git worktrees for feature isolation
 .worktrees/
+
+# Python virtualenv
+.venv/
