@@ -198,6 +198,23 @@ def test_drift_gate_passes_when_pi_matches_repo():
     assert "sync-from-pi" not in r.stderr.lower(), _diag(r)
 
 
+def test_drift_gate_ignores_whitespace_only_differences():
+    """Mainsail saves with trailing whitespace pre-commit strips here.
+
+    The gate's intent is semantic drift, not whitespace round-trip noise.
+    """
+    marker = "#*# <---------------------- SAVE_CONFIG ---------------------->"
+    body = (REPO / "printer.cfg").read_text().split(marker)[0]
+    # Add trailing whitespace to most lines, like Mainsail does.
+    body_with_ws = "\n".join(
+        line + "   \t" if line.strip() else line for line in body.split("\n")
+    )
+    fake_pi_cfg = body_with_ws + marker + "\n#*# [heater_bed]\n"
+    r = _run(env={"FAKE_PI_PRINTER_CFG": fake_pi_cfg})
+    assert "drift" not in r.stderr.lower(), _diag(r)
+    assert "sync-from-pi" not in r.stderr.lower(), _diag(r)
+
+
 def test_chooses_firmware_restart_on_non_macro_change(fake_log):
     """A non-macro/non-archive file in the diff routes to firmware_restart."""
     env = {
