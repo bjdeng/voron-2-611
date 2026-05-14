@@ -778,3 +778,23 @@ These are explicitly out of scope per Spec §9, but worth noting for future work
 5. Sensorless X investigation.
 6. EBB USB → CAN migration.
 7. Microsteps reassessment ("quiet without losing steps" — per Ben).
+
+---
+
+## Note added 2026-05-13 by ci-scaffold plan
+
+The eddy migration must also remove these entries from
+`scripts/macro_refcheck.py` ALLOWLIST (added by the ci-scaffold work)
+in the same PR that removes the `[probe_eddy_ng]` block:
+
+```python
+"PROBE_EDDY_NG_TAP",
+"PROBE_EDDY_NG_PROBE",
+"PROBE_EDDY_NG_CALIBRATE",
+"PROBE_EDDY_NG_STATUS",
+"PROBE_EDDY_NG_SET_TAP_OFFSET",
+```
+
+If this step is skipped, the new CI scaffold will flag the unresolved
+callers in `macros/print_start.cfg` — see acid test result in
+`memory/troubleshooting-log.md` under "Resolved" (2026-05-13).
