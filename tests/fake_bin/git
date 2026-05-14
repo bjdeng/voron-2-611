@@ -18,5 +18,9 @@ case "$1 $2" in
     if [[ "${FAKE_GIT_DIFF_ERROR:-0}" == "1" ]]; then exit 128; fi
     printf '%s\n' "${FAKE_GIT_DIFF_FILES:-macros/macros.cfg}"
     exit 0 ;;
+  "status -sb")
+    # Diagnostic call from check_tree_clean after detecting a dirty tree.
+    # Real git would print the dirty files; the fake just needs to not blow up.
+    exit 0 ;;
   *) echo "fake git: unhandled args: $*" >&2; exit 99 ;;
 esac

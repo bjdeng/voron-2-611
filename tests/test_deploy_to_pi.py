@@ -62,6 +62,37 @@ def test_aborts_when_not_on_main():
     assert "refuses to run from 'feat/something'" in r.stderr, _diag(r)
 
 
+def test_aborts_when_tree_dirty_unstaged():
+    """Working tree has unstaged changes -> abort."""
+    r = _run(env={"FAKE_GIT_DIRTY": "1"})
+    assert r.returncode == 1, _diag(r)
+    assert "not clean" in r.stderr, _diag(r)
+
+
+def test_aborts_when_tree_dirty_staged():
+    """Working tree has staged changes -> abort."""
+    r = _run(env={"FAKE_GIT_CACHED_DIRTY": "1"})
+    assert r.returncode == 1, _diag(r)
+    assert "not clean" in r.stderr, _diag(r)
+
+
+def test_aborts_when_local_ahead_of_origin():
+    """Local main diverges from origin/main -> abort."""
+    r = _run(env={
+        "FAKE_GIT_LOCAL_SHA": "aaaa1111",
+        "FAKE_GIT_REMOTE_SHA": "bbbb2222",
+    })
+    assert r.returncode == 1, _diag(r)
+    assert "not in sync with origin/main" in r.stderr, _diag(r)
+
+
+def test_aborts_when_ssh_unreachable():
+    """Pi unreachable via keyed SSH -> abort."""
+    r = _run(env={"FAKE_SSH_REACHABLE": "0"})
+    assert r.returncode == 1, _diag(r)
+    assert "can't reach" in r.stderr, _diag(r)
+
+
 def test_aborts_when_ci_red():
     r = _run(env={"FAKE_GH_RESPONSE": "failure"})
     assert r.returncode == 1, _diag(r)
@@ -212,6 +243,20 @@ def test_succeeds_when_klipper_returns_ready(fake_log):
     r = _run(env=env)
     assert r.returncode == 0, _diag(r)
     assert "state=ready" in r.stdout, _diag(r)
+
+
+def test_fails_when_klipper_never_returns_ready(fake_log):
+    """Klipper stays in 'startup' state past the poll deadline -> exit 3."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_PRINTER_INFO_JSON": '{"result":{"state":"startup","state_message":"still starting"}}',
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "2",
+    }
+    r = _run(env=env)
+    assert r.returncode == 3, _diag(r)
+    assert "did not reach 'ready'" in r.stderr, _diag(r)
 
 
 def test_fails_when_klipper_returns_error(fake_log):
