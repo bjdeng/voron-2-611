@@ -169,13 +169,16 @@ No change to the top-section `[include eddy.cfg]` line in `printer.cfg` — we r
 
 ## 6. Calibration sequence
 
-Hands-on at the printer, ~30–45 min. Each step ends with `SAVE_CONFIG` (which restarts Klipper) before the next.
+Hands-on at the printer, ~45–60 min including warmup. Each step ends with `SAVE_CONFIG` (which restarts Klipper) before the next.
 
+**Run the whole calibration at printing temperature.** The BTT Eddy is sensitive to coil/electronics temperature; calibrating cold and printing hot causes measurable drift. Hold the bed and hotend at the values below for steps 1–5. Bed at **60 °C** (per Ben — typical first-print bed temp; well above ambient so the bed plate is dimensionally settled), hotend at **200 °C** (typical PLA print temp; primary requirement is consistent thermal expansion of the toolhead and probe holder, not the specific filament). Keep the part-cooling fan off during calibration unless `Eddy_Probe.md` instructs otherwise.
+
+0. **Warmup.** `M140 S60` + `M104 S200`. Soak ~5 min after both reach target so the gantry and bed plate thermally equilibrate. **Park toolhead near center, sensor 20 mm above bed** while soaking.
 1. **Drive current calibration.** Toolhead centered, sensor ~20 mm above bed. `LDC_CALIBRATE_DRIVE_CURRENT CHIP=btt_eddy` → wait a few seconds → `SAVE_CONFIG`.
-2. **Z-height calibration (paper test).** Toolhead centered, paper between nozzle and bed. `PROBE_EDDY_CURRENT_CALIBRATE CHIP=btt_eddy`, perform the paper test as prompted (per `vendor/klipper/docs/Bed_Level.md` "the paper test"), `ACCEPT`. Tool runs ~2 min of frequency-to-Z mapping. → `SAVE_CONFIG`. Inspect "noise / MAD_Hz" output against expected ranges in `Eddy_Probe.md`.
-3. **Tap guess.** Toolhead centered, nozzle 3–10 mm above bed, clean nozzle, **finger on M112**. `PROBE_EDDY_CURRENT_TAP_CALIBRATE TAP=guess`. → `SAVE_CONFIG`.
-4. **Tap refine.** Same starting position. `PROBE_EDDY_CURRENT_TAP_CALIBRATE TAP=refine`. → `SAVE_CONFIG`.
-5. **Tap verify.** Same starting position. `PROBE_EDDY_CURRENT_TAP_CALIBRATE TAP=verify` — 5 taps in a row. → `SAVE_CONFIG` if stable.
+2. **Z-height calibration (paper test).** Toolhead centered, paper between nozzle and bed. `PROBE_EDDY_CURRENT_CALIBRATE CHIP=btt_eddy`, perform the paper test as prompted (per `vendor/klipper/docs/Bed_Level.md` "the paper test"), `ACCEPT`. Tool runs ~2 min of frequency-to-Z mapping. → `SAVE_CONFIG`. Inspect "noise / MAD_Hz" output against expected ranges in `Eddy_Probe.md`. Re-confirm the bed and hotend are still at target before continuing.
+3. **Tap guess.** Toolhead centered, nozzle 3–10 mm above bed, **clean nozzle** (cold-pull or brush — important for tap accuracy), **finger on M112**. `PROBE_EDDY_CURRENT_TAP_CALIBRATE TAP=guess`. → `SAVE_CONFIG`.
+4. **Tap refine.** Same starting position, same temperatures. `PROBE_EDDY_CURRENT_TAP_CALIBRATE TAP=refine`. → `SAVE_CONFIG`.
+5. **Tap verify.** Same starting position, same temperatures. `PROBE_EDDY_CURRENT_TAP_CALIBRATE TAP=verify` — 5 taps in a row. → `SAVE_CONFIG` if stable.
 
 Troubleshooting reference: `vendor/klipper/docs/Eddy_Probe.md:344+`.
 

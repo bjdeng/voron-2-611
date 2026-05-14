@@ -276,7 +276,7 @@ These have already tripped someone up — flag them when relevant.
 - **Webcam is unplugged.** Crowsnest + Sonar still run but have nothing to stream.
 - **Klipper has no update_manager block.** Klipper updates are not automated through Moonraker — likely intentional to avoid breaking the `eddy-ng` + Happy-Hare overlay.
 - **SAVE_CONFIG block lives at the bottom of `printer.cfg`.** Klipper rewrites it on every `SAVE_CONFIG`. When syncing this repo → Pi, never overwrite the Pi's SAVE_CONFIG section.
-- **Microsteps 128 on X/Y/Z** (atypically high), plus `interpolate: False` on the TMC2209s. **Intentional**, chosen for precision and noise (per Ben). Don't "normalize" without asking — but it's also worth a fresh investigation given current Klipper improvements. See [Open investigations](#open-investigations).
+- **Microsteps 128 on X/Y/Z** (atypically high), plus `interpolate: False` on the TMC2209s. Followed third-party online advice rather than analyzed for this hardware (per Ben). Real goal: quiet without losing steps. Don't change blindly, but this is **worth a deliberate investigation** with current Klipper — the right value could be 16/32/64. See [Open investigations](#open-investigations).
 
 ---
 
@@ -286,7 +286,7 @@ Items Ben has flagged as worth digging into. Track progress in [`memory/troubles
 
 1. **`eddy-ng` → native Klipper Eddy migration.** Upstream Klipper has `[probe_eddy_current]` with tap support. Verify it covers all eddy-ng features in use, particularly: rapid bed scanning, temperature-offset-2 calibration, and touch sensing — these were USB-mode-only on the EBB SB v1.0 when Ben built the printer, which is why the toolhead is on USB instead of CAN. Tracked as task #12.
 2. **Sensorless X feasibility on this build.** Currently uses a physical endstop wired to the EBB. Ben's prior understanding was this wasn't viable or was potentially harmful. Worth a fresh look on V2.4 r2 + dual SKR 1.4 + TMC2209.
-3. **Microsteps 128 — is this still the right value?** Originally chosen for precision and noise. Klipper has improved since; explore optimal value for current hardware.
+3. **Microsteps 128 — is this still the right value?** Followed third-party online advice; real goal is "quiet without losing steps" (per Ben). Investigate step-rate budget of LPC1769 + TMC2209 in current Klipper and measure noise/skip behavior at 32/64/128 to decide.
 4. **Stale tuning values.** Re-run input shaper / PID / PA / Eddy calibration on current Klipper.
 5. **`moonraker-timelapse` is broken.** Ben has never gotten it to work. Decision pending: fix, or remove the include + update_manager entry.
 6. **Webcam re-enable.** Currently unplugged due to timing issues. Plan tied to #1 (Eddy migration).

@@ -45,7 +45,7 @@ Standard mod path. Galileo's 9:1 gear ratio explains the unusual `gear_ratio: 9:
 Reason: Ben chose to print and build it himself. No buffer (Filamentalist rewinders instead).
 
 ### microsteps 128 on X/Y/Z
-Intentional (per Ben, 2026-05-13): chosen for precision and noise. Klipper has improved its handling since; worth re-exploring what's optimal for this hardware before any change. See [Open investigations] #3.
+**Followed advice rather than firmly chosen.** Per Ben (2026-05-13): *"I'm just going by what some guy wrote online. I want the printer quiet but don't want to skip steps."* The values came from third-party advice, not from a deliberate analysis of this hardware. **Worth exploring.** Klipper has improved its handling of step rates over the years; the real goal is "quiet without losing steps." The right value for this printer's TMC2209 + LPC1769 step rate budget could be lower (16/32/64) or the same — needs measurement. See [Open investigations] #3.
 
 ### Dual SKR 1.4 mainboards (USB)
 **Original Voron 2.4 r2 reference spec** — not a discretionary choice. Don't propose consolidation to a single board / CAN bus without explicit reason.
