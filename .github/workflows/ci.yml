@@ -25,6 +25,35 @@ jobs:
         # save_variables.py does open(path, 'w') which won't create parents.
         # On a real Pi those paths exist; on a fresh runner they don't.
         run: mkdir -p ~/printer_data/config/mmu
+      - name: Symlink third-party Klipper extensions
+        # printer.cfg uses [probe_eddy_ng] (provided by vvuk/eddy-ng) and
+        # [mmu] / [mmu_machine] etc. (provided by moggieuk/Happy-Hare). On
+        # the printer these are symlinked into ~/klipper/klippy/extras/ by
+        # each project's install.sh. In CI vendor/klipper is vanilla, so
+        # we replicate the symlink layer here. Source of truth for what
+        # gets linked:
+        #   eddy-ng: install.py FILES_TO_COPY (Python files only — the .c
+        #     file is firmware-only and test_klippy.py doesn't compile MCUs)
+        #   Happy-Hare: install.sh link_mmu_plugins (extras + extras/mmu)
+        # Bumping vendor/eddy-ng or vendor/happy-hare may require updating
+        # this list — check their install scripts for the file set.
+        shell: bash
+        run: |
+          set -euo pipefail
+          KLIPPER_EXTRAS=vendor/klipper/klippy/extras
+          # eddy-ng — two Python files
+          ln -sf "$PWD/vendor/eddy-ng/probe_eddy_ng.py" "$KLIPPER_EXTRAS/probe_eddy_ng.py"
+          ln -sf "$PWD/vendor/eddy-ng/ldc1612_ng.py"   "$KLIPPER_EXTRAS/ldc1612_ng.py"
+          # Happy-Hare — extras/*.py + extras/mmu/*.py
+          mkdir -p "$KLIPPER_EXTRAS/mmu"
+          for f in vendor/happy-hare/extras/*.py; do
+            ln -sf "$PWD/$f" "$KLIPPER_EXTRAS/$(basename "$f")"
+          done
+          for f in vendor/happy-hare/extras/mmu/*.py; do
+            ln -sf "$PWD/$f" "$KLIPPER_EXTRAS/mmu/$(basename "$f")"
+          done
+          echo "Symlinked extras:"
+          ls -la "$KLIPPER_EXTRAS/probe_eddy_ng.py" "$KLIPPER_EXTRAS/ldc1612_ng.py" "$KLIPPER_EXTRAS/mmu_machine.py" "$KLIPPER_EXTRAS/mmu/mmu.py"
       - name: Run test_klippy.py against tests/voron-2-611.test
         # `shell: bash` enables `-eo pipefail` by default. Without it,
         # GitHub Actions runs `bash -e {0}` (no pipefail), so `tee`'s
