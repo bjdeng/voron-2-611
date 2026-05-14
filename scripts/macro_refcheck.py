@@ -18,7 +18,6 @@ import sys
 from pathlib import Path
 
 MACRO_HEADER = re.compile(r"^\[gcode_macro\s+(\S+)\s*\]\s*$")
-DELAYED_HEADER = re.compile(r"^\[delayed_gcode\s+(\S+)\s*\]\s*$")
 RENAME_FIELD = re.compile(r"^\s*rename_existing\s*:\s*(\S+)\s*$")
 GCODE_FIELD = re.compile(r"^[Gg][Cc][Oo][Dd][Ee]\s*:\s*$")
 COMMAND_LINE = re.compile(r"^[ \t]+([A-Z][A-Z0-9_]*)\b")
@@ -193,14 +192,22 @@ def load_builtins() -> set[str]:
 
 
 def collect_defined(paths: list[Path]) -> set[str]:
+    """Build the set of macro names that are callable from gcode.
+
+    Includes: [gcode_macro X] headers, rename_existing: Y targets.
+    Excludes: [delayed_gcode X] IDs — those are NOT directly callable
+    commands; they're triggered by UPDATE_DELAYED_GCODE ID=X. Treating
+    them as callable creates false negatives (a macro typo that happens
+    to match a delayed_gcode ID would pass refcheck but fail at runtime).
+    Codex flagged this — P2.
+    """
     defined: set[str] = set()
     for path in paths:
         for line in path.read_text(encoding="utf-8").splitlines():
-            for pat in (MACRO_HEADER, DELAYED_HEADER):
-                m = pat.match(line)
-                if m:
-                    defined.add(m.group(1).upper())
-                    break
+            m = MACRO_HEADER.match(line)
+            if m:
+                defined.add(m.group(1).upper())
+                continue
             m = RENAME_FIELD.match(line)
             if m:
                 defined.add(m.group(1).upper())
