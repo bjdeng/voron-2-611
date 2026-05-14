@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+echo "curl $*" >> "${FAKE_LOG_DIR:-/dev/stderr}"
+
+url=""
+for arg in "$@"; do
+  case "$arg" in http*) url="$arg" ;; esac
+done
+
+case "$url" in
+  *server/info)
+    if [[ "${FAKE_MOONRAKER_REACHABLE:-1}" == "1" ]]; then exit 0; else exit 22; fi ;;
+  *print_stats*)
+    printf '%s' "${FAKE_PRINT_STATS_JSON:-{\"result\":{\"status\":{\"print_stats\":{\"state\":\"standby\"}}}}}"
+    exit 0 ;;
+  *printer/info)
+    printf '%s' "${FAKE_PRINTER_INFO_JSON:-{\"result\":{\"state\":\"ready\",\"state_message\":\"Printer is ready\"}}}"
+    exit 0 ;;
+  *printer/restart|*printer/firmware_restart)
+    if [[ "${FAKE_RESTART_OK:-1}" == "1" ]]; then echo '{"result":"ok"}'; exit 0; else exit 1; fi ;;
+  *) echo "fake curl: unhandled url: $url" >&2; exit 99 ;;
+esac

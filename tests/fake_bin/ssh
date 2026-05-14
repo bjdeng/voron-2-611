@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+echo "ssh $*" >> "${FAKE_LOG_DIR:-/dev/stderr}"
+
+if [[ "${FAKE_SSH_REACHABLE:-1}" != "1" ]]; then
+  exit 255
+fi
+
+# Heuristic: last arg is the remote command. Match on it.
+remote_cmd="${@: -1}"
+case "$remote_cmd" in
+  true) exit 0 ;;
+  *sed*SAVE_CONFIG*) printf '%s\n' "${FAKE_SAVE_CONFIG_BLOCK:-#*# <---------------------- SAVE_CONFIG ---------------------->}" ;;
+  *last-deploy-sha*) printf '%s' "${FAKE_LAST_DEPLOY_SHA:-}" ;;
+  *cat*printer.cfg*) printf '%s' "${FAKE_PI_PRINTER_CFG:-}" ;;
+  echo*last-deploy-sha) exit 0 ;;
+  *) exit 0 ;;
+esac

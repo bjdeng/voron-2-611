@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+echo "gh $*" >> "${FAKE_LOG_DIR:-/dev/stderr}"
+
+case "${FAKE_GH_RESPONSE:-success}" in
+  success) echo '[{"status":"completed","conclusion":"success"}]' ;;
+  failure) echo '[{"status":"completed","conclusion":"failure"}]' ;;
+  skipped) echo '[{"status":"completed","conclusion":"skipped"}]' ;;
+  none) echo '[]' ;;
+esac
+exit 0

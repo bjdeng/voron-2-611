@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+echo "scp $*" >> "${FAKE_LOG_DIR:-/dev/stderr}"
+exit 0
