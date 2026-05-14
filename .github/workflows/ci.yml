@@ -26,6 +26,11 @@ jobs:
         # On a real Pi those paths exist; on a fresh runner they don't.
         run: mkdir -p ~/printer_data/config/mmu
       - name: Run test_klippy.py against tests/voron-2-611.test
+        # `shell: bash` enables `-eo pipefail` by default. Without it,
+        # GitHub Actions runs `bash -e {0}` (no pipefail), so `tee`'s
+        # exit code (0) would mask a non-zero from test_klippy.py and
+        # the job would falsely report green. Codex P1.
+        shell: bash
         working-directory: vendor/klipper
         run: |
           python scripts/test_klippy.py -v -d ../../tests/dict ../../tests/voron-2-611.test 2>&1 | tee klippy-test.log
