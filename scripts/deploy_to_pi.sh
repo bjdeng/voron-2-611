@@ -245,15 +245,24 @@ show_plan_and_confirm() {
 }
 
 do_rsync() {
-  rsync -av "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/" "${PI_HOST}:~/printer_data/config/"
-  scp -q "$STAGED_PRINTER_CFG" "${PI_HOST}:~/printer_data/config/printer.cfg"
+  rsync -av "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/" "${PI_HOST}:~/printer_data/config/" || {
+    echo "ERR: rsync failed mid-deploy. Pi state may be partially updated; run sync-from-pi to inspect." >&2
+    exit 2
+  }
+  scp -q "$STAGED_PRINTER_CFG" "${PI_HOST}:~/printer_data/config/printer.cfg" || {
+    echo "ERR: scp of staged printer.cfg failed mid-deploy. Pi state may be partially updated; run sync-from-pi to inspect." >&2
+    exit 2
+  }
 }
 
 update_deploy_marker() {
   # Record the deploy SHA so the next deploy can pick the right restart kind.
   # $LOCAL intentionally expands on the client side before being sent to the Pi.
   # shellcheck disable=SC2029
-  ssh "$PI_HOST" "echo '$LOCAL' > ~/printer_data/config/.last-deploy-sha"
+  ssh "$PI_HOST" "echo '$LOCAL' > ~/printer_data/config/.last-deploy-sha" || {
+    echo "ERR: failed to write deploy marker on Pi. Files synced; next deploy will treat this as a fresh deploy." >&2
+    exit 2
+  }
 }
 
 trigger_restart() {
@@ -261,8 +270,8 @@ trigger_restart() {
   echo "==> Calling Moonraker /printer/$RESTART_KIND"
   local restart_resp
   restart_resp=$(curl -fsS -X POST "$PI_API/printer/$RESTART_KIND") || {
-    echo "ERR: Moonraker restart call failed. Check klippy.log on the Pi." >&2
-    exit 1
+    echo "ERR: Moonraker restart call failed. Files are synced but Klipper was not restarted. Check klippy.log on the Pi." >&2
+    exit 2
   }
   echo "Moonraker response:"
   printf '%s\n' "$restart_resp"

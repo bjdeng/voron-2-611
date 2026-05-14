@@ -210,3 +210,15 @@ def test_yes_flag_skips_confirmation(fake_log):
     assert r.returncode == 0, _diag(r)
     # Prove the --yes branch was taken, not just the non-TTY auto-confirm fallback.
     assert "--yes given" in r.stdout, _diag(r)
+
+
+def test_exit_code_2_on_mid_flight_restart_failure(fake_log):
+    """Moonraker restart call fails -> exit 2 (mid-flight, not precondition)."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "FAKE_RESTART_OK": "0",
+    }
+    r = _run(env=env, args=["--yes"])
+    assert r.returncode == 2, _diag(r)
+    assert "Moonraker restart call failed" in r.stderr, _diag(r)
