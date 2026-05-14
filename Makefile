@@ -55,8 +55,12 @@ builtins: venv
 
 venv: .venv/bin/pre-commit
 
-.venv/bin/pre-commit: requirements.txt vendor/klipper/scripts/klippy-requirements.txt
-t@if [ ! -d .venv ]; then python3 -m venv .venv; fi
-t.venv/bin/pip install -q -r requirements.txt
-t.venv/bin/pip install -q -r vendor/klipper/scripts/klippy-requirements.txt -r vendor/klipper/scripts/tests-requirements.txt
-t@touch $@
+.venv/bin/pre-commit: requirements.txt
+	@if [ ! -d .venv ]; then python3 -m venv .venv; fi
+	.venv/bin/pip install -q -r requirements.txt
+	@touch $@
+
+# Klipper's own runtime deps (greenlet, cffi, jinja2, scipy, etc.) are
+# CI-only: `make klippy` can't run on macOS (Klipper chelper needs Linux
+# kernel headers), so installing them locally just causes scipy build
+# failures with no benefit. CI installs them in the klippy job.
