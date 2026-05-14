@@ -67,6 +67,25 @@ check_in_sync_with_origin() {
   fi
 }
 
+check_ci_green() {
+  local response conclusion
+  response=$(gh run list --branch main --commit "$LOCAL" --json status,conclusion --limit 1)
+  if [[ "$response" == "[]" ]]; then
+    echo "ERR: CI not green: no run found for HEAD ($LOCAL). Push commit and wait for CI." >&2
+    exit 1
+  fi
+  conclusion=$(printf '%s' "$response" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['conclusion'])")
+  case "$conclusion" in
+    success|skipped) ;;  # green or intentionally-skipped (Open Investigation #7)
+    None)
+      echo "ERR: CI not green: run for HEAD ($LOCAL) is still in progress. Wait and re-run." >&2
+      exit 1 ;;
+    *)
+      echo "ERR: CI not green: latest run for HEAD ($LOCAL) is '$conclusion'." >&2
+      exit 1 ;;
+  esac
+}
+
 check_ssh_reachable() {
   if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$PI_HOST" 'true' 2>/dev/null; then
     echo "ERR: can't reach $PI_HOST via keyed SSH. Set up the key or set PI_HOST." >&2
@@ -219,6 +238,7 @@ main() {
   check_on_main
   check_tree_clean
   check_in_sync_with_origin
+  check_ci_green                   # ← NEW
   check_ssh_reachable
   check_moonraker_reachable
   capture_save_config

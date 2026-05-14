@@ -53,3 +53,37 @@ def test_aborts_when_not_on_main():
     r = _run(env={"FAKE_GIT_BRANCH": "feat/something"})
     assert r.returncode == 1, _diag(r)
     assert "refuses to run from 'feat/something'" in r.stderr, _diag(r)
+
+
+def test_aborts_when_ci_red():
+    r = _run(env={"FAKE_GH_RESPONSE": "failure"})
+    assert r.returncode == 1, _diag(r)
+    assert "CI not green" in r.stderr, _diag(r)
+
+
+def test_aborts_when_ci_missing():
+    r = _run(env={"FAKE_GH_RESPONSE": "none"})
+    assert r.returncode == 1, _diag(r)
+    assert "CI not green" in r.stderr, _diag(r)
+
+
+def test_ci_skipped_counts_as_pass(fake_log):
+    """Klippy parse + smoke is intentionally skipped today (Open Investigation #7)."""
+    r = _run(env={"FAKE_GH_RESPONSE": "skipped", "FAKE_LOG_DIR": str(fake_log)})
+    # CI gate must NOT have been the reason for any non-zero exit.
+    assert "CI not green" not in r.stderr, _diag(r)
+    # The gate WAS exercised: fake gh was invoked.
+    log = fake_log.read_text()
+    assert "gh run list" in log, log
+
+
+def test_aborts_when_ci_in_progress(fake_log):
+    """Run still in progress: conclusion is null, message should say in progress."""
+    # Override the gh fake to return an in-progress run.
+    env = {
+        "FAKE_GH_RESPONSE": "in_progress",
+        "FAKE_LOG_DIR": str(fake_log),
+    }
+    r = _run(env=env)
+    assert r.returncode == 1, _diag(r)
+    assert "still in progress" in r.stderr, _diag(r)
