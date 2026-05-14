@@ -76,25 +76,38 @@ check_in_sync_with_origin() {
 }
 
 check_ci_green() {
-  local response conclusion
-  response=$(gh run list --branch main --commit "$LOCAL" --json status,conclusion --limit 1)
+  # gh run list --commit <sha> filter is unreliable (returns [] even when a
+  # matching run exists by ID). Query latest run on the branch and verify
+  # its headSha matches HEAD locally.
+  local response head_sha status conclusion
+  response=$(gh run list --branch main --limit 1 --json headSha,status,conclusion)
   if [[ "$response" == "[]" ]]; then
-    echo "ERR: CI not green: no run found for HEAD ($LOCAL). Push commit and wait for CI." >&2
+    echo "ERR: CI not green: no run found on origin/main. Push and wait for CI." >&2
     exit 1
   fi
-  conclusion=$(printf '%s' "$response" | python3 -c \
-    "import json,sys; print(json.load(sys.stdin)[0]['conclusion'])" \
+  read -r head_sha status conclusion < <(printf '%s' "$response" | python3 -c \
+    "import json,sys; r=json.load(sys.stdin)[0]; print(r['headSha'], r['status'], r.get('conclusion') or '-')" \
     2>/dev/null) || {
-    echo "ERR: could not parse CI conclusion from gh output. Raw response: $response" >&2
+    echo "ERR: could not parse latest CI run from gh output. Raw response: $response" >&2
     exit 1
   }
+  if [[ "$head_sha" != "$LOCAL" ]]; then
+    echo "ERR: CI not green: latest run on main is for $head_sha, not HEAD ($LOCAL). Push and wait for CI." >&2
+    exit 1
+  fi
+  case "$status" in
+    in_progress|queued|requested|waiting|pending)
+      echo "ERR: CI not green: run for HEAD ($LOCAL) is $status. Wait and re-run." >&2
+      exit 1 ;;
+    completed) ;;
+    *)
+      echo "ERR: CI not green: unrecognized status '$status' for HEAD ($LOCAL)." >&2
+      exit 1 ;;
+  esac
   case "$conclusion" in
     success|skipped) ;;  # green or intentionally-skipped (Open Investigation #7)
-    None)
-      echo "ERR: CI not green: run for HEAD ($LOCAL) is still in progress. Wait and re-run." >&2
-      exit 1 ;;
     *)
-      echo "ERR: CI not green: latest run for HEAD ($LOCAL) is '$conclusion'." >&2
+      echo "ERR: CI not green: latest run for HEAD ($LOCAL) conclusion is '$conclusion'." >&2
       exit 1 ;;
   esac
 }
