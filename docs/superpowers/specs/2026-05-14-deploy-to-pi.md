@@ -1,143 +1,176 @@
 # deploy-to-pi — sync repo to Pi after merge to main
 
-**Status:** spec
+**Status:** spec (v2 — revised 2026-05-14 after discovering existing implementation)
 **Date:** 2026-05-14
 **Owner:** Ben
 
 ## Problem
 
-Today the repo is the canonical source for Klipper config but there is no automated way to push merged changes to the Pi. Each merge to `main` creates drift until someone manually runs `scp` or `rsync`. The drift accumulates silently — you can be three PRs ahead in repo while the printer still runs the pre-merge config.
+The repo is the canonical source for Klipper config but there is no fully-gated way to push merged changes to the Pi. A bash script `scripts/deploy_to_pi.sh` exists (168 lines, committed in `6f96e12`) and handles ~70% of the work, but is missing several safety gates and has zero test coverage. Each merge to `main` therefore creates drift until someone manually runs the script — and the script can run even when CI is red or a print is in progress.
 
-The reverse direction (Pi → repo) is already handled by the `sync-from-pi` skill. The forward direction is missing.
+The reverse direction (Pi → repo) is handled by `scripts/sync_from_pi.sh` + `sync-from-pi` skill.
 
 ## Goal
 
-A single command — `/deploy-to-pi` — that takes the current `origin/main` and applies it to the Pi safely: refuses if anything is unsafe, shows the diff, classifies the restart impact, and verifies Klipper comes back ready. Closes the loop on every cleanup PR with one keystroke.
+Extend the existing `scripts/deploy_to_pi.sh` with the missing safety gates, add `--yes` / `--dry-run` flags, and add test coverage so we trust it for every-merge use. Single command — `/deploy-to-pi` — closes the loop on every cleanup PR with one keystroke and refuses if anything is unsafe.
 
-Out of scope: automated trigger on merge (that's a future GH Action wrapping the same script). Out of scope for v1: non-Klipper configs (`moonraker.conf`, `crowsnest.conf`, `sonar.conf`).
+Out of scope: automated trigger on merge (future GH Action wrapping the same script). Out of scope for v1: non-Klipper configs (`moonraker.conf`, `crowsnest.conf`, `sonar.conf`). Out of scope: porting bash to Python — the existing bash works and the test pattern (PATH-override fake binaries + pytest subprocess assertions) is sound.
 
 ## Architecture
 
-A skill at `~/.claude/skills/deploy-to-pi/SKILL.md` wraps a Python script at `scripts/deploy_to_pi.py`. The skill provides the conversational surface (preconditions, diff, confirmation, restart classification reasoning). The script encodes the mechanical work (file collection, SAVE_CONFIG splice, scp, Moonraker calls) and is pytest-testable. The future GH Action invokes the script directly with `--yes`.
+Existing: skill at `.claude/skills/deploy-to-pi/SKILL.md` + bash script at `scripts/deploy_to_pi.sh`. The skill is user-only (`disable-model-invocation: true`) — Claude can suggest deployment, only the user invokes it. Future GH Action will wrap the script with `--yes`.
 
-Mirror of the `sync-from-pi` skill shape. Same pattern, opposite direction.
+Mirror of the existing `sync-from-pi` skill shape. Same pattern, opposite direction.
 
-## Preconditions
+## What's already implemented (in `scripts/deploy_to_pi.sh`)
 
-All gates must pass before any file touches the Pi. Each gate is a hard fail with a clear error message; the skill aborts and tells the user what to fix.
+- Pre-flight: on `main`, clean working tree, fast-forwarded to `origin/main`, SSH reachable, Moonraker reachable (currently warn-only — promote to hard-fail).
+- SAVE_CONFIG splice via `sed`: extract Pi's `#*# <-+ SAVE_CONFIG -+>` tail, append to repo's body.
+- File scope: rsync with explicit symlink-exclusion list (`mainsail.cfg`, `timelapse.cfg`, `mmu/base/<symlinked-list>`, `mmu/optional/*`).
+- Restart classification: uses `.last-deploy-sha` marker on Pi + `git diff <marker>..main`. If diff is `macros/`, `archive/`, or `printer.cfg`-only → `RESTART`. Else → `FIRMWARE_RESTART`.
+- Confirmation prompt before any write.
+- Records new `.last-deploy-sha` marker on success.
+- Calls Moonraker `POST /printer/<restart_kind>`.
 
-1. **Local repo clean.** `git status --porcelain` empty. On branch `main`. Fast-forwarded to `origin/main`.
-2. **CI green on HEAD.** `gh run list --branch main --commit $(git rev-parse HEAD) --status success --limit 1` returns a run. The `Klippy parse + smoke gcode` job being `skipped` counts as pass until Open Investigation #7 (eddy migration) re-enables it — flagged in skill output so the user knows.
-3. **Pi reachable.** `curl http://mainsailos.local:7125/printer/info` returns 200 and parses.
-4. **Printer idle.** Moonraker reports `print_stats.state == "standby"`. Not `printing`, `paused`, `error`, or `cancelled` mid-cooldown.
-5. **Pi `printer.cfg` body matches `origin/main`.** Body = everything above the `#*# <---------------------- SAVE_CONFIG ---------------------->` marker. If diverged → abort with: "Pi has uncommitted local edits. Run `sync-from-pi` first to capture them, then re-run `deploy-to-pi`."
+## What's missing (this spec's work)
 
-## File scope (v1)
+1. **CI green gate.** Query `gh run list --branch main --commit $(git rev-parse main) --json status,conclusion --limit 1` and verify a green run exists for HEAD. If the `Klippy parse + smoke gcode` job is `skipped` (per Open Investigation #7 until eddy migration), that counts as pass — flagged in output.
+2. **Printer-idle gate.** `GET /printer/objects/query?print_stats` → require `state == "standby"`. Refuse if `printing`, `paused`, or any other state.
+3. **Drift gate.** Compare Pi's `printer.cfg` body (everything above the SAVE_CONFIG marker) to repo's `printer.cfg` body. If diverged → abort: "Pi has uncommitted local edits. Run `sync-from-pi` first."
+4. **Post-restart ready polling.** After calling Moonraker restart, poll `GET /printer/info` every 1s for up to 30s. Verify `state == "ready"`. If `error`, surface `state_message` and exit non-zero.
+5. **`--yes` flag.** Skip confirmation prompt (for the skill's pre-confirmed flow and future GH Action).
+6. **`--dry-run` flag.** Print preconditions, plan, expected restart kind; touch nothing on Pi.
+7. **Promote Moonraker-reachable from warn to hard-fail.** Currently a `WARN` only; should refuse to proceed because the restart step at the end would fail anyway.
+8. **Tests.** pytest-driven via subprocess + PATH-override fake binaries (`ssh`, `scp`, `curl`, `gh`, `git`) — same pattern as `tests/test_macro_refcheck.py`. Each gate has a "passes" and "fails-correctly" test.
 
-Klipper configs only — files reachable from `printer.cfg` via `[include]`:
-- `printer.cfg`, `eddy.cfg`, `btt-ebb-sb-usb-v1.0.cfg`, `mainsail.cfg`, `timelapse.cfg`
-- `macros/*.cfg`
-- `mmu/base/*.cfg`, `mmu/optional/*.cfg`, `mmu/addons/*.cfg`, `mmu/mmu_vars.cfg`
+## Script CLI
 
-**Symlink carve-out.** Before any scp, the script runs `ssh pi 'test -L <path>'` for each file. If the file is a symlink on the Pi (so: `mmu/base/*`, `mainsail.cfg`, `timelapse.cfg`), it is **skipped with a warning**: "this file is symlinked from `<third-party-repo>` on the Pi — push the change to that repo and re-run its install.sh, do not overwrite the symlink." Repo edits to symlinked files are a code smell anyway; the warning makes it visible.
+`scripts/deploy_to_pi.sh` flags:
 
-Out of scope for v1: `moonraker.conf`, `crowsnest.conf`, `sonar.conf`, `firmware/*`. These need different restart semantics (Moonraker service, Crowsnest daemon, MCU re-flash) and rarely change. Manual handling until v2.
-
-## printer.cfg splice
-
-Special handling because the Pi owns the SAVE_CONFIG block at the bottom of `printer.cfg`.
-
-1. `ssh pi 'cat ~/printer_data/config/printer.cfg'` → save Pi's full file in memory.
-2. Find Pi's SAVE_CONFIG marker line. Everything from that line through EOF is Pi-owned and must survive.
-3. Read repo's `printer.cfg`. Find its SAVE_CONFIG marker (if any). Everything above is the repo's authoritative body.
-4. Build the deploy file: `<repo body> + <Pi tail>`. If repo has no SAVE_CONFIG marker (just-initialized repo), append Pi's tail as-is.
-5. scp the spliced result to the Pi.
-
-Klipper's own `printer-YYYYMMDD_HHMMSS.cfg` auto-backup runs on the Pi at parse-time, so even on the worst-case parse failure, the prior file is recoverable. The script also tars the current Pi config dir to `/tmp/deploy-to-pi-last.tar.gz` on the laptop side before any scp, as one-deep local backup.
-
-## Restart classification
-
-The script computes the diff between Pi's current state and the files about to be deployed (after symlink-skip and SAVE_CONFIG splice). Classification rules in order:
-
-| Rule (first match wins) | Restart |
+| Flag | Meaning |
 |---|---|
-| Every changed line begins with `#` or is whitespace (comments-only) | none |
-| Diff touches any of: `[mcu`, `pin:`, `kinematics:`, `sensor_type:`, `step_pin`, `dir_pin`, `enable_pin`, `endstop_pin`, `serial:` | `FIRMWARE_RESTART` |
-| Anything else | `RESTART` |
+| (no flag) | Run preconditions, print plan, prompt for confirmation, deploy. Default for interactive use. |
+| `--yes` | Skip the confirmation prompt. Preconditions still apply. For use by the skill (after user confirms in conversation) and by the future GH Action. |
+| `--dry-run` | Run preconditions, print plan, exit. Never touches Pi. |
 
-After scp, the script calls the matching Moonraker endpoint: `POST /printer/restart` or `POST /printer/firmware_restart`, or skips entirely. Then polls `GET /printer/info` every 1s for up to 30s waiting for `state == "ready"`. If Klipper goes to `error` instead, the script surfaces `state_message` and exits non-zero. The user then inspects via Mainsail or `~/printer_data/logs/klippy.log`.
+Exit codes: `0` success, `1` precondition failed, `2` deploy failed mid-flight, `3` Klipper failed to come back ready.
+
+## Refactor for testability
+
+The current script is sequential top-to-bottom in 168 lines. To enable per-gate testing without a refactor cathedral, extract each gate and side-effect step into a bash function in the same file:
+
+```bash
+check_on_main()           # exit 1 if not on main
+check_tree_clean()        # exit 1 if dirty
+check_in_sync_with_origin() # exit 1 if ahead/behind
+check_ssh_reachable()     # exit 1 if SSH fails
+check_moonraker_reachable() # exit 1 if curl fails (NEW: hard fail)
+check_ci_green()          # NEW: exit 1 if CI not green for HEAD
+check_printer_idle()      # NEW: exit 1 if not standby
+check_no_pi_drift()       # NEW: exit 1 if Pi cfg diverges from origin/main
+capture_save_config()
+build_staged_printer_cfg()
+choose_restart_kind()
+show_plan_and_confirm()   # respects --yes and --dry-run
+do_rsync()
+update_deploy_marker()
+trigger_restart()
+wait_for_klipper_ready()  # NEW: poll, exit 3 on timeout/error
+cleanup()
+
+main() {
+  parse_flags "$@"
+  check_on_main
+  check_tree_clean
+  check_in_sync_with_origin
+  check_ssh_reachable
+  check_moonraker_reachable
+  check_ci_green
+  check_printer_idle
+  check_no_pi_drift
+  capture_save_config
+  build_staged_printer_cfg
+  choose_restart_kind
+  show_plan_and_confirm
+  [[ "$DRY_RUN" == 1 ]] && { cleanup; exit 0; }
+  do_rsync
+  update_deploy_marker
+  trigger_restart
+  wait_for_klipper_ready
+  cleanup
+}
+```
+
+This is a true refactor — no behavior change in the first commit, just rearranged. Subsequent commits add the new gates one at a time. Each new gate is a TDD loop: failing test → function → wire-into-main → test passes → commit.
+
+## Test infrastructure
+
+`tests/test_deploy_to_pi.py` runs the script in a temp dir with `PATH` rewired to a `tests/fake_bin/` directory of stub binaries. Each fake binary appends its args to a log file and emits canned stdout based on env vars set per-test:
+
+```python
+def run_script(env_overrides):
+    fake_bin = tmp_path / "fake_bin"
+    install_fakes(fake_bin)  # ssh, scp, curl, gh, git
+    env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}", **env_overrides}
+    return subprocess.run(
+        [str(REPO / "scripts" / "deploy_to_pi.sh")],
+        cwd=tmp_repo,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+def test_aborts_when_ci_red(tmp_path):
+    r = run_script({"FAKE_GH_RESPONSE": "failure"})
+    assert r.returncode == 1
+    assert "CI not green" in r.stderr
+```
+
+Each new gate gets two tests: passes when condition met, fails when condition not met.
 
 ## Skill conversation flow
 
 ```
 > /deploy-to-pi
-[skill: checking preconditions...]
-✓ Repo clean, on main, up to date with origin (28cb8e6 → f8db90d)
+[skill: invoking scripts/deploy_to_pi.sh]
+✓ On main, clean, up to date with origin (28cb8e6 → f8db90d)
+✓ SSH reachable
+✓ Moonraker reachable
 ✓ CI green (run #25870066714)
-✓ Pi reachable at mainsailos.local
-✓ Printer idle
+✓ Printer idle (standby)
 ✓ Pi printer.cfg body matches origin/main
 
 Files to deploy:
-  btt-ebb-sb-usb-v1.0.cfg (-44 lines, comments only)
+  btt-ebb-sb-usb-v1.0.cfg (-44 lines)
+  ...
+Restart kind: restart
 
-Restart classification: none (comments-only change)
+Proceed? [y/N] y
 
-Confirm? [y/N]
-> y
-
-[skill: deploying...]
-✓ Tarred current Pi config to /tmp/deploy-to-pi-last.tar.gz
-✓ scp btt-ebb-sb-usb-v1.0.cfg
-✓ Skip restart (no functional change)
-✓ Printer still ready
+✓ rsync complete
+✓ printer.cfg uploaded with Pi's SAVE_CONFIG re-appended
+✓ POST /printer/restart
+✓ Klipper state=ready after 3s
 
 Done.
 ```
 
 ## Failure modes
 
-| Failure | Skill behavior |
-|---|---|
-| Precondition fails | Abort before any Pi write; tell user what to fix; exit non-zero |
-| scp fails mid-flight | Some files landed, others did not. Exit non-zero. User runs `sync-from-pi` to capture Pi state, fixes, retries. No partial rollback — too complex for v1. |
-| Klipper enters `error` after restart | Surface `state_message`; point at klippy.log; exit non-zero. Klipper's auto-backup on the Pi is the rollback path. |
-| Pi unreachable during restart phase | Exit non-zero; file is deployed but restart pending. User restarts manually via Mainsail. |
-
-## Script CLI
-
-`scripts/deploy_to_pi.py` flags:
-
-| Flag | Meaning |
-|---|---|
-| (no flag) | Run preconditions, print plan, prompt for confirmation, deploy. Default for interactive use. |
-| `--yes` | Skip the confirmation prompt. Preconditions still apply. For use by the skill (after user confirms in conversation) and by the future GH Action. |
-| `--dry-run` | Run preconditions, print plan, exit. Never touches Pi. For previewing what a deploy would do. |
-
-Exit codes: `0` success, `1` precondition failed, `2` deploy failed mid-flight, `3` Klipper failed to come back ready.
-
-## Testing
-
-**Unit tests (pytest, in `tests/test_deploy_to_pi.py`):**
-- SAVE_CONFIG splice: given a repo file and a Pi file, the spliced output equals expected.
-- Restart classifier: a battery of synthetic diffs, each labelled with expected classification.
-- Symlink detection: mock `ssh test -L` returning various states.
-- Preconditions: mock Moonraker responses for each gate, verify abort/pass.
-
-**Integration tests:**
-- Spin up an HTTP server mock fixture that imitates Moonraker's relevant endpoints. Run the full script against it. No real Pi needed in CI.
-
-**Manual end-to-end test:**
-- After v1 is built, deploy a known-safe comments-only change (re-run on a `chore: strip` PR like #3) and verify the loop closes cleanly.
+| Failure | Behavior | Exit code |
+|---|---|---|
+| Precondition fails | Abort before any Pi write; tell user what to fix | 1 |
+| rsync/scp fails mid-flight | Some files landed, others did not. User runs `sync-from-pi` to capture Pi state, retries | 2 |
+| Klipper enters `error` after restart | Surface `state_message`, point at klippy.log | 3 |
+| `wait_for_klipper_ready` times out at 30s | Klipper alive but slow — exit non-zero, user inspects | 3 |
 
 ## CLAUDE.md update
 
-Add to "Workflow & CI/CD":
-> **After each merge to `main` with CI green:** run `/deploy-to-pi` to sync the Pi. The skill refuses if the printer is busy or the Pi has drift; it will tell you what to do next. (Until the skill ships: manual `scp` for the changed files.)
+Already landed on this branch (`feat/deploy-to-pi`): the post-merge deploy step is documented in "Workflow & CI/CD" with the manual-fallback note. When this PR merges, the manual-fallback parenthetical can be removed in a follow-up commit (or as part of the merge commit).
 
 ## Open questions
 
 None blocking v1. Future v2 considerations:
 - Should the skill auto-trigger on `git fetch && origin/main moved`? Probably no — too magical, can fire mid-print.
-- Should `moonraker.conf` get v2 support? Add when we first need it; rare today.
-- Should there be a `--dry-run` flag that shows the plan without touching the Pi? Yes, build it in v1 alongside `--yes`. Not worth a separate doc section.
+- Should `moonraker.conf` get v2 support? Add when first needed; rare today.
+- Wrap as GH Action — separate spec, after v1 ships.
