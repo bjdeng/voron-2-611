@@ -389,7 +389,7 @@ def test_deploy_excludes_noise_files(fake_log, tmp_path):
     # Inside config/ these three paths must always be excluded
     assert "--exclude=/firmware/" in log, log
     assert "--exclude=/archive/" in log, log
-    assert "--exclude=printer.cfg" in log, log
+    assert "--exclude=/printer.cfg" in log, log
 
 
 def test_aborts_when_pi_symlink_discovery_fails():

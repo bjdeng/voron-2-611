@@ -212,7 +212,7 @@ build_rsync_excludes() {
   RSYNC_EXCLUDES=(
     --exclude='/firmware/'
     --exclude='/archive/'
-    --exclude='printer.cfg'
+    --exclude='/printer.cfg'
   )
   RSYNC_EXCLUDES+=("${PI_SYMLINK_EXCLUDES[@]}")
 }
