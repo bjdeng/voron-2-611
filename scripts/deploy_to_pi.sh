@@ -19,12 +19,17 @@ STAGED_PRINTER_CFG=""
 RESTART_KIND=""
 RSYNC_EXCLUDES=()
 
+# Polling parameters for wait_for_klipper_ready. Overridable for tests.
+# READY_POLL_INTERVAL=0 is valid (POSIX sleep accepts 0); tests override to 0.
+READY_POLL_INTERVAL="${READY_POLL_INTERVAL:-1}"
+READY_POLL_MAX="${READY_POLL_MAX:-30}"
+
 # ERE pattern matching the SAVE_CONFIG marker line that Klipper writes at
 # the bottom of printer.cfg. Used wherever we split body from tail.
 # -E across all sed sites; BSD sed (macOS) doesn't support \+ in BRE.
 SAVE_CONFIG_MARKER='^#\*# <-+ SAVE_CONFIG -+>'
 
-trap 'rm -f "${SAVE_CONFIG_PI:-}" "${STAGED_PRINTER_CFG:-}" /tmp/restart_resp.json' EXIT
+trap 'rm -f "${SAVE_CONFIG_PI:-}" "${STAGED_PRINTER_CFG:-}"' EXIT
 
 # ---------------------------------------------------------------------------
 
@@ -221,6 +226,10 @@ show_plan_and_confirm() {
   echo "==> printer.cfg will be uploaded with the Pi's SAVE_CONFIG block re-appended."
   echo "==> Restart kind chosen: $RESTART_KIND"
   echo
+  if [[ ! -t 0 ]]; then
+    # stdin not a TTY (running under pytest); auto-confirm
+    return 0
+  fi
   local answer
   read -r -p "Proceed? [y/N] " answer
   case "$answer" in
@@ -244,17 +253,41 @@ update_deploy_marker() {
 trigger_restart() {
   echo
   echo "==> Calling Moonraker /printer/$RESTART_KIND"
-  curl -fsS -X POST "$PI_API/printer/$RESTART_KIND" -o /tmp/restart_resp.json || {
+  local restart_resp
+  restart_resp=$(curl -fsS -X POST "$PI_API/printer/$RESTART_KIND") || {
     echo "ERR: Moonraker restart call failed. Check klippy.log on the Pi." >&2
     exit 1
   }
   echo "Moonraker response:"
-  cat /tmp/restart_resp.json
+  printf '%s\n' "$restart_resp"
   echo
 }
 
+wait_for_klipper_ready() {
+  local i resp state state_msg
+  for i in $(seq 1 "$READY_POLL_MAX"); do
+    sleep "$READY_POLL_INTERVAL"
+    resp=$(curl -fsS --max-time 3 "$PI_API/printer/info" 2>/dev/null || true)
+    if [[ -z "$resp" ]]; then continue; fi
+    state=$(printf '%s' "$resp" | python3 -c "import json,sys; print(json.load(sys.stdin)['result']['state'])" 2>/dev/null || echo "")
+    state_msg=$(printf '%s' "$resp" | python3 -c "import json,sys; print(json.load(sys.stdin)['result'].get('state_message',''))" 2>/dev/null || echo "")
+    case "$state" in
+      ready)
+        echo "==> Klipper state=ready (after ${i} poll(s))"
+        return 0 ;;
+      error)
+        echo "ERR: Klipper failed to start: $state_msg" >&2
+        exit 3 ;;
+      startup|"") continue ;;
+      *) continue ;;
+    esac
+  done
+  echo "ERR: Klipper did not reach 'ready' within ${READY_POLL_MAX}s. Inspect klippy.log." >&2
+  exit 3
+}
+
 cleanup() {
-  rm -f "$SAVE_CONFIG_PI" "$STAGED_PRINTER_CFG" /tmp/restart_resp.json
+  rm -f "$SAVE_CONFIG_PI" "$STAGED_PRINTER_CFG"
 
   echo
   echo "==> Deploy complete. Verify printer state in Mainsail."
@@ -281,6 +314,7 @@ main() {
   do_rsync
   update_deploy_marker
   trigger_restart
+  wait_for_klipper_ready
   cleanup
 }
 

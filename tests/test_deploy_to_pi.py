@@ -156,3 +156,29 @@ def test_drift_gate_passes_when_pi_matches_repo():
     # Drift gate must not be the reason for any non-zero exit.
     assert "drift" not in r.stderr.lower(), _diag(r)
     assert "sync-from-pi" not in r.stderr.lower(), _diag(r)
+
+
+def test_succeeds_when_klipper_returns_ready(fake_log):
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_PRINTER_INFO_JSON": '{"result":{"state":"ready","state_message":"Printer is ready"}}',
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env)
+    assert r.returncode == 0, _diag(r)
+    assert "state=ready" in r.stdout, _diag(r)
+
+
+def test_fails_when_klipper_returns_error(fake_log):
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_PRINTER_INFO_JSON": '{"result":{"state":"error","state_message":"Invalid pin description"}}',
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env)
+    assert r.returncode == 3, _diag(r)
+    assert "Invalid pin description" in r.stderr, _diag(r)

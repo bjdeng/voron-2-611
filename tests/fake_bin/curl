@@ -14,7 +14,8 @@ case "$url" in
     printf '%s' "${FAKE_PRINT_STATS_JSON:-$_default}"
     exit 0 ;;
   *printer/info)
-    printf '%s' "${FAKE_PRINTER_INFO_JSON:-{\"result\":{\"state\":\"ready\",\"state_message\":\"Printer is ready\"}}}"
+    _default_info='{"result":{"state":"ready","state_message":"Printer is ready"}}'
+    printf '%s' "${FAKE_PRINTER_INFO_JSON:-$_default_info}"
     exit 0 ;;
   *printer/restart|*printer/firmware_restart)
     if [[ "${FAKE_RESTART_OK:-1}" == "1" ]]; then echo '{"result":"ok"}'; exit 0; else exit 1; fi ;;
