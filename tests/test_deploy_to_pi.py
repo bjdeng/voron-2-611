@@ -102,6 +102,13 @@ def test_aborts_when_ci_in_progress(fake_log):
     assert "still in progress" in r.stderr, _diag(r)
 
 
+def test_aborts_when_ci_response_malformed():
+    """gh schema change drops the conclusion field — defensive parse handler."""
+    r = _run(env={"FAKE_GH_RESPONSE": "malformed"})
+    assert r.returncode == 1, _diag(r)
+    assert "could not parse CI conclusion" in r.stderr, _diag(r)
+
+
 def test_aborts_when_moonraker_unreachable():
     r = _run(env={"FAKE_MOONRAKER_REACHABLE": "0"})
     assert r.returncode == 1, _diag(r)

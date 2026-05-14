@@ -82,7 +82,12 @@ check_ci_green() {
     echo "ERR: CI not green: no run found for HEAD ($LOCAL). Push commit and wait for CI." >&2
     exit 1
   fi
-  conclusion=$(printf '%s' "$response" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['conclusion'])")
+  conclusion=$(printf '%s' "$response" | python3 -c \
+    "import json,sys; print(json.load(sys.stdin)[0]['conclusion'])" \
+    2>/dev/null) || {
+    echo "ERR: could not parse CI conclusion from gh output. Raw response: $response" >&2
+    exit 1
+  }
   case "$conclusion" in
     success|skipped) ;;  # green or intentionally-skipped (Open Investigation #7)
     None)
