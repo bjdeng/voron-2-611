@@ -34,8 +34,6 @@ trap 'rm -f "${SAVE_CONFIG_PI:-}" "${STAGED_PRINTER_CFG:-}"' EXIT
 # ---------------------------------------------------------------------------
 
 parse_flags() {
-  # SC2034: YES/DRY_RUN are scaffolding — honored in a later task
-  # shellcheck disable=SC2034
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --yes) YES=1 ;;
@@ -219,13 +217,21 @@ choose_restart_kind() {
 
 show_plan_and_confirm() {
   echo "==> Files to sync to ${PI_HOST}:~/printer_data/config/"
-  rsync -av --dry-run "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/" "${PI_HOST}:~/printer_data/config/" \
-    | tail -20
+  if [[ "$DRY_RUN" == 1 ]]; then
+    echo "(--dry-run: skipping rsync preview; no network calls to Pi will be made)"
+  else
+    rsync -av --dry-run "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/" "${PI_HOST}:~/printer_data/config/" \
+      | tail -20
+  fi
 
   echo
   echo "==> printer.cfg will be uploaded with the Pi's SAVE_CONFIG block re-appended."
   echo "==> Restart kind chosen: $RESTART_KIND"
   echo
+  if [[ "$YES" == 1 ]]; then
+    echo "(--yes given, proceeding without prompt)"
+    return 0
+  fi
   if [[ ! -t 0 ]]; then
     # stdin not a TTY (running under pytest); auto-confirm
     return 0
@@ -311,6 +317,11 @@ main() {
   build_rsync_excludes
   choose_restart_kind
   show_plan_and_confirm
+  if [[ "$DRY_RUN" == 1 ]]; then
+    echo "==> --dry-run: no changes made to Pi."
+    cleanup
+    exit 0
+  fi
   do_rsync
   update_deploy_marker
   trigger_restart

@@ -182,3 +182,29 @@ def test_fails_when_klipper_returns_error(fake_log):
     r = _run(env=env)
     assert r.returncode == 3, _diag(r)
     assert "Invalid pin description" in r.stderr, _diag(r)
+
+
+def test_dry_run_touches_nothing_on_pi(fake_log):
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+    }
+    r = _run(env=env, args=["--dry-run"])
+    assert r.returncode == 0, _diag(r)
+    log_contents = fake_log.read_text() if fake_log.exists() else ""
+    # Plan summary should be printed even in dry-run mode
+    assert "--dry-run" in r.stdout.lower() or "dry-run" in r.stdout.lower(), _diag(r)
+    # But no rsync/scp invocations should have hit the (fake) Pi
+    assert "rsync " not in log_contents, log_contents
+    assert "scp " not in log_contents, log_contents
+
+
+def test_yes_flag_skips_confirmation(fake_log):
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env, args=["--yes"])
+    assert r.returncode == 0, _diag(r)
