@@ -2,8 +2,15 @@
 """Static reference check for Klipper gcode_macro bodies.
 
 For every command invoked from a [gcode_macro] body, verify it resolves
-to a defined macro, a Klipper built-in (tests/builtins.txt), or an
-ALLOWLIST entry. Exit 1 with diagnostics if any reference is unknown.
+to a defined macro (in any passed .cfg), a Klipper built-in (loaded from
+tests/builtins.txt), or an ALLOWLIST entry. Catches typos in macro-to-
+macro calls, references to deleted macros, and missing ALLOWLIST entries
+after removing a third-party Klipper module.
+
+Exit codes:
+  0 — clean, no unknown references
+  1 — at least one unknown reference (diagnostics printed to stdout)
+  2 — invalid invocation: no files passed, or a passed file is missing
 """
 
 import re
@@ -13,16 +20,24 @@ from pathlib import Path
 MACRO_HEADER = re.compile(r"^\[gcode_macro\s+(\S+)\s*\]\s*$")
 DELAYED_HEADER = re.compile(r"^\[delayed_gcode\s+(\S+)\s*\]\s*$")
 RENAME_FIELD = re.compile(r"^\s*rename_existing\s*:\s*(\S+)\s*$")
-GCODE_FIELD = re.compile(r"^gcode\s*:\s*$")
+GCODE_FIELD = re.compile(r"^[Gg][Cc][Oo][Dd][Ee]\s*:\s*$")
 COMMAND_LINE = re.compile(r"^[ \t]+([A-Z][A-Z0-9_]*)\b")
 
-# G/M codes in standard ranges + Klipper internals not always captured by
-# the builtins extractor.
+BUILTINS_PATH = Path(__file__).resolve().parent.parent / "tests" / "builtins.txt"
+
+# Allow any GNN / MNNN token unconditionally. Klipper's gcode parser
+# accepts arbitrary G/M numbers (it dispatches by registered handler),
+# and tightening this to a curated list would just add false positives
+# for vendor-specific codes (e.g. M150 RGB on some MCUs).
 ALLOWLIST: set[str] = set()
 for _n in range(0, 100):
     ALLOWLIST.add(f"G{_n}")
 for _n in range(0, 1000):
     ALLOWLIST.add(f"M{_n}")
+
+# Klipper internals not always captured by tests/builtins.txt (typically
+# because their `register_command` call spans multiple lines, or the
+# command name is built dynamically in Python).
 ALLOWLIST.update(
     {
         "SAVE_GCODE_STATE",
@@ -60,10 +75,17 @@ ALLOWLIST.update(
     }
 )
 
-# Third-party module: eddy-ng commands. Remove this block when the
-# [probe_eddy_ng] section is removed from eddy.cfg (eddy migration PR).
-# This coupling makes CI catch a migration that updates eddy.cfg but
-# forgets to update callers of PROBE_EDDY_NG_*.
+# ACID-TEST COUPLING — eddy-ng (vendor/eddy-ng/probe_eddy_ng.py).
+# These commands are provided by the third-party `[probe_eddy_ng]`
+# config block in eddy.cfg. When the eddy migration removes that block,
+# this ALLOWLIST.update() must be deleted in the same PR — otherwise
+# refcheck silently keeps approving callers of PROBE_EDDY_NG_* that no
+# longer resolve.
+#
+# Verified by the eddy-migration acid test (see tests/README.md
+# "ALLOWLIST coupling" and CLAUDE.md "## CI checks"). The tripwire test
+# `test_eddy_ng_allowlist_coupling` in tests/test_macro_refcheck.py
+# fails if this block is removed without updating macros/print_start.cfg.
 ALLOWLIST.update(
     {
         "PROBE_EDDY_NG_TAP",
@@ -74,9 +96,11 @@ ALLOWLIST.update(
     }
 )
 
-# Happy-Hare runtime commands — registered by Python, not by config sections.
-# These are MMU commands provided by the Happy-Hare plugin's Python code
-# and are not declared as [gcode_macro] blocks anywhere in mmu/*.cfg.
+# Happy-Hare runtime commands — registered by Python (vendor/happy-hare),
+# not by [gcode_macro] blocks in mmu/*.cfg. These are not coupled to any
+# [section] in printer.cfg; they're stable for as long as Happy-Hare is
+# installed on the host. (Contrast with the eddy-ng block above, which
+# IS coupled to a removable [probe_eddy_ng] section.)
 ALLOWLIST.update(
     {
         "MMU_HOME",
@@ -149,23 +173,29 @@ ALLOWLIST.update(
 )
 
 
-def load_builtins(path: Path) -> set[str]:
-    if not path.exists():
-        return set()
+def load_builtins() -> set[str]:
+    """Read tests/builtins.txt (anchored to this script's location).
+
+    Exits with code 2 if the file is missing — without it, real Klipper
+    builtins would be silently flagged as unknown commands.
+    """
+    if not BUILTINS_PATH.exists():
+        print(
+            f"macro_refcheck: missing {BUILTINS_PATH} — run `make builtins`",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     return {
         line.strip()
-        for line in path.read_text().splitlines()
+        for line in BUILTINS_PATH.read_text().splitlines()
         if line.strip() and not line.startswith("#")
     }
 
 
-def collect_defined(paths: list[str]) -> set[str]:
+def collect_defined(paths: list[Path]) -> set[str]:
     defined: set[str] = set()
-    for path_str in paths:
-        path = Path(path_str)
-        if not path.exists():
-            continue
-        for line in path.read_text().splitlines():
+    for path in paths:
+        for line in path.read_text(encoding="utf-8").splitlines():
             for pat in (MACRO_HEADER, DELAYED_HEADER):
                 m = pat.match(line)
                 if m:
@@ -178,8 +208,12 @@ def collect_defined(paths: list[str]) -> set[str]:
 
 
 def each_macro_body(path: Path):
-    """Yield (name, body_first_lineno, body_lines) for each [gcode_macro]."""
-    lines = path.read_text().splitlines()
+    """Yield (name, body_first_lineno, body_lines) for each [gcode_macro]
+    that has a gcode: field. body_first_lineno is the 1-based line number
+    of the first body line (used for error messages). Macros with no
+    gcode: field are silently skipped (they're rare and harmless).
+    """
+    lines = path.read_text(encoding="utf-8").splitlines()
     i = 0
     while i < len(lines):
         m = MACRO_HEADER.match(lines[i])
@@ -216,16 +250,28 @@ def extract_commands(body_lines: list[str]):
             yield offset, m.group(1).upper()
 
 
-def main(paths: list[str]) -> None:
+def validate_inputs(path_strs: list[str]) -> list[Path]:
+    """Reject empty arg list and missing files. Exits 2 on failure."""
+    if not path_strs:
+        print("macro_refcheck: no files specified", file=sys.stderr)
+        sys.exit(2)
+    paths = [Path(p) for p in path_strs]
+    missing = [str(p) for p in paths if not p.exists()]
+    if missing:
+        for m in missing:
+            print(f"macro_refcheck: file not found: {m}", file=sys.stderr)
+        sys.exit(2)
+    return paths
+
+
+def main(path_strs: list[str]) -> None:
+    paths = validate_inputs(path_strs)
     defined = collect_defined(paths)
-    builtins = load_builtins(Path("tests/builtins.txt"))
+    builtins = load_builtins()
     known = defined | builtins | ALLOWLIST
 
     errors = 0
-    for path_str in paths:
-        path = Path(path_str)
-        if not path.exists():
-            continue
+    for path in paths:
         for macro_name, body_start, body in each_macro_body(path):
             for offset, cmd in extract_commands(body):
                 if cmd not in known:
