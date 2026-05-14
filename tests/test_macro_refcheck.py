@@ -104,7 +104,7 @@ def test_eddy_ng_allowlist_coupling():
     ), "eddy-ng ALLOWLIST block has drifted from expected commands"
 
     # Confirm callers exist — removing ALLOWLIST without these would be a real bug
-    print_start = (REPO / "macros" / "print_start.cfg").read_text()
+    print_start = (REPO / "config" / "macros" / "print_start.cfg").read_text()
     assert "PROBE_EDDY_NG_TAP" in print_start, (
         "macros/print_start.cfg no longer calls PROBE_EDDY_NG_TAP — "
         "if this is the eddy migration, also remove eddy_cmds from "
@@ -147,16 +147,16 @@ def test_real_repo_passes():
 
     cfgs = (
         [
-            "printer.cfg",
-            "eddy.cfg",
-            "btt-ebb-sb-usb-v1.0.cfg",
-            "mainsail.cfg",
-            "timelapse.cfg",
+            "config/printer.cfg",
+            "config/eddy.cfg",
+            "config/btt-ebb-sb-usb-v1.0.cfg",
+            "config/mainsail.cfg",
+            "config/timelapse.cfg",
         ]
-        + sorted(glob.glob("macros/*.cfg"))
-        + sorted(glob.glob("mmu/base/*.cfg"))
-        + sorted(glob.glob("mmu/addons/*.cfg"))
-        + sorted(glob.glob("mmu/optional/*.cfg"))
+        + sorted(glob.glob("config/macros/*.cfg"))
+        + sorted(glob.glob("config/mmu/base/*.cfg"))
+        + sorted(glob.glob("config/mmu/addons/*.cfg"))
+        + sorted(glob.glob("config/mmu/optional/*.cfg"))
     )
     r = run(*cfgs)
     assert r.returncode == 0, f"stdout={r.stdout!r}"

@@ -67,7 +67,7 @@ DIFF_EXCLUDES=(
   --exclude='firmware'
   --exclude='archive'
 )
-if diff -ruN "${DIFF_EXCLUDES[@]}" "$REPO_ROOT" "$STAGING"; then
+if diff -ruN "${DIFF_EXCLUDES[@]}" "$REPO_ROOT/config" "$STAGING"; then
   echo
   echo "==> Repo matches the Pi. Nothing to sync."
   exit 0
@@ -103,7 +103,7 @@ rsync -av \
   --exclude='.pre-commit-config.yaml' \
   --exclude='moonraker.asvc' \
   --delete \
-  "$STAGING/" "$REPO_ROOT/"
+  "$STAGING/" "$REPO_ROOT/config/"
 
 echo
 echo "==> Sync applied. Review with \`git status\` + \`git diff\`."

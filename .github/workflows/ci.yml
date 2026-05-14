@@ -133,5 +133,5 @@ jobs:
         run: |
           shopt -s failglob
           python scripts/macro_refcheck.py \
-            printer.cfg eddy.cfg btt-ebb-sb-usb-v1.0.cfg mainsail.cfg timelapse.cfg \
-            macros/*.cfg mmu/base/*.cfg mmu/addons/*.cfg mmu/optional/*.cfg
+            config/printer.cfg config/eddy.cfg config/btt-ebb-sb-usb-v1.0.cfg config/mainsail.cfg config/timelapse.cfg \
+            config/macros/*.cfg config/mmu/base/*.cfg config/mmu/addons/*.cfg config/mmu/optional/*.cfg
