@@ -204,7 +204,7 @@ Ben's note: *"on the machine some updates to klipper, happy hare and others occa
 | `~/klipper-kconfigs` | (saved configs) | — | Per-MCU build kconfigs. **Mirrored into `config/firmware/` in this repo.** |
 | `~/klippy-env`, `~/moonraker-env` | (venvs) | — | Python virtualenvs. |
 
-**Systemd services running:** `klipper`, `klipper_mcu`, `moonraker`, `nginx`, `sonar`, plus the OS-level usuals. Notably **`ModemManager` is active** — that's the well-known troublemaker that can hold open USB-serial devices when an MCU first appears. If MCUs go missing on boot, that's the first suspect.
+**Systemd services running:** `klipper`, `klipper_mcu`, `moonraker`, `nginx`, `sonar`, plus the OS-level usuals. **`ModemManager` is masked** (was active until 2026-05-14, then masked after a real USB-MCU enumeration race during the first live `/deploy-to-pi`). If a future MCU connect-error pattern returns, verify ModemManager is still masked.
 
 **Install/setup scripts that may need re-running after upgrades:**
 - `~/eddy-ng/install.sh` — after any `~/klipper` update that might break the symlinks into `klippy/extras/`
@@ -273,6 +273,8 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every `pull_request` and `pu
 
 Local run: `make test-py` (macOS-friendly subset). `make test` adds the klippy step (needs Linux because Klipper's C extension uses `sys/prctl.h` and `linux/can.h`).
 
+A companion workflow `.github/workflows/ci-docs-noop.yml` reports the same required check name as a no-op success on docs-only paths (CLAUDE.md, `memory/**`, `docs/**`, `.claude/**`, `LICENSE`). Without it, branch protection would block any docs-only PR because `paths-ignore` skips `ci.yml` entirely and the required check is never reported. For any push, exactly one of the two workflows runs.
+
 See [`tests/README.md`](tests/README.md) for full mechanics. **When to regenerate** cached data:
 - `tests/dict/*.dict` — after bumping `vendor/klipper` or modifying `config/firmware/*.config`. Build on the Pi.
 - `tests/builtins.txt` — after bumping `vendor/klipper`. Run `make builtins`.
@@ -288,7 +290,7 @@ These have already tripped someone up — flag them when relevant.
 - **MMU `config/mmu/base/*.cfg` are symlinks on the Pi** to `~/Happy-Hare/config/base/*`. In this repo they're files (dereferenced by `tar -h` on pull). If you push this repo back to the Pi without preserving symlinks, you'll break Happy-Hare's update model.
 - **`config/mainsail.cfg` is a symlink** to `~/mainsail-config/client.cfg`. Same caveat.
 - **`config/timelapse.cfg` is a symlink** to `~/moonraker-timelapse/klipper_macro/timelapse.cfg`. Same caveat — but Ben says he never used moonraker-timelapse and it may be broken; it's a removal candidate.
-- **`ModemManager` runs on the Pi — this is bad for Klipper.** ModemManager probes any new USB-serial device that appears, which can hold MCUs open and prevent Klipper from connecting cleanly, especially with 5 USB MCUs as on this machine. It doesn't always cause visible problems, but it's a latent footgun. Recommended fix (idempotent, reversible): `sudo systemctl mask --now ModemManager.service`. Verify with `sudo systemctl status ModemManager` after. This is not currently confirmed to be causing issues here, just a known class of problem.
+- **`ModemManager` is masked on this Pi (2026-05-14).** It probes new USB-serial devices and could hold MCUs open during enumeration — a known footgun on this 5-USB-MCU machine. Caused the `mcu 'mmu': Unable to connect` race during the first live `/deploy-to-pi`. Fixed via `sudo systemctl mask --now ModemManager.service`. Verify with `systemctl is-enabled ModemManager` (should print `masked`).
 - **No CAN bus.** The toolhead is on USB (`config/btt-ebb-sb-usb-v1.0.cfg`). EBB SB v1.0 supports both modes; Ben chose USB.
 - **Webcam is unplugged.** Crowsnest + Sonar still run but have nothing to stream.
 - **Klipper has no update_manager block.** Klipper updates are not automated through Moonraker — likely intentional to avoid breaking the `eddy-ng` + Happy-Hare overlay.
@@ -300,14 +302,10 @@ These have already tripped someone up — flag them when relevant.
 ## Designing non-trivial changes
 
 For anything bigger than a single-file edit:
-1. **`Skill: superpowers:brainstorming`** to produce a spec → committed to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`.
-2. **`Skill: superpowers:writing-plans`** to produce a task-by-task implementation plan → `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`.
+1. **`Skill: superpowers:brainstorming`** to produce a spec. Let the skill decide where it lives.
+2. **`Skill: superpowers:writing-plans`** to produce a task-by-task implementation plan. Same — let the skill place it.
 3. **`Skill: superpowers:using-git-worktrees`** (native `EnterWorktree` tool) before any implementation.
 4. **`Skill: pr-review-toolkit:review-pr`** **BEFORE** pushing — not after. (Lesson from 2026-05-14: a Codex P1 silent-failure would have been caught pre-push by the toolkit.)
-
-Existing specs and plans:
-- `docs/superpowers/specs/2026-05-13-eddy-ng-to-native-migration.md` + plan — replace `[probe_eddy_ng]` with native `[probe_eddy_current]`. Re-enables the klippy CI job too.
-- `docs/superpowers/specs/2026-05-13-ci-scaffold.md` + plan — this repo's CI; merged.
 
 ---
 
@@ -341,11 +339,13 @@ Items Ben has flagged as worth digging into. Track progress in [`memory/troubles
 5. **`moonraker-timelapse` is broken.** Ben has never gotten it to work. Decision pending: fix, or remove the include + update_manager entry.
 6. **Webcam re-enable.** Currently unplugged due to timing issues. Plan tied to #1 (Eddy migration).
 7. **CI klippy-smoke is disabled** until the eddy migration ships (test_klippy.py dict/firmware mismatch — see `memory/troubleshooting-log.md` 2026-05-14). Lint+refcheck CI is active and working.
-8. **Automated Pi deploy on every merge** (`main → rsync → Moonraker restart`). v1 (manual `/deploy-to-pi` skill + `scripts/deploy_to_pi.sh`) shipped on 2026-05-14. v2 — wrapping the script in a GH Action so deploys happen automatically when CI goes green on `main` — is still pending. See `docs/superpowers/specs/2026-05-14-deploy-to-pi.md` for the v1 design and `.claude/skills/deploy-to-pi/SKILL.md` for the runtime contract.
+8. **Automated Pi deploy on every merge** (`main → rsync → Moonraker restart`). v1 (manual `/deploy-to-pi` skill + `scripts/deploy_to_pi.sh`) shipped on 2026-05-14. v2 — wrapping the script in a GH Action so deploys happen automatically when CI goes green on `main` — is still pending. See `.claude/skills/deploy-to-pi/SKILL.md` for the runtime contract.
 
 **Recently resolved** (kept for context):
 - ~~Missing `[update_manager klipper]`~~ — by design; Moonraker auto-detects (`vendor/moonraker/docs/configuration.md:2017-2026`).
-- ~~TDD-equivalent for Klipper configs~~ — landed via the CI scaffold (`docs/superpowers/specs/2026-05-13-ci-scaffold.md`).
+- ~~TDD-equivalent for Klipper configs~~ — landed via the CI scaffold.
+- ~~`ModemManager` USB-MCU footgun~~ — masked on the Pi 2026-05-14.
+- ~~Top-level mixed machine state + tooling~~ — machine state moved into `config/` 2026-05-14.
 
 ---
 
