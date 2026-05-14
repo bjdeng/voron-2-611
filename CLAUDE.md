@@ -373,6 +373,19 @@ Reference docs are pinned to versions matching the Pi. Always grep these first b
 
 Bump deliberately with `git submodule update --remote vendor/<name>` — pin updates are PRs, not auto-pulled in CI.
 
+### Hardware references (not vendored — too heavy)
+
+These hardware projects ship with CAD / STLs / heavy assets that aren't worth vendoring (the ERCF v2 repo alone is 1.3 GB on a fresh clone). Use the URLs below when troubleshooting; they're the canonical upstreams for the hardware on this build.
+
+| Hardware | Upstream | Why we don't vendor |
+|---|---|---|
+| **ERCF v2** (MMU) | [Carrot-collective/ERCF_v2](https://github.com/Carrot-collective/ERCF_v2) | 1.3 GB — CAD + STLs + recommended-mods assets. `Documentation/` alone is 91 MB. |
+| **Galileo extruder** | search Annex-Engineering or community — verify before linking; the canonical home has shifted | Will be CAD-heavy; same logic |
+| **EASY-BRD** (ERCF SAMD21 MCU) | search Annex-Engineering — verify before linking | Schematics + firmware likely small enough to vendor if found; check size first |
+| **Stealthburner v2** | already covered by `vendor/voron-2` (SB v2 ships inside Voron-2 docs) | — |
+
+If we ever need to troubleshoot one of these and the URL isn't enough, clone it ad-hoc into `~/scratch/` rather than committing it as a submodule.
+
 ---
 
 ## Repo layout
