@@ -208,3 +208,5 @@ def test_yes_flag_skips_confirmation(fake_log):
     }
     r = _run(env=env, args=["--yes"])
     assert r.returncode == 0, _diag(r)
+    # Prove the --yes branch was taken, not just the non-TTY auto-confirm fallback.
+    assert "--yes given" in r.stdout, _diag(r)
