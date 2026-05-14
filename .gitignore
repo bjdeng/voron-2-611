@@ -30,3 +30,5 @@ _pull_staging/
 
 # Python virtualenv
 .venv/
+__pycache__/
+*.pyc
