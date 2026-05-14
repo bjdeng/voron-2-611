@@ -24,3 +24,6 @@ _pull_staging/
 
 # Vendored doc/source submodules — git tracks the submodule pointer, not contents
 # (No need to ignore vendor/ — submodules are explicit)
+
+# Local git worktrees for feature isolation
+.worktrees/
