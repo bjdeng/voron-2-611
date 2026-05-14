@@ -39,7 +39,7 @@ def _diag(r):
 def _matching_pi_cfg():
     """Build a Pi printer.cfg whose body matches repo's body + a fake SAVE_CONFIG tail."""
     marker = "#*# <---------------------- SAVE_CONFIG ---------------------->"
-    body = (REPO / "printer.cfg").read_text().split(marker)[0]
+    body = (REPO / "config" / "printer.cfg").read_text().split(marker)[0]
     return body + marker + "\n#*# [heater_bed]\n#*# control = pid\n"
 
 
@@ -210,7 +210,7 @@ def test_drift_gate_ignores_whitespace_only_differences():
     The gate's intent is semantic drift, not whitespace round-trip noise.
     """
     marker = "#*# <---------------------- SAVE_CONFIG ---------------------->"
-    body = (REPO / "printer.cfg").read_text().split(marker)[0]
+    body = (REPO / "config" / "printer.cfg").read_text().split(marker)[0]
     # Add trailing whitespace to most lines, like Mainsail does.
     body_with_ws = "\n".join(
         line + "   \t" if line.strip() else line for line in body.split("\n")
@@ -226,7 +226,7 @@ def test_chooses_firmware_restart_on_non_macro_change(fake_log):
     env = {
         "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
         "FAKE_LAST_DEPLOY_SHA": "abcd1234",
-        "FAKE_GIT_DIFF_FILES": "eddy.cfg",
+        "FAKE_GIT_DIFF_FILES": "config/eddy.cfg",
         "FAKE_LOG_DIR": str(fake_log),
         "READY_POLL_INTERVAL": "0",
         "READY_POLL_MAX": "3",
@@ -236,6 +236,24 @@ def test_chooses_firmware_restart_on_non_macro_change(fake_log):
     log = fake_log.read_text()
     assert "/printer/firmware_restart" in log, log
     assert "/printer/restart" not in log.replace("/printer/firmware_restart", ""), log
+
+
+def test_chooses_soft_restart_on_macro_only_change(fake_log):
+    """Macro-only diff routes to a soft `restart` (not firmware_restart)."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LAST_DEPLOY_SHA": "abcd1234",
+        "FAKE_GIT_DIFF_FILES": "config/macros/macros.cfg",
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env)
+    assert r.returncode == 0, _diag(r)
+    log = fake_log.read_text()
+    # Soft restart endpoint must be hit; firmware_restart must NOT.
+    assert "/printer/restart" in log, log
+    assert "/printer/firmware_restart" not in log, log
 
 
 def test_corrupt_deploy_marker_defaults_to_firmware_restart(fake_log):
@@ -376,7 +394,7 @@ def test_exit_code_2_on_marker_write_failure(fake_log):
 
 
 def test_deploy_excludes_noise_files(fake_log, tmp_path):
-    """Local dev noise (.gitmodules, .pytest_cache, .ruff_cache) must not be synced."""
+    """rsync source is config/ — firmware/ and archive/ must be excluded, printer.cfg handled separately."""
     env = {
         "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
         "FAKE_LOG_DIR": str(fake_log),
@@ -386,10 +404,10 @@ def test_deploy_excludes_noise_files(fake_log, tmp_path):
     r = _run(env=env, args=["--yes"])
     assert r.returncode == 0, _diag(r)
     log = fake_log.read_text()
-    # rsync invocation must include excludes for these
-    assert "--exclude=/.gitmodules" in log, log
-    assert "--exclude=/.pytest_cache/" in log, log
-    assert "--exclude=/.ruff_cache/" in log, log
+    # Inside config/ these three paths must always be excluded
+    assert "--exclude=/firmware/" in log, log
+    assert "--exclude=/archive/" in log, log
+    assert "--exclude=/printer.cfg" in log, log
 
 
 def test_aborts_when_pi_symlink_discovery_fails():

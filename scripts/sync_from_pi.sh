@@ -47,27 +47,11 @@ tar -xzf "$TARBALL" -C "$STAGING"
 echo "==> Diff vs working tree (additions on the Pi shown as +; lines removed shown as -):"
 echo
 DIFF_EXCLUDES=(
-  --exclude='.git'
-  --exclude='.claude'
-  --exclude='.venv'
-  --exclude='.worktrees'
-  --exclude='vendor'
-  --exclude='scripts'
-  --exclude='tests'
-  --exclude='docs'
-  --exclude='memory'
-  --exclude='Makefile'
-  --exclude='LICENSE'
-  --exclude='README.md'
-  --exclude='CLAUDE.md'
-  --exclude='requirements.txt'
-  --exclude='.gitignore'
-  --exclude='.pre-commit-config.yaml'
-  --exclude='.github'
+  # Repo-only dirs that don't exist on the Pi — preserve via diff exclude.
   --exclude='firmware'
   --exclude='archive'
 )
-if diff -ruN "${DIFF_EXCLUDES[@]}" "$REPO_ROOT" "$STAGING"; then
+if diff -ruN "${DIFF_EXCLUDES[@]}" "$REPO_ROOT/config" "$STAGING"; then
   echo
   echo "==> Repo matches the Pi. Nothing to sync."
   exit 0
@@ -81,29 +65,16 @@ case "$ANSWER" in
 esac
 
 # 5. Apply via rsync (deletes files the Pi removed; preserves repo-only paths via excludes).
+# Destination is REPO_ROOT/config/, so tooling at the repo root is naturally
+# out-of-scope. Only excludes here are paths that DO live under config/ and
+# either belong to the repo (don't delete) or belong to the Pi's per-session
+# state (don't import).
 rsync -av \
-  --exclude='/.git/' \
-  --exclude='/.claude/' \
-  --exclude='/.venv/' \
-  --exclude='/.worktrees/' \
-  --exclude='/vendor/' \
-  --exclude='/scripts/' \
-  --exclude='/tests/' \
-  --exclude='/docs/' \
-  --exclude='/memory/' \
   --exclude='/firmware/' \
   --exclude='/archive/' \
-  --exclude='/.github/' \
-  --exclude='Makefile' \
-  --exclude='LICENSE' \
-  --exclude='README.md' \
-  --exclude='CLAUDE.md' \
-  --exclude='requirements.txt' \
-  --exclude='.gitignore' \
-  --exclude='.pre-commit-config.yaml' \
   --exclude='moonraker.asvc' \
   --delete \
-  "$STAGING/" "$REPO_ROOT/"
+  "$STAGING/" "$REPO_ROOT/config/"
 
 echo
 echo "==> Sync applied. Review with \`git status\` + \`git diff\`."

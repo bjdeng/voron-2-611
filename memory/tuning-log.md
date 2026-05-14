@@ -6,7 +6,7 @@ Running record of calibration runs (input shaper, PID, pressure advance, flow, E
 
 ## 2026-05-13 — initial snapshot from SAVE_CONFIG
 
-Pulled from `printer.cfg` at repo-init time. Per Ben, these are likely stale and worth re-running.
+Pulled from `config/printer.cfg` at repo-init time. Per Ben, these are likely stale and worth re-running.
 
 - Bed PID: `Kp=44.470, Ki=1.246, Kd=396.896`
 - Hotend PID: `Kp=23.507, Ki=1.059, Kd=130.460`

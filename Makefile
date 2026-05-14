@@ -4,11 +4,11 @@
 
 PYTHON      := .venv/bin/python
 PRECOMMIT   := .venv/bin/pre-commit
-CFGS        := printer.cfg eddy.cfg btt-ebb-sb-usb-v1.0.cfg mainsail.cfg timelapse.cfg \
-               $(wildcard macros/*.cfg) \
-               $(wildcard mmu/base/*.cfg) \
-               $(wildcard mmu/addons/*.cfg) \
-               $(wildcard mmu/optional/*.cfg)
+CFGS        := config/printer.cfg config/eddy.cfg config/btt-ebb-sb-usb-v1.0.cfg config/mainsail.cfg config/timelapse.cfg \
+               $(wildcard config/macros/*.cfg) \
+               $(wildcard config/mmu/base/*.cfg) \
+               $(wildcard config/mmu/addons/*.cfg) \
+               $(wildcard config/mmu/optional/*.cfg)
 
 .PHONY: test test-py klippy refcheck pytest precommit builtins venv help
 

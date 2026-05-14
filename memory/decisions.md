@@ -7,7 +7,7 @@ Why things are the way they are. Use this to capture context that won't be obvio
 ## 2026-05-13 — repo initialized
 
 ### Chose USB over CAN for toolhead
-The EBB SB v1.0 supports both USB and CAN modes. Currently USB (`btt-ebb-sb-usb-v1.0.cfg`); no `can0` interface on the Pi. **Reason (per Ben, 2026-05-13):** when he got the EBB, USB was the only mode that supported rapid bed scanning, temperature-offset-2 calibration, and touch sensing on the BTT Eddy. CAN support for those features lagged. This couples the USB choice to the [eddy-ng → native] migration: re-evaluate USB-vs-CAN once Eddy is on native Klipper.
+The EBB SB v1.0 supports both USB and CAN modes. Currently USB (`config/btt-ebb-sb-usb-v1.0.cfg`); no `can0` interface on the Pi. **Reason (per Ben, 2026-05-13):** when he got the EBB, USB was the only mode that supported rapid bed scanning, temperature-offset-2 calibration, and touch sensing on the BTT Eddy. CAN support for those features lagged. This couples the USB choice to the [eddy-ng → native] migration: re-evaluate USB-vs-CAN once Eddy is on native Klipper.
 
 ### eddy-ng (vvuk/eddy-ng) chosen over native [probe_eddy_current]
 At install time, native Klipper Eddy didn't support tap or had limited scanning features. As of Klipper `4767a8ed` (2026-05-04, the version on the Pi), the native module **covers every feature eddy-ng provides and adds one eddy-ng deliberately omits** (per investigation 2026-05-13):
@@ -29,7 +29,7 @@ Investigation 2026-05-13. TMC2209 supports stallguard via DIAG; Klipper's sensor
 
 **Recommendation:** defer unless we're already touching toolhead wiring (e.g., during the eddy-ng → native migration or a CAN exploration). Not urgent.
 
-### Missing `[update_manager klipper]` in moonraker.conf — by design
+### Missing `[update_manager klipper]` in config/moonraker.conf — by design
 Investigation 2026-05-13. Ben's hypothesis was correct. Moonraker's docs (`vendor/moonraker/docs/configuration.md:2017-2026`) state:
 
 > "Configuration is automatically detected for Moonraker and Klipper, however it is possible to override the `channel`, `pinned_commit`, and `refresh_interval` options on a per application basis for each."
@@ -39,7 +39,7 @@ Both Klipper and Moonraker are **auto-detected** by the update_manager. An expli
 **How to apply:** treat the absence of `[update_manager klipper]` as normal. Add the block only if we deliberately want to pin or change update behavior (e.g., pinning to a known-good commit while the eddy-ng / Happy-Hare overlays are still in place).
 
 ### Stealthburner v2 + Galileo over v1 + CW2
-Standard mod path. Galileo's 9:1 gear ratio explains the unusual `gear_ratio: 9:1` + `rotation_distance: 48.033` in `btt-ebb-sb-usb-v1.0.cfg`.
+Standard mod path. Galileo's 9:1 gear ratio explains the unusual `gear_ratio: 9:1` + `rotation_distance: 48.033` in `config/btt-ebb-sb-usb-v1.0.cfg`.
 
 ### Self-printed ERCF v2 over commercial MMU (e.g. BoxTurtle, Tradrack, AMS)
 Reason: Ben chose to print and build it himself. No buffer (Filamentalist rewinders instead).

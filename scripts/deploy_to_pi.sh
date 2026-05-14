@@ -181,7 +181,7 @@ check_no_pi_drift() {
   pi_full=$(ssh "$PI_HOST" 'cat ~/printer_data/config/printer.cfg')
   if ! diff -q -w -B \
       <(printf '%s\n' "$pi_full" | sed -E "/$SAVE_CONFIG_MARKER/,\$d") \
-      <(sed -E "/$SAVE_CONFIG_MARKER/,\$d" "$REPO_ROOT/printer.cfg") \
+      <(sed -E "/$SAVE_CONFIG_MARKER/,\$d" "$REPO_ROOT/config/printer.cfg") \
       >/dev/null; then
     echo "ERR: Pi printer.cfg body has drifted from origin/main. Run sync-from-pi to capture changes, then re-run deploy-to-pi." >&2
     exit 1
@@ -191,7 +191,7 @@ check_no_pi_drift() {
 build_staged_printer_cfg() {
   # Stage repo printer.cfg minus its own SAVE_CONFIG block, then append Pi's.
   STAGED_PRINTER_CFG=$(mktemp)
-  sed -E "/$SAVE_CONFIG_MARKER/,\$d" printer.cfg > "$STAGED_PRINTER_CFG"
+  sed -E "/$SAVE_CONFIG_MARKER/,\$d" "$REPO_ROOT/config/printer.cfg" > "$STAGED_PRINTER_CFG"
   if [[ -s "$SAVE_CONFIG_PI" ]]; then
     printf '\n' >> "$STAGED_PRINTER_CFG"
     cat "$SAVE_CONFIG_PI" >> "$STAGED_PRINTER_CFG"
@@ -199,38 +199,21 @@ build_staged_printer_cfg() {
 }
 
 build_rsync_excludes() {
-  # Exclude source-side tooling files (local working tree artifacts that must
-  # never land on the Pi). Pi-side symlinks are handled dynamically via
-  # PI_SYMLINK_EXCLUDES populated by discover_pi_symlinks().
+  # rsync source is config/, so tooling paths (scripts/, vendor/, tests/,
+  # docs/, memory/, .github/, .claude/, Makefile, README.md, CLAUDE.md, etc.)
+  # live OUTSIDE the source and don't need explicit excludes.
+  #
+  # Inside config/ we still exclude:
+  #   firmware/ — build kconfigs aren't deployed (they're flash-time inputs)
+  #   archive/  — historical configs we don't run
+  #   printer.cfg — handled separately via SAVE_CONFIG splice
+  #
+  # Plus the dynamic symlink list from discover_pi_symlinks.
   RSYNC_EXCLUDES=(
-    --exclude='/.git/'
-    --exclude='/.github/'
-    --exclude='/.claude/'
-    --exclude='/.venv/'
-    --exclude='/.worktrees/'
-    --exclude='/vendor/'
-    --exclude='/scripts/'
-    --exclude='/tests/'
-    --exclude='/docs/'
-    --exclude='/memory/'
     --exclude='/firmware/'
     --exclude='/archive/'
-    --exclude='.gitignore'
-    --exclude='.pre-commit-config.yaml'
-    --exclude='Makefile'
-    --exclude='LICENSE'
-    --exclude='README.md'
-    --exclude='CLAUDE.md'
-    --exclude='requirements.txt'
-    --exclude='.env'
-    --exclude='.env.example'
-    # Local dev noise (git/tool caches that must not land in ~/printer_data/config/)
-    --exclude='/.gitmodules'
-    --exclude='/.pytest_cache/'
-    --exclude='/.ruff_cache/'
-    --exclude='printer.cfg'   # handled separately via SAVE_CONFIG splice
+    --exclude='/printer.cfg'
   )
-  # Append dynamic Pi-side symlink excludes (drift-proof: discovered live)
   RSYNC_EXCLUDES+=("${PI_SYMLINK_EXCLUDES[@]}")
 }
 
@@ -254,9 +237,10 @@ choose_restart_kind() {
     RESTART_KIND="restart"
     return
   fi
-  # If any changed file is OUTSIDE macros/ / archive/ / printer.cfg, MCU-level
-  # state may have moved — firmware_restart. Otherwise soft restart is enough.
-  if printf '%s\n' "$changed" | grep -vE '^(macros/|archive/|printer\.cfg$)' >/dev/null; then
+  # If any changed file is OUTSIDE config/macros/, config/archive/, or
+  # config/printer.cfg, MCU-level state may have moved — firmware_restart.
+  # Otherwise soft restart is enough.
+  if printf '%s\n' "$changed" | grep -vE '^config/(macros/|archive/|printer\.cfg$)' >/dev/null; then
     RESTART_KIND="firmware_restart"
   else
     RESTART_KIND="restart"
@@ -270,7 +254,7 @@ show_plan_and_confirm() {
   else
     # Preview is informational. If it fails (e.g., transient network), let
     # do_rsync's hard-fail-and-exit-2 path be the authoritative failure.
-    rsync -av --dry-run "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/" "${PI_HOST}:~/printer_data/config/" \
+    rsync -av --dry-run "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/config/" "${PI_HOST}:~/printer_data/config/" \
       | tail -20 || echo "(preview unavailable; do_rsync will report the real failure)"
   fi
 
@@ -295,7 +279,7 @@ show_plan_and_confirm() {
 }
 
 do_rsync() {
-  rsync -av "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/" "${PI_HOST}:~/printer_data/config/" || {
+  rsync -av "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/config/" "${PI_HOST}:~/printer_data/config/" || {
     echo "ERR: rsync failed mid-deploy. Pi state may be partially updated; run sync-from-pi to inspect." >&2
     exit 2
   }
