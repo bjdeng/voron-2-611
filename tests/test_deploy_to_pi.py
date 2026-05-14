@@ -124,22 +124,28 @@ def test_ci_skipped_counts_as_pass(fake_log):
 
 
 def test_aborts_when_ci_in_progress(fake_log):
-    """Run still in progress: conclusion is null, message should say in progress."""
-    # Override the gh fake to return an in-progress run.
+    """Run still in progress: status=in_progress, conclusion="". Should refuse."""
     env = {
         "FAKE_GH_RESPONSE": "in_progress",
         "FAKE_LOG_DIR": str(fake_log),
     }
     r = _run(env=env)
     assert r.returncode == 1, _diag(r)
-    assert "still in progress" in r.stderr, _diag(r)
+    assert "is in_progress" in r.stderr, _diag(r)
 
 
 def test_aborts_when_ci_response_malformed():
-    """gh schema change drops the conclusion field — defensive parse handler."""
+    """gh schema change breaks the headSha/status/conclusion shape."""
     r = _run(env={"FAKE_GH_RESPONSE": "malformed"})
     assert r.returncode == 1, _diag(r)
-    assert "could not parse CI conclusion" in r.stderr, _diag(r)
+    assert "could not parse latest CI run" in r.stderr, _diag(r)
+
+
+def test_aborts_when_ci_run_is_for_different_commit():
+    """gh returns a run for a different commit than HEAD (CI hasn't dispatched yet)."""
+    r = _run(env={"FAKE_GH_RESPONSE": "stale"})
+    assert r.returncode == 1, _diag(r)
+    assert "not HEAD" in r.stderr, _diag(r)
 
 
 def test_aborts_when_moonraker_unreachable():

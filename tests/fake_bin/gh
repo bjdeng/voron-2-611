@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 echo "gh $*" >> "${FAKE_LOG_DIR:-/dev/stderr}"
 
+SHA="${FAKE_GH_HEAD_SHA:-${FAKE_GIT_LOCAL_SHA:-abc1234}}"
 case "${FAKE_GH_RESPONSE:-success}" in
-  success) echo '[{"status":"completed","conclusion":"success"}]' ;;
-  failure) echo '[{"status":"completed","conclusion":"failure"}]' ;;
-  skipped) echo '[{"status":"completed","conclusion":"skipped"}]' ;;
-  in_progress) echo '[{"status":"in_progress","conclusion":null}]' ;;
+  success) echo "[{\"headSha\":\"$SHA\",\"status\":\"completed\",\"conclusion\":\"success\"}]" ;;
+  failure) echo "[{\"headSha\":\"$SHA\",\"status\":\"completed\",\"conclusion\":\"failure\"}]" ;;
+  skipped) echo "[{\"headSha\":\"$SHA\",\"status\":\"completed\",\"conclusion\":\"skipped\"}]" ;;
+  # Real gh returns conclusion:"" (empty string) for in-progress runs, not null.
+  in_progress) echo "[{\"headSha\":\"$SHA\",\"status\":\"in_progress\",\"conclusion\":\"\"}]" ;;
+  # Latest run on main is for a different commit (e.g., HEAD was just pushed
+  # and CI hasn't dispatched yet).
+  stale) echo '[{"headSha":"deadbee","status":"completed","conclusion":"success"}]' ;;
   none) echo '[]' ;;
-  # Unexpected schema (e.g. gh API change drops `conclusion`)
-  malformed) echo '[{"status":"completed"}]' ;;
+  # Unexpected schema (e.g. gh API change drops a field)
+  malformed) echo '[{"foo":"bar"}]' ;;
 esac
 exit 0
