@@ -380,9 +380,9 @@ These hardware projects ship with CAD / STLs / heavy assets that aren't worth ve
 | Hardware | Upstream | Why we don't vendor |
 |---|---|---|
 | **ERCF v2** (MMU) | [Carrot-collective/ERCF_v2](https://github.com/Carrot-collective/ERCF_v2) | 1.3 GB — CAD + STLs + recommended-mods assets. `Documentation/` alone is 91 MB. |
-| **Galileo extruder** | search Annex-Engineering or community — verify before linking; the canonical home has shifted | Will be CAD-heavy; same logic |
-| **EASY-BRD** (ERCF SAMD21 MCU) | search Annex-Engineering — verify before linking | Schematics + firmware likely small enough to vendor if found; check size first |
-| **Stealthburner v2** | already covered by `vendor/voron-2` (SB v2 ships inside Voron-2 docs) | — |
+| **Galileo 2** (extruder; 9:1 ratio matches our `config/btt-ebb-sb-usb-v1.0.cfg`) | [JaredC01/Galileo2](https://github.com/JaredC01/Galileo2) | CAD-heavy. The Voron Stealthburner drop-in (G2E) is what's on this build. The original (7.5:1) lives at [JaredC01/Galileo](https://github.com/JaredC01/Galileo) — not what we have. |
+| **EASY-BRD** (ERCF SAMD21 MCU) | [Tircown/ERCF-easy-brd](https://github.com/Tircown/ERCF-easy-brd) | Schematic + KiCad files + reference configs. Probably small enough to vendor if we ever need to dig in — check size first. |
+| **Stealthburner v2** (toolhead) | [VoronDesign/Voron-Stealthburner](https://github.com/VoronDesign/Voron-Stealthburner) | CAD + STLs + assembly manual. Separate from `vendor/voron-2` (the main Voron 2 repo doesn't include the SB toolhead). |
 
 If we ever need to troubleshoot one of these and the URL isn't enough, clone it ad-hoc into `~/scratch/` rather than committing it as a submodule.
 
