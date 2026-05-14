@@ -19,6 +19,8 @@ STAGED_PRINTER_CFG=""
 RESTART_KIND=""
 RSYNC_EXCLUDES=()
 
+trap 'rm -f "${SAVE_CONFIG_PI:-}" "${STAGED_PRINTER_CFG:-}" /tmp/restart_resp.json' EXIT
+
 # ---------------------------------------------------------------------------
 
 parse_flags() {
