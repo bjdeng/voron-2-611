@@ -341,7 +341,7 @@ Items Ben has flagged as worth digging into. Track progress in [`memory/troubles
 5. **`moonraker-timelapse` is broken.** Ben has never gotten it to work. Decision pending: fix, or remove the include + update_manager entry.
 6. **Webcam re-enable.** Currently unplugged due to timing issues. Plan tied to #1 (Eddy migration).
 7. **CI klippy-smoke is disabled** until the eddy migration ships (test_klippy.py dict/firmware mismatch — see `memory/troubleshooting-log.md` 2026-05-14). Lint+refcheck CI is active and working.
-8. **Automated Pi deploy** (`main → rsync → Moonraker restart`). Sketched in [Workflow & CI/CD](#workflow--cicd); needs its own spec.
+8. **Automated Pi deploy** (`main → rsync → Moonraker restart`). Spec at `docs/superpowers/specs/2026-05-14-deploy-to-pi.md`. v1 is a `/deploy-to-pi` skill + `scripts/deploy_to_pi.py` script (manual trigger); v2 is a GH Action wrapping the same script.
 
 **Recently resolved** (kept for context):
 - ~~Missing `[update_manager klipper]`~~ — by design; Moonraker auto-detects (`vendor/moonraker/docs/configuration.md:2017-2026`).
@@ -351,9 +351,9 @@ Items Ben has flagged as worth digging into. Track progress in [`memory/troubles
 
 ## Workflow & CI/CD
 
-**Today:** edit locally on a `feat/*` branch → PR → CI gate → squash-merge to `main`. CI is built (`.github/workflows/ci.yml` — see [## CI checks](#ci-checks)). Pi sync is still manual.
+**Today:** edit locally on a `feat/*` (or `chore/*`, `fix/*`, `docs/*`) branch → PR → CI gate → squash-merge to `main`. CI is built (`.github/workflows/ci.yml` — see [## CI checks](#ci-checks)).
 
-**Not built yet:** automated `main → Pi` deploy. Sketch: GitHub Action on push to `main` rsyncs the non-symlinked, non-SAVE_CONFIG portion to the Pi over the keyed SSH login, re-appends the Pi's current SAVE_CONFIG block, then calls Moonraker's `printer.restart` (or `firmware_restart` if the diff touches `[mcu]`, kinematics, pins, etc.). Klipper's auto-backup (`printer-YYYYMMDD_HHMMSS.cfg`) preserves the prior file on failure. This deserves its own spec.
+**After every merge to `main`:** run `/deploy-to-pi` to sync the Pi. The skill refuses if CI isn't green, the printer is busy, or the Pi has drift; it tells you what to do next. **Until the skill ships** (spec at `docs/superpowers/specs/2026-05-14-deploy-to-pi.md`, Open Investigation #8): manually `scp` the changed files and call `RESTART` / `FIRMWARE_RESTART` as appropriate. Always check `print_stats.state == "standby"` via Moonraker (`curl http://mainsailos.local:7125/printer/objects/query?print_stats`) before touching the Pi.
 
 ---
 
