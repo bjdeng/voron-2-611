@@ -19,10 +19,26 @@ jobs:
           cache: pip
       - name: Install Klipper's runtime deps (greenlet, cffi, jinja2, …)
         run: pip install -r vendor/klipper/scripts/klippy-requirements.txt -r vendor/klipper/scripts/tests-requirements.txt
+      - name: Pre-create paths referenced by config (Happy-Hare save_variables, etc.)
+        # printer.cfg references files at ~/printer_data/config/mmu/mmu_vars.cfg
+        # (via Happy-Hare's [save_variables] in mmu/base/mmu_macro_vars.cfg).
+        # save_variables.py does open(path, 'w') which won't create parents.
+        # On a real Pi those paths exist; on a fresh runner they don't.
+        run: mkdir -p ~/printer_data/config/mmu
       - name: Run test_klippy.py against tests/voron-2-611.test
         working-directory: vendor/klipper
         run: |
-          python scripts/test_klippy.py -d ../../tests/dict ../../tests/voron-2-611.test
+          python scripts/test_klippy.py -v -d ../../tests/dict ../../tests/voron-2-611.test 2>&1 | tee klippy-test.log
+      - name: Upload klippy log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: klippy-test-log
+          path: |
+            vendor/klipper/klippy-test.log
+            vendor/klipper/_test_.log
+            vendor/klipper/_test_output*
+          if-no-files-found: ignore
 
   lint-and-refcheck:
     name: pre-commit + macro refcheck + pytest
@@ -42,7 +58,11 @@ jobs:
       - name: Unit tests (pytest)
         run: python -m pytest tests/ -v
       - name: macro_refcheck against all .cfg files
+        # failglob: bash exits nonzero if any glob matches nothing — catches
+        # accidental directory renames / restructures that would otherwise
+        # silently shrink coverage.
         run: |
+          shopt -s failglob
           python scripts/macro_refcheck.py \
-            printer.cfg eddy.cfg btt-ebb-sb-usb-v1.0.cfg timelapse.cfg \
+            printer.cfg eddy.cfg btt-ebb-sb-usb-v1.0.cfg mainsail.cfg timelapse.cfg \
             macros/*.cfg mmu/base/*.cfg mmu/addons/*.cfg mmu/optional/*.cfg

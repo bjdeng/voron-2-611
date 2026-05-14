@@ -52,7 +52,13 @@ def test_real_repo_passes():
     import glob
 
     cfgs = (
-        ["printer.cfg", "eddy.cfg", "btt-ebb-sb-usb-v1.0.cfg", "timelapse.cfg"]
+        [
+            "printer.cfg",
+            "eddy.cfg",
+            "btt-ebb-sb-usb-v1.0.cfg",
+            "mainsail.cfg",
+            "timelapse.cfg",
+        ]
         + sorted(glob.glob("macros/*.cfg"))
         + sorted(glob.glob("mmu/base/*.cfg"))
         + sorted(glob.glob("mmu/addons/*.cfg"))
