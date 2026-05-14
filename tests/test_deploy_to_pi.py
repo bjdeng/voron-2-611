@@ -87,3 +87,36 @@ def test_aborts_when_ci_in_progress(fake_log):
     r = _run(env=env)
     assert r.returncode == 1, _diag(r)
     assert "still in progress" in r.stderr, _diag(r)
+
+
+def test_aborts_when_moonraker_unreachable():
+    r = _run(env={"FAKE_MOONRAKER_REACHABLE": "0"})
+    assert r.returncode == 1, _diag(r)
+    assert "Moonraker not reachable" in r.stderr, _diag(r)
+
+
+def test_aborts_when_printer_printing():
+    r = _run(
+        env={
+            "FAKE_PRINT_STATS_JSON": '{"result":{"status":{"print_stats":{"state":"printing"}}}}',
+        }
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "printer is not idle" in r.stderr.lower(), _diag(r)
+
+
+def test_aborts_when_printer_paused():
+    r = _run(
+        env={
+            "FAKE_PRINT_STATS_JSON": '{"result":{"status":{"print_stats":{"state":"paused"}}}}',
+        }
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "printer is not idle" in r.stderr.lower(), _diag(r)
+
+
+def test_aborts_when_print_stats_malformed():
+    """Moonraker returns JSON without the expected key path -- defensive fallback."""
+    r = _run(env={"FAKE_PRINT_STATS_JSON": '{"result":{"status":{}}}'})
+    assert r.returncode == 1, _diag(r)
+    assert "could not parse print_stats" in r.stderr.lower(), _diag(r)

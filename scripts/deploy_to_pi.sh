@@ -95,7 +95,20 @@ check_ssh_reachable() {
 
 check_moonraker_reachable() {
   if ! curl -fsS -o /dev/null --max-time 5 "$PI_API/server/info"; then
-    echo "WARN: Moonraker not responding at $PI_API. Deploy will proceed but restart step will fail." >&2
+    echo "ERR: Moonraker not reachable at $PI_API. Deploy aborted (restart step would fail anyway)." >&2
+    exit 1
+  fi
+}
+
+check_printer_idle() {
+  local resp state
+  resp=$(curl -fsS --max-time 5 "$PI_API/printer/objects/query?print_stats")
+  state=$(printf '%s' "$resp" | python3 -c \
+    "import json,sys; d=json.load(sys.stdin); print(d['result']['status']['print_stats']['state'])" \
+    2>/dev/null) || { echo "ERR: could not parse print_stats response from Moonraker. Is Klippy running?" >&2; exit 1; }
+  if [[ "$state" != "standby" ]]; then
+    echo "ERR: printer is not idle (state=$state). Deploy aborted; wait for print to finish or cancel it." >&2
+    exit 1
   fi
 }
 
@@ -241,6 +254,7 @@ main() {
   check_ci_green                   # ← NEW
   check_ssh_reachable
   check_moonraker_reachable
+  check_printer_idle
   capture_save_config
   build_staged_printer_cfg
   build_rsync_excludes
