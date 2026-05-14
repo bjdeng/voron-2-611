@@ -55,7 +55,8 @@ builtins: venv
 
 venv: .venv/bin/pre-commit
 
-.venv/bin/pre-commit: requirements.txt
-	@if [ ! -d .venv ]; then python3 -m venv .venv; fi
-	.venv/bin/pip install -q -r requirements.txt
-	@touch $@
+.venv/bin/pre-commit: requirements.txt vendor/klipper/scripts/klippy-requirements.txt
+t@if [ ! -d .venv ]; then python3 -m venv .venv; fi
+t.venv/bin/pip install -q -r requirements.txt
+t.venv/bin/pip install -q -r vendor/klipper/scripts/klippy-requirements.txt -r vendor/klipper/scripts/tests-requirements.txt
+t@touch $@

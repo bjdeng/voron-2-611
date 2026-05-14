@@ -17,8 +17,8 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install Python deps
-        run: pip install -r requirements.txt
+      - name: Install Klipper's runtime deps (greenlet, cffi, jinja2, …)
+        run: pip install -r vendor/klipper/scripts/klippy-requirements.txt -r vendor/klipper/scripts/tests-requirements.txt
       - name: Run test_klippy.py against tests/voron-2-611.test
         working-directory: vendor/klipper
         run: |
@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install Python deps
+      - name: Install tooling deps
         run: pip install -r requirements.txt
       - name: pre-commit (text hygiene + ruff)
         run: pre-commit run --all-files
