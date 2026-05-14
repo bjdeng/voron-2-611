@@ -1,0 +1,61 @@
+# Voron 2.611 — local CI parity.
+# `make test` runs everything CI runs (klippy job requires Linux).
+# `make test-py` runs the macOS-friendly subset (no klippy).
+
+PYTHON      := .venv/bin/python
+PRECOMMIT   := .venv/bin/pre-commit
+CFGS        := printer.cfg eddy.cfg btt-ebb-sb-usb-v1.0.cfg timelapse.cfg \
+               $(wildcard macros/*.cfg) \
+               $(wildcard mmu/base/*.cfg) \
+               $(wildcard mmu/addons/*.cfg) \
+               $(wildcard mmu/optional/*.cfg)
+
+.PHONY: test test-py klippy refcheck pytest precommit builtins venv help
+
+help:
+	@echo "Targets:"
+	@echo "  test        — full pipeline (klippy + refcheck + pytest + pre-commit). Linux only."
+	@echo "  test-py     — refcheck + pytest + pre-commit. Works on macOS."
+	@echo "  klippy      — run Klipper's test_klippy.py against tests/voron-2-611.test."
+	@echo "  refcheck    — run scripts/macro_refcheck.py against all .cfg files."
+	@echo "  pytest      — run scripts unit tests."
+	@echo "  precommit   — run pre-commit hooks (text hygiene, ruff)."
+	@echo "  builtins    — regenerate tests/builtins.txt from vendor/klipper."
+	@echo "  venv        — bootstrap .venv/ if missing."
+
+# Full pipeline. Includes klippy → fails on macOS (Klipper chelper needs Linux headers).
+test: venv klippy refcheck pytest precommit
+
+# macOS-friendly subset.
+test-py: venv refcheck pytest precommit
+
+klippy: venv
+	cd vendor/klipper && ../../$(PYTHON) scripts/test_klippy.py -d ../../tests/dict ../../tests/voron-2-611.test
+
+refcheck: venv
+	$(PYTHON) scripts/macro_refcheck.py $(CFGS)
+
+pytest: venv
+	$(PYTHON) -m pytest tests/ -v
+
+precommit: venv
+	$(PRECOMMIT) run --all-files
+
+# Regenerate the Klipper builtins list. Run when bumping vendor/klipper.
+builtins: venv
+	@{ \
+	  echo "# Auto-generated list of Klipper built-in gcode commands."; \
+	  echo "# Source: cmd_<NAME>_help = ... declarations across vendor/klipper/klippy/"; \
+	  echo "# Regenerate: \`make builtins\`"; \
+	  grep -rhE "^[[:space:]]*cmd_[A-Z][A-Z0-9_]+_help[[:space:]]*=" vendor/klipper/klippy/ \
+	    | sed -E 's/^[[:space:]]*cmd_([A-Z][A-Z0-9_]+)_help.*/\1/' \
+	    | sort -u; \
+	} > tests/builtins.txt
+	@echo "Wrote $$(( $$(wc -l < tests/builtins.txt) - 3 )) commands to tests/builtins.txt"
+
+venv: .venv/bin/pre-commit
+
+.venv/bin/pre-commit: requirements.txt
+	@if [ ! -d .venv ]; then python3 -m venv .venv; fi
+	.venv/bin/pip install -q -r requirements.txt
+	@touch $@
