@@ -297,43 +297,63 @@ These have already tripped someone up — flag them when relevant.
 
 ---
 
+## Designing non-trivial changes
+
+For anything bigger than a single-file edit:
+1. **`Skill: superpowers:brainstorming`** to produce a spec → committed to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`.
+2. **`Skill: superpowers:writing-plans`** to produce a task-by-task implementation plan → `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`.
+3. **`Skill: superpowers:using-git-worktrees`** (native `EnterWorktree` tool) before any implementation.
+4. **`Skill: pr-review-toolkit:review-pr`** **BEFORE** pushing — not after. (Lesson from 2026-05-14: a Codex P1 silent-failure would have been caught pre-push by the toolkit.)
+
+Existing specs and plans:
+- `docs/superpowers/specs/2026-05-13-eddy-ng-to-native-migration.md` + plan — replace `[probe_eddy_ng]` with native `[probe_eddy_current]`. Re-enables the klippy CI job too.
+- `docs/superpowers/specs/2026-05-13-ci-scaffold.md` + plan — this repo's CI; merged.
+
+---
+
+## First-time setup
+
+After cloning:
+
+```sh
+git submodule update --init --recursive   # pulls vendored Klipper / Happy-Hare / eddy-ng / Voron-2 / btt-docs / …
+make venv                                  # creates .venv with pytest, pre-commit, ruff
+make test-py                               # runs the macOS-compatible CI subset locally
+pre-commit install                         # (optional) auto-run hooks on every commit
+```
+
+To re-pull configs from the Pi when it drifts ahead (Mainsail edits, SAVE_CONFIG rewrites):
+
+```sh
+rsync -av --exclude='printer-2*.cfg' --exclude='mmu-2*' pi@mainsailos.local:~/printer_data/config/ ./
+```
+
+---
+
 ## Open investigations
 
 Items Ben has flagged as worth digging into. Track progress in [`memory/troubleshooting-log.md`](memory/troubleshooting-log.md) and [`memory/decisions.md`](memory/decisions.md).
 
-1. **`eddy-ng` → native Klipper Eddy migration.** Upstream Klipper has `[probe_eddy_current]` with tap support. Verify it covers all eddy-ng features in use, particularly: rapid bed scanning, temperature-offset-2 calibration, and touch sensing — these were USB-mode-only on the EBB SB v1.0 when Ben built the printer, which is why the toolhead is on USB instead of CAN. Tracked as task #12.
+1. **`eddy-ng` → native Klipper Eddy migration.** Spec at `docs/superpowers/specs/2026-05-13-eddy-ng-to-native-migration.md`, plan alongside. Awaiting a printer-time window for the calibration session. Re-enables the disabled klippy CI job.
 2. **Sensorless X feasibility on this build.** Currently uses a physical endstop wired to the EBB. Ben's prior understanding was this wasn't viable or was potentially harmful. Worth a fresh look on V2.4 r2 + dual SKR 1.4 + TMC2209.
 3. **Microsteps 128 — is this still the right value?** Followed third-party online advice; real goal is "quiet without losing steps" (per Ben). Investigate step-rate budget of LPC1769 + TMC2209 in current Klipper and measure noise/skip behavior at 32/64/128 to decide.
 4. **Stale tuning values.** Re-run input shaper / PID / PA / Eddy calibration on current Klipper.
 5. **`moonraker-timelapse` is broken.** Ben has never gotten it to work. Decision pending: fix, or remove the include + update_manager entry.
 6. **Webcam re-enable.** Currently unplugged due to timing issues. Plan tied to #1 (Eddy migration).
-7. ~~**Is there a reason there's no `[update_manager klipper]`?**~~ **Resolved 2026-05-13:** Ben was right; it's by design. Moonraker auto-detects Klipper and Moonraker (`vendor/moonraker/docs/configuration.md:2017-2026`). The block is only needed to override channel / pinned_commit / refresh_interval. See [`memory/decisions.md`](memory/decisions.md).
-8. **TDD-equivalent for Klipper configs.** Build a CI pipeline that (a) parses `printer.cfg` with Klipper's own parser, (b) lints jinja2 in `gcode_macro` blocks, (c) reference-checks `M*` rename chains and gcode_macro cross-calls, (d) optionally runs Klipper `--debug` against a recorded `.gcode` print. Lives alongside the deploy automation. Confirmed worth doing.
+7. **CI klippy-smoke is disabled** until the eddy migration ships (test_klippy.py dict/firmware mismatch — see `memory/troubleshooting-log.md` 2026-05-14). Lint+refcheck CI is active and working.
+8. **Automated Pi deploy** (`main → rsync → Moonraker restart`). Sketched in [Workflow & CI/CD](#workflow--cicd); needs its own spec.
+
+**Recently resolved** (kept for context):
+- ~~Missing `[update_manager klipper]`~~ — by design; Moonraker auto-detects (`vendor/moonraker/docs/configuration.md:2017-2026`).
+- ~~TDD-equivalent for Klipper configs~~ — landed via the CI scaffold (`docs/superpowers/specs/2026-05-13-ci-scaffold.md`).
 
 ---
 
 ## Workflow & CI/CD
 
-**Today (manual):** edit on the Pi via Mainsail or SSH; periodically `rsync` into this repo. Working but not durable.
+**Today:** edit locally on a `feat/*` branch → PR → CI gate → squash-merge to `main`. CI is built (`.github/workflows/ci.yml` — see [## CI checks](#ci-checks)). Pi sync is still manual.
 
-**Goal:** edit locally → PR → merge `main` → automated sync to `~/printer_data/config/` on the Pi → `RESTART`/`FIRMWARE_RESTART` as appropriate.
-
-**Sketch (not built yet):**
-- GitHub Action on push to `main`:
-  - `rsync` only the **non-symlinked, non-SAVE_CONFIG-portion** of files to the Pi over SSH (use the keyed login set up 2026-05-13)
-  - Read the current Pi `printer.cfg` SAVE_CONFIG block; re-append it to the synced version before writing
-  - Trigger a Moonraker API `printer.restart` (or `printer.firmware_restart` if the diff touches MCU-impacting sections — heuristic: any change outside `macros/`, `archive/`, `mmu/`, top of `printer.cfg`)
-  - On failure, the previous file is preserved via Klipper's auto-backup mechanism (`printer-YYYYMMDD_HHMMSS.cfg`)
-- Preview/PR workflow: open a PR, CI runs `klipper --validate-config printer.cfg` against a vendored Klipper checkout (this gives a syntactic "test" — see next).
-
-**"Tests" for a Klipper config (TDD-equivalent):**
-There's no real unit-test framework for `.cfg` files, but several things are testable on PR:
-1. `klippy` config syntax validation (parse the config with Klipper's own parser; catches typos and unknown sections)
-2. Macro template lint (jinja2 parse-ability via a small script)
-3. `gcode_macro` reference check (every `M*` rename, every `{action_call_remote_method(...)}`, every `[gcode_macro X]` referenced by another)
-4. A "smoke test" by running Klipper in `--debug` against a real `.gcode` file (skip when no MCU is connected)
-
-These are good candidates for a `tests/` directory and a GitHub Action. None of this exists yet.
+**Not built yet:** automated `main → Pi` deploy. Sketch: GitHub Action on push to `main` rsyncs the non-symlinked, non-SAVE_CONFIG portion to the Pi over the keyed SSH login, re-appends the Pi's current SAVE_CONFIG block, then calls Moonraker's `printer.restart` (or `firmware_restart` if the diff touches `[mcu]`, kinematics, pins, etc.). Klipper's auto-backup (`printer-YYYYMMDD_HHMMSS.cfg`) preserves the prior file on failure. This deserves its own spec.
 
 ---
 
@@ -341,23 +361,17 @@ These are good candidates for a `tests/` directory and a GitHub Action. None of 
 
 Reference docs are pinned to versions matching the Pi. Always grep these first before going to the web.
 
-**Planned vendored repos** (commands shown below — not run yet; Ben to approve):
-
 | Path | Upstream | Pin | Why |
 |---|---|---|---|
-| `vendor/klipper` | https://github.com/Klipper3d/klipper | commit `4767a8ed` (matches Pi as of 2026-05-13) | Klipper source + `docs/` |
-| `vendor/happy-hare` | https://github.com/moggieuk/Happy-Hare | `v3.4.2-22-ga880ac0a` (matches Pi) | MMU control, mmu/* config templates, README |
-| `vendor/eddy-ng` | https://github.com/vvuk/eddy-ng | `c7ca62e` (matches Pi) | While we still depend on it; investigate migration to native Klipper |
-| `vendor/voron-2-docs` | https://github.com/VoronDesign/Voron-2 | latest tag (TBD) | V2.4 manual, BOM, sourcing guide |
-| `vendor/mainsail-config` | https://github.com/mainsail-crew/mainsail-config | `v1.2.1-1-gff3869a` (matches Pi) | Source of the `client.cfg` symlinked from `mainsail.cfg` |
-| `vendor/moonraker` | https://github.com/Arksine/moonraker | `v0.10.0-19-g1ed102e` (matches Pi) | Moonraker docs (under `docs/`) |
+| `vendor/klipper` | Klipper3d/klipper | `4767a8ed` | Source + `docs/`. Sparse-checked to `docs/ klippy/ src/ test/ .github/ scripts/`. |
+| `vendor/happy-hare` | moggieuk/Happy-Hare | `a880ac0a` (v3.4.2-22) | MMU control + `mmu/*` config templates |
+| `vendor/eddy-ng` | vvuk/eddy-ng | `c7ca62e` (v0.1-73) | Third-party probe extension; targeted for removal post-migration |
+| `vendor/voron-2` | VoronDesign/Voron-2 | `Voron2.4` branch tip | V2.4 manual/BOM (sparse: `Manual/ firmware/ slicer_profiles/`) |
+| `vendor/mainsail-config` | mainsail-crew/mainsail-config | `ff3869a` (v1.2.1-1) | Source of `client.cfg` symlinked from `mainsail.cfg` |
+| `vendor/moonraker` | Arksine/moonraker | `1ed102e` (v0.10.0-19) | Moonraker `docs/` |
+| `vendor/btt-docs` | bigtreetech/docs | shallow `main` | BTT hardware reference (sparse: text only, no images) |
 
-Update with:
-```sh
-git submodule update --remote vendor/<name>
-```
-
-(Pin updates should be committed deliberately, not auto-pulled in CI.)
+Bump deliberately with `git submodule update --remote vendor/<name>` — pin updates are PRs, not auto-pulled in CI.
 
 ---
 
@@ -366,9 +380,13 @@ git submodule update --remote vendor/<name>
 ```
 voron-2-611/
 ├── CLAUDE.md                    # this file
-├── README.md                    # (not yet written — same content as CLAUDE.md until ready)
+├── README.md                    # brief intro + safety notes; points here
+├── LICENSE                      # GPL-3.0 (matches Klipper / Voron Design)
 ├── .env                         # SSH creds (gitignored)
-├── .gitignore
+├── .gitignore                   # excludes .env, .venv/, .worktrees/, dict backups, logs
+├── .pre-commit-config.yaml      # text hygiene + ruff hooks (runs in CI too)
+├── Makefile                     # `make test-py` (macOS) / `make test` (Linux); see ## CI checks
+├── requirements.txt             # tooling deps (pytest, pre-commit) — pinned
 │
 ├── printer.cfg                  # top-level Klipper config (includes everything below)
 ├── mainsail.cfg                 # symlink target on Pi (→ ~/mainsail-config/client.cfg)
@@ -400,6 +418,13 @@ voron-2-611/
 │   ├── eddy.config              # BTT Eddy
 │   └── easy-brd.config          # ERCF EASY-BRD
 │
+├── tests/                       # CI: smoke .test, fixtures, builtins.txt, dict/, pytest
+├── scripts/                     # macro_refcheck.py
+├── .github/workflows/ci.yml     # GitHub Actions (two parallel jobs)
+├── docs/superpowers/            # specs/ and plans/ for non-trivial changes
+│   ├── specs/                   # design docs (eddy migration, CI scaffold, …)
+│   └── plans/                   # implementation plans matched to specs
+│
 ├── archive/                     # historical, not included
 │   ├── klicky/                  # pre-Eddy probe configs
 │   ├── klicky-variables.cfg
@@ -411,5 +436,5 @@ voron-2-611/
 │   ├── hardware-changes.md
 │   └── decisions.md
 │
-└── vendor/                      # git submodules (TBD — see Vendor section)
+└── vendor/                      # 7 git submodules — see ## Vendor / submodules
 ```
