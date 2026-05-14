@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+echo "gh $*" >> "${FAKE_LOG_DIR:-/dev/stderr}"
+
+case "${FAKE_GH_RESPONSE:-success}" in
+  success) echo '[{"status":"completed","conclusion":"success"}]' ;;
+  failure) echo '[{"status":"completed","conclusion":"failure"}]' ;;
+  skipped) echo '[{"status":"completed","conclusion":"skipped"}]' ;;
+  in_progress) echo '[{"status":"in_progress","conclusion":null}]' ;;
+  none) echo '[]' ;;
+  # Unexpected schema (e.g. gh API change drops `conclusion`)
+  malformed) echo '[{"status":"completed"}]' ;;
+esac
+exit 0
