@@ -4,9 +4,9 @@
 
 **Goal:** Replace the `vvuk/eddy-ng` Klipper probe extension with upstream Klipper's native `[probe_eddy_current]` + `[ldc1612]` on Voron 2.611, preserving the tap-at-print-start workflow.
 
-**Architecture:** In-place rewrite of `eddy.cfg` on a `feat/eddy-native` git worktree. Surgical two-line edit to `macros/print_start.cfg`. SAVE_CONFIG cleanup in `printer.cfg`. Manual `rsync` to the Pi at `pi@mainsailos.local` (keyed SSH already set up). Hands-on calibration at the printer (bed 60 °C, hotend 200 °C). `pr-review-toolkit:review-pr` runs before merge to `main`.
+**Architecture:** In-place rewrite of `config/eddy.cfg` on a `feat/eddy-native` git worktree. Surgical two-line edit to `config/macros/print_start.cfg`. SAVE_CONFIG cleanup in `config/printer.cfg`. Deploy via `/deploy-to-pi` skill + `scripts/deploy_to_pi.sh` (8 safety gates; requires CI green on `origin/main`). Hands-on calibration at the printer (bed 60 °C, hotend 200 °C). `pr-review-toolkit:review-pr` runs before merge to `main`.
 
-**Tech Stack:** Klipper `0.13.0-649-g4767a8ed` (master, pinned per `vendor/klipper`), Moonraker `v0.10.0-19`, Mainsail, SSH to Pi, rsync. No code-language tests — verification is Klipper RESTART success + calibration step success + printed-part quality.
+**Tech Stack:** Klipper `0.13.0-649-g4767a8ed` (master, pinned per `vendor/klipper`), Moonraker `v0.10.0-19`, Mainsail, SSH to Pi, `scripts/deploy_to_pi.sh`. No code-language tests — verification is deploy-to-pi reporting Klipper ready + calibration step success + printed-part quality.
 
 **Spec:** `docs/superpowers/specs/2026-05-13-eddy-ng-to-native-migration.md` (commit `fc79190`).
 
@@ -18,16 +18,16 @@
 
 | File | Scope of change | Reason |
 |---|---|---|
-| `eddy.cfg` | Full rewrite of the probe section. Replace `[probe_eddy_ng btt_eddy]` with `[probe_eddy_current btt_eddy]` (+ `[ldc1612 btt_eddy]` if required by the pinned Klipper commit). Preserve `[mcu eddy]`, both `[temperature_sensor]`s, `[bed_mesh]`, `[safe_z_home]`, `[force_move]`, and both `[gcode_macro ...]` overrides byte-for-byte. | Spec §5.1 |
-| `macros/print_start.cfg` | Line 67: `PROBE_EDDY_NG_TAP` → `G28 Z METHOD=tap` (with documented fallback). Line 93: delete `PROBE_EDDY_NG_SET_TAP_OFFSET VALUE=0`. | Spec §5.2 |
-| `printer.cfg` | Delete the `#*# [probe_eddy_ng btt_eddy]` block in SAVE_CONFIG (currently lines ~463-469). Leave every other SAVE_CONFIG entry untouched. | Spec §5.3 |
+| `config/eddy.cfg` | Full rewrite of the probe section. Replace `[probe_eddy_ng btt_eddy]` with `[probe_eddy_current btt_eddy]` (+ `[ldc1612 btt_eddy]` if required by the pinned Klipper commit). Preserve `[mcu eddy]`, both `[temperature_sensor]`s, `[bed_mesh]`, `[safe_z_home]`, `[force_move]`, and both `[gcode_macro ...]` overrides byte-for-byte. | Spec §5.1 |
+| `config/macros/print_start.cfg` | Line 67: `PROBE_EDDY_NG_TAP` → `G28 Z METHOD=tap` (with documented fallback). Line 93: delete `PROBE_EDDY_NG_SET_TAP_OFFSET VALUE=0`. | Spec §5.2 |
+| `config/printer.cfg` | Delete the `#*# [probe_eddy_ng btt_eddy]` block in SAVE_CONFIG (currently lines ~463-469). Leave every other SAVE_CONFIG entry untouched. | Spec §5.3 |
 | `memory/tuning-log.md` | Append a 2026-05-13 entry with new calibration values pulled back from the Pi's `printer.cfg` after step 6. | Spec §6 verification + project convention |
 
 **Unchanged (verified by grep for `eddy_?ng|probe_eddy_ng`):**
-`btt-ebb-sb-usb-v1.0.cfg`, `mainsail.cfg`, `timelapse.cfg`, `moonraker.conf`, `crowsnest.conf`, `sonar.conf`, `firmware/*.config`, all of `mmu/*`, `macros/{macros,bedfans,lcd_tweaks,test_speed,calibrate_*}.cfg`.
+`config/btt-ebb-sb-usb-v1.0.cfg`, `config/mainsail.cfg`, `config/timelapse.cfg`, `config/moonraker.conf`, `config/crowsnest.conf`, `config/sonar.conf`, `config/firmware/*.config`, all of `config/mmu/*`, `config/macros/{macros,bedfans,lcd_tweaks,test_speed,calibrate_*}.cfg`.
 
 **Pi-side state (not in repo, but mutated):**
-- `~/printer_data/config/*.cfg` — overwritten by rsync from the worktree.
+- `~/printer_data/config/*.cfg` — overwritten by deploy-to-pi rsync from the worktree.
 - `~/printer_data/logs/klippy.log` — append-only, used as the "test output."
 - `~/eddy-ng/` and `~/klipper/klippy/extras/probe_eddy_ng.py` (symlink) — **untouched**. eddy-ng install dir stays in place; rollback path depends on this. Cleanup is a separate spec.
 
@@ -169,20 +169,20 @@ Write a temporary scratchpad to `docs/superpowers/plans/eddy-prep-notes.md` (thi
 
 ---
 
-## Task 3: Rewrite `eddy.cfg`
+## Task 3: Rewrite `config/eddy.cfg`
 
 **Files:**
-- Modify: `eddy.cfg` (whole-file replacement of the probe section; other sections preserved byte-for-byte)
+- Modify: `config/eddy.cfg` (whole-file replacement of the probe section; other sections preserved byte-for-byte)
 
-- [ ] **Step 1: Snapshot the current `eddy.cfg` for diff comparison**
+- [ ] **Step 1: Snapshot the current `config/eddy.cfg` for diff comparison**
 
 ```sh
-cp eddy.cfg /tmp/eddy.cfg.before
+cp config/eddy.cfg /tmp/eddy.cfg.before
 ```
 
 This is for visual diff inspection during Step 4, not for rollback (git handles that).
 
-- [ ] **Step 2: Open `eddy.cfg` and edit in place**
+- [ ] **Step 2: Open `config/eddy.cfg` and edit in place**
 
 Replace the entire `[probe_eddy_ng btt_eddy]` block (currently lines 5-12) with the native equivalent. Use the values you recorded in Task 2.
 
@@ -206,12 +206,12 @@ If Task 2 Step 2 determined `[ldc1612 btt_eddy]` is NOT a separate section in ou
 
 - [ ] **Step 3: Delete the eddy-ng-only commented blocks at the bottom**
 
-Lines 60-145 of the current `eddy.cfg` contain commented-out `# Uncomment if using Eddy as probe AND endstop AND beta z-offset control` blocks (`G28` override, `SET_Z_FROM_PROBE`, `Z_OFFSET_APPLY_PROBE`, etc). These are eddy-ng scaffolding for features native folds in automatically. Delete them in their entirety.
+Lines 60-145 of the current `config/eddy.cfg` contain commented-out `# Uncomment if using Eddy as probe AND endstop AND beta z-offset control` blocks (`G28` override, `SET_Z_FROM_PROBE`, `Z_OFFSET_APPLY_PROBE`, etc). These are eddy-ng scaffolding for features native folds in automatically. Delete them in their entirety.
 
-- [ ] **Step 4: Verify everything else in `eddy.cfg` is preserved byte-for-byte**
+- [ ] **Step 4: Verify everything else in `config/eddy.cfg` is preserved byte-for-byte**
 
 ```sh
-diff /tmp/eddy.cfg.before eddy.cfg
+diff /tmp/eddy.cfg.before config/eddy.cfg
 ```
 
 The diff should show:
@@ -226,10 +226,10 @@ If the diff shows changes anywhere else, undo them and re-diff before continuing
 
 ---
 
-## Task 4: Update `macros/print_start.cfg`
+## Task 4: Update `config/macros/print_start.cfg`
 
 **Files:**
-- Modify: `macros/print_start.cfg:67` and `macros/print_start.cfg:93`
+- Modify: `config/macros/print_start.cfg:67` and `config/macros/print_start.cfg:93`
 
 - [ ] **Step 1: Replace the tap call on line 67**
 
@@ -263,7 +263,7 @@ Delete this line. Native doesn't accumulate a runtime tap offset, so there's not
 - [ ] **Step 3: Verify the surrounding flow still parses as expected**
 
 ```sh
-grep -nE "PROBE_EDDY|METHOD=tap|SET_KINEMATIC" macros/print_start.cfg
+grep -nE "PROBE_EDDY|METHOD=tap|SET_KINEMATIC" config/macros/print_start.cfg
 ```
 
 Expected: matches only on the new lines from Step 1. No `PROBE_EDDY_NG_*` references remain.
@@ -272,19 +272,19 @@ Expected: matches only on the new lines from Step 1. No `PROBE_EDDY_NG_*` refere
 grep -rin "PROBE_EDDY_NG" --include='*.cfg' .
 ```
 
-Expected: only matches in `archive/` (which is intentionally not included by `printer.cfg`).
+Expected: only matches in `archive/` (which is intentionally not included by `config/printer.cfg`).
 
 ---
 
-## Task 5: Strip stale SAVE_CONFIG block from `printer.cfg`
+## Task 5: Strip stale SAVE_CONFIG block from `config/printer.cfg`
 
 **Files:**
-- Modify: `printer.cfg` (the SAVE_CONFIG section at the bottom)
+- Modify: `config/printer.cfg` (the SAVE_CONFIG section at the bottom)
 
 - [ ] **Step 1: Locate the stale block**
 
 ```sh
-grep -n "#\*# \[probe_eddy_ng" printer.cfg
+grep -n "#\*# \[probe_eddy_ng" config/printer.cfg
 ```
 
 Expected: a line number around 463. Note the line number; the block starts there.
@@ -292,19 +292,19 @@ Expected: a line number around 463. Note the line number; the block starts there
 - [ ] **Step 2: Find the end of the block**
 
 ```sh
-awk '/^#\*# \[probe_eddy_ng/,/^#\*# \[/{print NR": "$0}' printer.cfg | head -20
+awk '/^#\*# \[probe_eddy_ng/,/^#\*# \[/{print NR": "$0}' config/printer.cfg | head -20
 ```
 
 The block ends just before the next `#*# [` section header. Note both line numbers.
 
 - [ ] **Step 3: Delete the block**
 
-Edit `printer.cfg` and delete lines from the `#*# [probe_eddy_ng btt_eddy]` header through the last line of its content (the base64 `calibration_16 = ...` line). Stop before the next `#*# [<section>]` header.
+Edit `config/printer.cfg` and delete lines from the `#*# [probe_eddy_ng btt_eddy]` header through the last line of its content (the base64 `calibration_16 = ...` line). Stop before the next `#*# [<section>]` header.
 
 - [ ] **Step 4: Confirm the rest of SAVE_CONFIG is intact**
 
 ```sh
-grep -nE "^#\*# \[" printer.cfg
+grep -nE "^#\*# \[" config/printer.cfg
 ```
 
 Expected to remain (no `probe_eddy_ng`):
@@ -318,28 +318,31 @@ If any of those are missing, undo the edit and try again — only the `probe_edd
 
 ---
 
-## Task 6: First commit and sync to Pi
+## Task 6: First commit, PR + merge, then deploy via deploy-to-pi
+
+> **Workflow change vs original plan:** The `/deploy-to-pi` skill (added 2026-05-14 via PRs #5–#8) requires CI green on `origin/main` HEAD before it will push to the Pi. This means the `feat/eddy-native` branch **must be merged to `main` before the deploy step** — unlike the old raw-rsync flow which could push directly from a feature branch. The merge is step 4 of this task; deploy is steps 6–7.
 
 **Files:**
 - Commit on `feat/eddy-native` branch
-- Sync `~/printer_data/config/{eddy.cfg, macros/print_start.cfg, printer.cfg}` on the Pi
+- PR open + CI green + squash merge to `main`
+- Deploy `config/` to Pi via `scripts/deploy_to_pi.sh`
 
 - [ ] **Step 1: Review the diff**
 
 ```sh
 git diff --stat
-git diff eddy.cfg macros/print_start.cfg printer.cfg
+git diff config/eddy.cfg config/macros/print_start.cfg config/printer.cfg
 ```
 
 Read the full diff. Confirm:
-- `eddy.cfg`: probe section replaced, scaffolding deleted, nothing else touched
-- `macros/print_start.cfg`: exactly 2 line changes (one replace, one delete)
-- `printer.cfg`: only the `probe_eddy_ng` SAVE_CONFIG block removed
+- `config/eddy.cfg`: probe section replaced, scaffolding deleted, nothing else touched
+- `config/macros/print_start.cfg`: exactly 2 line changes (one replace, one delete)
+- `config/printer.cfg`: only the `probe_eddy_ng` SAVE_CONFIG block removed
 
 - [ ] **Step 2: Stage and commit**
 
 ```sh
-git add eddy.cfg macros/print_start.cfg printer.cfg docs/superpowers/plans/eddy-prep-notes.md
+git add config/eddy.cfg config/macros/print_start.cfg config/printer.cfg docs/superpowers/plans/eddy-prep-notes.md
 git commit -m "$(cat <<'EOF'
 feat(eddy): migrate from vvuk/eddy-ng to native [probe_eddy_current]
 
@@ -362,85 +365,93 @@ EOF
 )"
 ```
 
-- [ ] **Step 3: Dry-run the rsync to the Pi**
+- [ ] **Step 3: Push the feat branch and open a draft PR**
 
 ```sh
-rsync -avzn --delete-after \
-  eddy.cfg macros/print_start.cfg printer.cfg \
-  pi@mainsailos.local:~/printer_data/config/
+git push -u origin feat/eddy-native
+gh pr create --base main --head feat/eddy-native --draft \
+  --title "feat(eddy): migrate from vvuk/eddy-ng to native [probe_eddy_current]" \
+  --body "Replaces third-party probe extension with upstream Klipper's native module. See spec and prep notes for details."
 ```
 
-The `-n` is dry-run. Read the output: it should list exactly 3 file transfers (preserving the `macros/` directory structure for `print_start.cfg`). No deletions. If anything else is listed for transfer or deletion, stop.
+Wait for CI to run and go green. The deploy-to-pi script requires CI green on `origin/main`, so CI must pass here before we can proceed.
 
-Note: the rsync target preserves `macros/print_start.cfg` as `~/printer_data/config/macros/print_start.cfg` because rsync preserves relative paths when source paths have a leading directory. Verify the dry-run output reflects this.
+- [ ] **Step 4: Merge to main (squash)**
 
-- [ ] **Step 4: Real rsync**
+Once CI is green on the draft PR, mark it ready and squash-merge:
 
 ```sh
-rsync -avz \
-  eddy.cfg macros/print_start.cfg printer.cfg \
-  pi@mainsailos.local:~/printer_data/config/
+gh pr merge --squash --delete-branch
 ```
 
-(Drop the `-n`; do NOT use `--delete-after` for the live run — we only want to overwrite the three named files.)
-
-Expected: three file transfers reported. No errors.
-
-- [ ] **Step 5: Verify file contents on the Pi**
+- [ ] **Step 5: Sync local main**
 
 ```sh
-ssh pi@mainsailos.local 'head -20 ~/printer_data/config/eddy.cfg; echo "---"; sed -n "60,75p" ~/printer_data/config/macros/print_start.cfg; echo "---"; tail -30 ~/printer_data/config/printer.cfg'
+git switch main && git pull --ff-only
 ```
 
-Confirm:
-- `eddy.cfg` head shows the new `[probe_eddy_current]` block
-- `print_start.cfg` lines 60-75 show the new `G28 Z METHOD=tap` (or fallback)
-- `printer.cfg` tail SAVE_CONFIG no longer mentions `probe_eddy_ng`
+- [ ] **Step 6: Dry-run the deploy**
+
+```sh
+bash scripts/deploy_to_pi.sh --dry-run
+```
+
+Verify all 8 gates pass against the real Pi. Confirm:
+- The 3 changed files (`config/eddy.cfg`, `config/macros/print_start.cfg`, `config/printer.cfg`) appear in the rsync preview.
+- Drift gate passes (since `main` now has the new versions).
+- Restart kind = `firmware_restart` (the eddy migration touches MCU-impacting sections via `[ldc1612]` / `[probe_eddy_current]`).
+
+If any gate fails, fix the reported issue before proceeding to the live deploy.
+
+- [ ] **Step 7: Real deploy**
+
+```sh
+bash scripts/deploy_to_pi.sh --yes
+```
+
+The script will:
+1. Capture the Pi's current SAVE_CONFIG block and splice it into the new `config/printer.cfg`.
+2. rsync `config/` to the Pi (symlink-safe, no noise files).
+3. Write `.last-deploy-sha` on the Pi.
+4. Call `printer/firmware_restart` via Moonraker.
+5. Poll `/printer/info` until `state=ready` (timeout 60 s; exits 3 on timeout).
+
+If the script exits non-zero, check the error message — it surfaces the specific gate or Moonraker call that failed.
 
 ---
 
-## Task 7: Config syntax smoke (Klipper RESTART succeeds)
+## Task 7: Verify Klipper parsed the new config successfully
 
-**Files:** none modified — running and observing on the Pi.
+**Files:** none modified — observation only.
 
-- [ ] **Step 1: Restart Klipper via Moonraker**
+> **Note:** The firmware_restart and ready-polling were already performed by `deploy-to-pi` in Task 6 Step 7. If `deploy-to-pi` exited 0, Klipper is already up and parsing the new config.
 
-```sh
-curl -sf -X POST http://mainsailos.local:7125/printer/firmware_restart \
-  || ssh pi@mainsailos.local 'sudo systemctl restart klipper'
-```
+- [ ] **Step 1: Confirm deploy-to-pi exited 0**
 
-We use `firmware_restart` (not just `restart`) because we changed `[mcu]`-impacting config (the new `[ldc1612]` / `[probe_eddy_current]` sections involve the Eddy MCU).
+If Task 6 Step 7 reported success (exit 0), Klipper is parsing the new config. If it exited 3 (timeout), Klipper failed to come back — see klippy.log immediately.
 
-- [ ] **Step 2: Wait for Klipper to come up and check status**
+- [ ] **Step 2: Tail klippy.log for warnings about the new sections**
 
 ```sh
-sleep 6
-ssh pi@mainsailos.local 'tail -30 ~/printer_data/logs/klippy.log'
+ssh pi@mainsailos.local 'tail -60 ~/printer_data/logs/klippy.log'
 ```
 
-Expected: lines ending in `Klipper state: Ready` or similar. **No** stack traces, **no** `Unknown config option`, **no** `pin clash`, **no** `Probe is required but missing`.
-
-If errors appear, stop and read the full log:
-
-```sh
-ssh pi@mainsailos.local 'tail -200 ~/printer_data/logs/klippy.log'
-```
+Expected: no stack traces, no `Unknown config option`, no `pin clash`, no `Probe is required but missing`. Pay particular attention to the `[probe_eddy_current]` and `[ldc1612]` section loads.
 
 Common failures:
 - `Unknown config object 'ldc1612'` → revisit Task 2 Step 2 (the inline-vs-separate question)
 - `Pin XXX used multiple times in config` → check the `intb_pin` value from Task 2 Step 1
 - `Probe requires .. method ...` → revisit Task 4 Step 1 (the G28 METHOD=tap form)
 
-If any error: **do not proceed**. Fix in worktree, re-run Task 6 Steps 4-5, then retry this step.
+If any error: **do not proceed**. Fix on a new `fix/eddy-*` branch, re-run Task 6's merge+deploy cycle, then retry this step.
 
-- [ ] **Step 3: Confirm probe is recognized in Mainsail / Moonraker**
+- [ ] **Step 3: Verify all 5 MCUs are connected**
 
 ```sh
-curl -s http://mainsailos.local:7125/printer/objects/query?probe | python3 -m json.tool | head -30
+curl -s http://mainsailos.local:7125/printer/objects/query?mcu | python3 -m json.tool | grep '"state"'
 ```
 
-Expected: a JSON object with a `result.status.probe` key (possibly with `last_z_result: null` since no probe has run yet).
+Expected: 5 entries all showing `"state": "ready"` (for `mcu`, `z`, `EBB`, `eddy`, `mmu`).
 
 ---
 
@@ -639,8 +650,8 @@ If first layer is noticeably worse: pause via Mainsail, check `klippy.log` for p
 - [ ] **Step 4: After print completes, pull updated SAVE_CONFIG back into the repo**
 
 ```sh
-scp pi@mainsailos.local:~/printer_data/config/printer.cfg ./printer.cfg
-git diff printer.cfg
+scp pi@mainsailos.local:~/printer_data/config/printer.cfg ./config/printer.cfg
+git diff config/printer.cfg
 ```
 
 Expected diff: SAVE_CONFIG section has new `[probe_eddy_current btt_eddy]` block with calibration values. No other lines changed.
@@ -665,14 +676,14 @@ Old eddy-ng calibration removed from SAVE_CONFIG; the eddy-ng install directory 
 
 Replace the angle-bracket placeholders with the real values you noted in Task 8 Step 7 and Task 10 Step 3.
 
-- [ ] **Step 6: Commit the printer.cfg SAVE_CONFIG sync and the tuning log entry**
+- [ ] **Step 6: Commit the config/printer.cfg SAVE_CONFIG sync and the tuning log entry**
 
 ```sh
-git add printer.cfg memory/tuning-log.md
+git add config/printer.cfg memory/tuning-log.md
 git commit -m "$(cat <<'EOF'
 feat(eddy): record native Eddy calibration results
 
-- printer.cfg SAVE_CONFIG now contains [probe_eddy_current btt_eddy]
+- config/printer.cfg SAVE_CONFIG now contains [probe_eddy_current btt_eddy]
   values from on-machine calibration at bed 60°C / hotend 200°C
 - memory/tuning-log.md updated with the new values for future reference
 
@@ -683,87 +694,52 @@ EOF
 
 ---
 
-## Task 11: PR review and merge
+## Task 11: Confirm migration end-to-end and close out
 
 **Files:**
-- Remove: `docs/superpowers/plans/eddy-prep-notes.md` (scratchpad cleanup)
+- Remove: `docs/superpowers/plans/eddy-prep-notes.md` (scratchpad cleanup, if not already done in Task 6 merge)
 
-- [ ] **Step 1: Remove the prep-notes scratchpad**
+> **Note:** The PR-and-merge work already happened in Task 6. This task confirms the migration succeeded end-to-end after calibration, handles any post-calibration commits, and does final cleanup.
 
-The temporary notes from Task 2 are no longer needed.
+- [ ] **Step 1: Remove the prep-notes scratchpad (if still present)**
+
+If `docs/superpowers/plans/eddy-prep-notes.md` was included in the Task 6 merge commit it's already gone. If it's still present:
 
 ```sh
 git rm docs/superpowers/plans/eddy-prep-notes.md
 git commit -m "chore(eddy): remove prep scratchpad after successful migration"
 ```
 
-- [ ] **Step 2: Invoke pr-review-toolkit on the branch diff**
+Push and open a follow-up PR (or include in the Task 10 commit above if timing allows).
 
-```
-Skill: pr-review-toolkit:review-pr
-```
+- [ ] **Step 2: Push calibration commit(s) and merge**
 
-Pass the branch diff context: `feat/eddy-native` vs `main`. The toolkit will dispatch its sub-reviewers (code-reviewer, comment-analyzer, silent-failure-hunter, type-design-analyzer, pr-test-analyzer, code-simplifier). Treat its output as gating — address any high-priority findings before merging.
-
-Note: most pr-review-toolkit findings will be about code, not Klipper configs. The most relevant sub-skills for a config-only PR are `code-reviewer` (catches structural issues, e.g., a section we should have preserved but didn't) and `comment-analyzer` (the spec/plan/commit messages are heavy with prose).
-
-- [ ] **Step 3: Address any review findings**
-
-If the toolkit flags issues:
-- High-priority: fix on the branch, re-commit, re-run Task 11 Step 2.
-- Low-priority / nits: optionally fix; document deferrals in `memory/decisions.md` if you skip.
-
-- [ ] **Step 4: Merge `feat/eddy-native` into `main`**
-
-Per Ben's git conventions (CLAUDE.md global): squash merge preferred. Since the repo has no GitHub remote yet, this is a local merge.
+The Task 10 Step 6 commit (SAVE_CONFIG sync + tuning log) needs to reach `main` via the same PR flow:
 
 ```sh
-# Find the parent repo (the worktree is a linked working tree)
-PARENT=$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)
-echo "Parent repo: $PARENT"
-
-# Step into parent repo and switch to main
-git -C "$PARENT" checkout main
-
-# Squash-merge feat/eddy-native into main
-git -C "$PARENT" merge --squash feat/eddy-native
-git -C "$PARENT" commit -m "$(cat <<'EOF'
-feat(eddy): migrate from vvuk/eddy-ng to native [probe_eddy_current]
-
-Squash-merge of feat/eddy-native. Replaces third-party probe extension
-with upstream Klipper's native module. Tap-at-print-start preserved.
-Calibration values captured in printer.cfg SAVE_CONFIG and memory/tuning-log.md.
-
-Spec: docs/superpowers/specs/2026-05-13-eddy-ng-to-native-migration.md
-Plan: docs/superpowers/plans/2026-05-13-eddy-ng-to-native-migration.md
-References: <community repo from Task 2 step 4>
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-EOF
-)"
+git push -u origin <branch>
+gh pr create --base main ...
+gh pr merge --squash --delete-branch
+git switch main && git pull --ff-only
 ```
 
-- [ ] **Step 5: Exit the worktree**
+Optionally run `bash scripts/deploy_to_pi.sh --dry-run` after merge — it should report zero drift (Pi already has the calibration values from Task 8).
 
-Use the native tool counterpart to `EnterWorktree`:
-
-```
-ExitWorktree
-```
-
-(Or, if not available: `git worktree remove <path>` after `git branch -D feat/eddy-native`.)
-
-- [ ] **Step 6: Verify the Pi matches main**
+- [ ] **Step 3: Verify the migration succeeded**
 
 ```sh
-cd /Users/ben/code/voron-2-611
-git checkout main
-rsync -avzn eddy.cfg macros/print_start.cfg printer.cfg pi@mainsailos.local:~/printer_data/config/
+bash scripts/deploy_to_pi.sh --dry-run
 ```
 
-Expected: dry-run reports **zero file transfers** — the Pi is already in sync with `main` because Task 6 already pushed the changes and Task 10 pulled the SAVE_CONFIG back.
+Expected: drift gate reports no config drift (Pi already in sync with `main`).
 
-If anything transfers, real-rsync it and `RESTART` Klipper.
+- [ ] **Step 4: Final klippy.log scan**
+
+```sh
+ssh pi@mainsailos.local 'grep -c "probe_eddy_ng" ~/printer_data/logs/klippy.log'
+```
+
+Expected: 0 (or only lines from the session before the migration — those are historical).
 
 ---
 
@@ -796,14 +772,14 @@ in the same PR that removes the `[probe_eddy_ng]` block:
 ```
 
 If this step is skipped, the new CI scaffold will flag the unresolved
-callers in `macros/print_start.cfg` — see acid test result in
+callers in `config/macros/print_start.cfg` — see acid test result in
 `memory/troubleshooting-log.md` under "Resolved" (2026-05-13).
 
 ## Note added 2026-05-14 by ci-scaffold execution
 
 While the CI scaffold was being implemented, the `klippy-smoke` job
 was disabled (`if: false` in `.github/workflows/ci.yml`) because
-`test_klippy.py` fails against `printer.cfg` while `[probe_eddy_ng]`
+`test_klippy.py` fails against `config/printer.cfg` while `[probe_eddy_ng]`
 is active. Root cause: the committed `tests/dict/eddy.dict` doesn't
 include `ldc1612_ng_*` MCU commands (the eddy-ng C extension wasn't
 fully applied to the Pi's firmware build).
@@ -814,3 +790,14 @@ fully applied to the Pi's firmware build).
    MCU commands which ARE present in eddy.dict.
 3. If CI fails for any other reason after re-enable, investigate
    per `memory/troubleshooting-log.md` 2026-05-14.
+
+## Note added 2026-05-14 by repo-reorg + deploy-to-pi shift
+
+This plan was refreshed on 2026-05-14 after two major infrastructure changes landed:
+
+1. **PR #10 (repo reorganization):** machine state moved from root-level into `config/`. All path references in this plan were prefixed accordingly.
+2. **PRs #5–#8 (deploy-to-pi v1):** a real `/deploy-to-pi` skill + script with 8 safety gates is now the canonical sync mechanism. Task 6 was rewritten to use it instead of raw rsync; Task 7 was simplified because deploy-to-pi handles the firmware_restart + ready-polling internally.
+
+The original Task 6/7 content is preserved in git history at commit `503c85c` if needed for reference (run `git log -- docs/superpowers/plans/2026-05-13-eddy-ng-to-native-migration.md` to find it).
+
+Calibration tasks (8, 9, 10) are unchanged — they require Ben physically at the printer and aren't affected by the tooling refresh.
