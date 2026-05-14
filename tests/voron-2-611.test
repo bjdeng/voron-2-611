@@ -5,7 +5,7 @@
 # This requires Linux (Klipper's chelper uses Linux-only kernel headers).
 # CI runs it on ubuntu-22.04 via .github/workflows/ci.yml.
 
-CONFIG ../../printer.cfg
+CONFIG ../printer.cfg
 DICTIONARY mcu.dict z=mcu.dict EBB=ebb-usb.dict eddy=eddy.dict mmu=easy-brd.dict
 
 # --- Boot + leveling smoke ---
