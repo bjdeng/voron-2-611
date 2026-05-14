@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  klippy-smoke:
+    name: Klippy parse + smoke gcode
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+      - name: Run test_klippy.py against tests/voron-2-611.test
+        working-directory: vendor/klipper
+        run: |
+          python scripts/test_klippy.py -d ../../tests/dict ../../tests/voron-2-611.test
+
+  lint-and-refcheck:
+    name: pre-commit + macro refcheck + pytest
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+      - name: pre-commit (text hygiene + ruff)
+        run: pre-commit run --all-files
+      - name: Unit tests (pytest)
+        run: python -m pytest tests/ -v
+      - name: macro_refcheck against all .cfg files
+        run: |
+          python scripts/macro_refcheck.py \
+            printer.cfg eddy.cfg btt-ebb-sb-usb-v1.0.cfg timelapse.cfg \
+            macros/*.cfg mmu/base/*.cfg mmu/addons/*.cfg mmu/optional/*.cfg
