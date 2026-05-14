@@ -11,6 +11,12 @@ fi
 remote_cmd="${*: -1}"
 case "$remote_cmd" in
   true) exit 0 ;;
+  *find*-type*l*)
+    if [[ "${FAKE_SSH_FIND_OK:-1}" != "1" ]]; then
+      echo "find: cannot access '~/printer_data/config': No such file or directory" >&2
+      exit 1
+    fi
+    printf '%s\n' "${FAKE_PI_SYMLINKS:-}" ;;
   *sed*SAVE_CONFIG*) printf '%s\n' "${FAKE_SAVE_CONFIG_BLOCK:-#*# <---------------------- SAVE_CONFIG ---------------------->}" ;;
   # Marker write: must match before the generic *last-deploy-sha* read pattern.
   # The script issues `echo '<sha>' > ~/printer_data/config/.last-deploy-sha`.

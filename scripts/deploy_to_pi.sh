@@ -18,11 +18,12 @@ SAVE_CONFIG_PI=""
 STAGED_PRINTER_CFG=""
 RESTART_KIND=""
 RSYNC_EXCLUDES=()
+PI_SYMLINK_EXCLUDES=()
 
 # Polling parameters for wait_for_klipper_ready. Overridable for tests.
 # READY_POLL_INTERVAL=0 is valid (POSIX sleep accepts 0); tests override to 0.
 READY_POLL_INTERVAL="${READY_POLL_INTERVAL:-1}"
-READY_POLL_MAX="${READY_POLL_MAX:-30}"
+READY_POLL_MAX="${READY_POLL_MAX:-60}"
 
 # ERE pattern matching the SAVE_CONFIG marker line that Klipper writes at
 # the bottom of printer.cfg. Used wherever we split body from tail.
@@ -119,6 +120,29 @@ check_ssh_reachable() {
   fi
 }
 
+discover_pi_symlinks() {
+  # Find every symlink under ~/printer_data/config/ on the Pi. rsync would
+  # otherwise replace these with the source's dereferenced content, breaking
+  # third-party install models (Happy-Hare, mainsail-config, moonraker-
+  # timelapse all use symlinks here).
+  #
+  # Hard-fail on ssh/find failure: silent fallback to "no excludes" would
+  # destructively overwrite every Pi-side symlink, which is exactly what
+  # this function exists to prevent.
+  local raw relpath
+  PI_SYMLINK_EXCLUDES=()
+  if ! raw=$(ssh "$PI_HOST" 'cd ~/printer_data/config && find . -type l -printf "%P\n"' 2>&1); then
+    echo "ERR: could not discover Pi-side symlinks (ssh or find failed):" >&2
+    printf '  %s\n' "$raw" >&2
+    echo "ERR: aborting — refusing to deploy without symlink-safety excludes." >&2
+    exit 1
+  fi
+  while IFS= read -r relpath; do
+    [[ -z "$relpath" ]] && continue
+    PI_SYMLINK_EXCLUDES+=(--exclude="/$relpath")
+  done <<< "$raw"
+}
+
 check_moonraker_reachable() {
   if ! curl -fsS -o /dev/null --max-time 5 "$PI_API/server/info"; then
     echo "ERR: Moonraker not reachable at $PI_API. Deploy aborted (restart step would fail anyway)." >&2
@@ -175,8 +199,9 @@ build_staged_printer_cfg() {
 }
 
 build_rsync_excludes() {
-  # Include real-config files; explicitly exclude tooling, docs, and the
-  # symlinked-third-party files that mustn't be overwritten.
+  # Exclude source-side tooling files (local working tree artifacts that must
+  # never land on the Pi). Pi-side symlinks are handled dynamically via
+  # PI_SYMLINK_EXCLUDES populated by discover_pi_symlinks().
   RSYNC_EXCLUDES=(
     --exclude='/.git/'
     --exclude='/.github/'
@@ -199,21 +224,14 @@ build_rsync_excludes() {
     --exclude='requirements.txt'
     --exclude='.env'
     --exclude='.env.example'
-    # Symlinks on the Pi — don't overwrite them with our dereferenced copies
-    --exclude='mainsail.cfg'
-    --exclude='timelapse.cfg'
-    --exclude='mmu/base/mmu_cut_tip.cfg'
-    --exclude='mmu/base/mmu_form_tip.cfg'
-    --exclude='mmu/base/mmu_heater_vent.cfg'
-    --exclude='mmu/base/mmu_leds.cfg'
-    --exclude='mmu/base/mmu_purge.cfg'
-    --exclude='mmu/base/mmu_sequence.cfg'
-    --exclude='mmu/base/mmu_software.cfg'
-    --exclude='mmu/base/mmu_state.cfg'
-    --exclude='mmu/optional/client_macros.cfg'
-    --exclude='mmu/optional/mmu_menu.cfg'
+    # Local dev noise (git/tool caches that must not land in ~/printer_data/config/)
+    --exclude='/.gitmodules'
+    --exclude='/.pytest_cache/'
+    --exclude='/.ruff_cache/'
     --exclude='printer.cfg'   # handled separately via SAVE_CONFIG splice
   )
+  # Append dynamic Pi-side symlink excludes (drift-proof: discovered live)
+  RSYNC_EXCLUDES+=("${PI_SYMLINK_EXCLUDES[@]}")
 }
 
 choose_restart_kind() {
@@ -335,9 +353,6 @@ wait_for_klipper_ready() {
 
 cleanup() {
   rm -f "$SAVE_CONFIG_PI" "$STAGED_PRINTER_CFG"
-
-  echo
-  echo "==> Deploy complete. Verify printer state in Mainsail."
 }
 
 # ---------------------------------------------------------------------------
@@ -350,6 +365,7 @@ main() {
   check_in_sync_with_origin
   check_ci_green                   # ← NEW
   check_ssh_reachable
+  discover_pi_symlinks
   check_moonraker_reachable
   check_printer_idle
   capture_save_config
@@ -368,6 +384,8 @@ main() {
   trigger_restart
   wait_for_klipper_ready
   cleanup
+  echo
+  echo "==> Deploy complete. Verify printer state in Mainsail."
 }
 
 main "$@"

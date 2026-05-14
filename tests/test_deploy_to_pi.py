@@ -310,6 +310,8 @@ def test_dry_run_touches_nothing_on_pi(fake_log):
     # But no rsync/scp invocations should have hit the (fake) Pi
     assert "rsync " not in log_contents, log_contents
     assert "scp " not in log_contents, log_contents
+    # And the "Deploy complete" message must not appear in --dry-run output
+    assert "Deploy complete" not in r.stdout, _diag(r)
 
 
 def test_yes_flag_skips_confirmation(fake_log):
@@ -371,3 +373,60 @@ def test_exit_code_2_on_marker_write_failure(fake_log):
     r = _run(env=env, args=["--yes"])
     assert r.returncode == 2, _diag(r)
     assert "failed to write deploy marker" in r.stderr, _diag(r)
+
+
+def test_deploy_excludes_noise_files(fake_log, tmp_path):
+    """Local dev noise (.gitmodules, .pytest_cache, .ruff_cache) must not be synced."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env, args=["--yes"])
+    assert r.returncode == 0, _diag(r)
+    log = fake_log.read_text()
+    # rsync invocation must include excludes for these
+    assert "--exclude=/.gitmodules" in log, log
+    assert "--exclude=/.pytest_cache/" in log, log
+    assert "--exclude=/.ruff_cache/" in log, log
+
+
+def test_aborts_when_pi_symlink_discovery_fails():
+    """ssh/find failure must hard-fail, not silently deploy without excludes.
+
+    Falling back to "no excludes" would destructively overwrite every
+    symlink under ~/printer_data/config/ — exactly what discover_pi_symlinks
+    exists to prevent.
+    """
+    r = _run(env={"FAKE_SSH_FIND_OK": "0", "FAKE_PI_PRINTER_CFG": _matching_pi_cfg()})
+    assert r.returncode == 1, _diag(r)
+    assert "could not discover Pi-side symlinks" in r.stderr, _diag(r)
+
+
+def test_deploy_excludes_pi_side_symlinks(fake_log):
+    """Symlinks discovered on the Pi must be added to rsync excludes."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "FAKE_PI_SYMLINKS": "mmu/base/mmu_cut_tip.cfg\nmainsail.cfg\nmmu/base/some_new_symlink.cfg",
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env, args=["--yes"])
+    assert r.returncode == 0, _diag(r)
+    log = fake_log.read_text()
+    assert "--exclude=/mmu/base/mmu_cut_tip.cfg" in log, log
+    assert "--exclude=/mainsail.cfg" in log, log
+    # Pi symlinks that don't appear in any static list (drift-resistant)
+    assert "--exclude=/mmu/base/some_new_symlink.cfg" in log, log
+
+
+def test_dry_run_does_not_print_deploy_complete(fake_log):
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+    }
+    r = _run(env=env, args=["--dry-run"])
+    assert r.returncode == 0, _diag(r)
+    assert "Deploy complete" not in r.stdout, _diag(r)
