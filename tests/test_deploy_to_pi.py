@@ -36,6 +36,13 @@ def _diag(r):
     return f"rc={r.returncode}\n--- stdout ---\n{r.stdout}\n--- stderr ---\n{r.stderr}"
 
 
+def _matching_pi_cfg():
+    """Build a Pi printer.cfg whose body matches repo's body + a fake SAVE_CONFIG tail."""
+    marker = "#*# <---------------------- SAVE_CONFIG ---------------------->"
+    body = (REPO / "printer.cfg").read_text().split(marker)[0]
+    return body + marker + "\n#*# [heater_bed]\n#*# control = pid\n"
+
+
 @pytest.fixture
 def fake_log(tmp_path):
     """A temp file the fakes append their invocations to.
@@ -69,7 +76,13 @@ def test_aborts_when_ci_missing():
 
 def test_ci_skipped_counts_as_pass(fake_log):
     """Klippy parse + smoke is intentionally skipped today (Open Investigation #7)."""
-    r = _run(env={"FAKE_GH_RESPONSE": "skipped", "FAKE_LOG_DIR": str(fake_log)})
+    r = _run(
+        env={
+            "FAKE_GH_RESPONSE": "skipped",
+            "FAKE_LOG_DIR": str(fake_log),
+            "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        }
+    )
     # CI gate must NOT have been the reason for any non-zero exit.
     assert "CI not green" not in r.stderr, _diag(r)
     # The gate WAS exercised: fake gh was invoked.
@@ -120,3 +133,26 @@ def test_aborts_when_print_stats_malformed():
     r = _run(env={"FAKE_PRINT_STATS_JSON": '{"result":{"status":{}}}'})
     assert r.returncode == 1, _diag(r)
     assert "could not parse print_stats" in r.stderr.lower(), _diag(r)
+
+
+def test_aborts_when_pi_has_drift():
+    """Pi's printer.cfg body differs from origin/main's body."""
+    fake_pi_cfg = (
+        "[printer]\n"
+        "max_velocity: 999   # someone-edited-on-pi\n"
+        "\n"
+        "#*# <---------------------- SAVE_CONFIG ---------------------->\n"
+        "#*# [heater_bed]\n"
+    )
+    r = _run(env={"FAKE_PI_PRINTER_CFG": fake_pi_cfg})
+    assert r.returncode == 1, _diag(r)
+    combined = (r.stderr + r.stdout).lower()
+    assert "drift" in combined or "sync-from-pi" in combined, _diag(r)
+
+
+def test_drift_gate_passes_when_pi_matches_repo():
+    """Pi's printer.cfg body matches origin/main's body — gate passes."""
+    r = _run(env={"FAKE_PI_PRINTER_CFG": _matching_pi_cfg()})
+    # Drift gate must not be the reason for any non-zero exit.
+    assert "drift" not in r.stderr.lower(), _diag(r)
+    assert "sync-from-pi" not in r.stderr.lower(), _diag(r)

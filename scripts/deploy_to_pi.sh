@@ -19,6 +19,11 @@ STAGED_PRINTER_CFG=""
 RESTART_KIND=""
 RSYNC_EXCLUDES=()
 
+# ERE pattern matching the SAVE_CONFIG marker line that Klipper writes at
+# the bottom of printer.cfg. Used wherever we split body from tail.
+# -E across all sed sites; BSD sed (macOS) doesn't support \+ in BRE.
+SAVE_CONFIG_MARKER='^#\*# <-+ SAVE_CONFIG -+>'
+
 trap 'rm -f "${SAVE_CONFIG_PI:-}" "${STAGED_PRINTER_CFG:-}" /tmp/restart_resp.json' EXIT
 
 # ---------------------------------------------------------------------------
@@ -115,16 +120,28 @@ check_printer_idle() {
 capture_save_config() {
   echo "==> Capturing Pi's current SAVE_CONFIG block"
   SAVE_CONFIG_PI=$(mktemp)
-  ssh "$PI_HOST" 'sed -n "/^#\*# <-+ SAVE_CONFIG -\+>/,$p" ~/printer_data/config/printer.cfg' > "$SAVE_CONFIG_PI"
+  # shellcheck disable=SC2029 # $SAVE_CONFIG_MARKER intentionally expands on the client side
+  ssh "$PI_HOST" "sed -nE '/$SAVE_CONFIG_MARKER/,\$p' ~/printer_data/config/printer.cfg" > "$SAVE_CONFIG_PI"
   if [[ ! -s "$SAVE_CONFIG_PI" ]]; then
     echo "WARN: no SAVE_CONFIG block found in Pi's printer.cfg. Continuing without one." >&2
+  fi
+}
+
+check_no_pi_drift() {
+  local pi_full pi_body repo_body
+  pi_full=$(ssh "$PI_HOST" 'cat ~/printer_data/config/printer.cfg')
+  pi_body=$(printf '%s\n' "$pi_full" | sed -E "/$SAVE_CONFIG_MARKER/,\$d")
+  repo_body=$(sed -E "/$SAVE_CONFIG_MARKER/,\$d" "$REPO_ROOT/printer.cfg")
+  if [[ "$pi_body" != "$repo_body" ]]; then
+    echo "ERR: Pi printer.cfg body has drifted from origin/main. Run sync-from-pi to capture changes, then re-run deploy-to-pi." >&2
+    exit 1
   fi
 }
 
 build_staged_printer_cfg() {
   # Stage repo printer.cfg minus its own SAVE_CONFIG block, then append Pi's.
   STAGED_PRINTER_CFG=$(mktemp)
-  sed '/^#\*# <-+ SAVE_CONFIG -\+>/,$d' printer.cfg > "$STAGED_PRINTER_CFG"
+  sed -E "/$SAVE_CONFIG_MARKER/,\$d" printer.cfg > "$STAGED_PRINTER_CFG"
   if [[ -s "$SAVE_CONFIG_PI" ]]; then
     printf '\n' >> "$STAGED_PRINTER_CFG"
     cat "$SAVE_CONFIG_PI" >> "$STAGED_PRINTER_CFG"
@@ -256,6 +273,7 @@ main() {
   check_moonraker_reachable
   check_printer_idle
   capture_save_config
+  check_no_pi_drift
   build_staged_printer_cfg
   build_rsync_excludes
   choose_restart_kind
