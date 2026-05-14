@@ -10,9 +10,15 @@ This skill mutates the printer. The user, not Claude, decides when to deploy. Cl
 
 ## Pre-flight
 
-- Must be on `main` with a clean working tree and up-to-date with `origin/main`. The skill refuses to deploy from a feat branch or a dirty working tree.
-- Pi must be reachable via keyed SSH (`ssh pi@mainsailos.local` works without password). The `.env` fallback (`pi:raspberry`) is supported but flagged with a warning.
-- Moonraker must be running on the Pi (default API port 7125).
+The skill refuses to deploy if any of these gates fail (it tells you what to fix):
+
+- Must be on `main` with a clean working tree and up-to-date with `origin/main`. Refuses to deploy from a feat branch or a dirty working tree.
+- Latest CI run on HEAD must be **green** (success). The `Klippy parse + smoke gcode` job is intentionally `skipped` until Open Investigation #7 ships — that counts as pass. An in-progress run is rejected with a clear message.
+- Pi must be reachable via keyed SSH (`ssh pi@mainsailos.local` works without password).
+- Moonraker must be running on the Pi (default API port 7125). Unreachable Moonraker is a hard fail — the restart step would fail anyway.
+- Printer must be **idle** (`print_stats.state == "standby"`). Not `printing`, `paused`, etc.
+- Pi's `printer.cfg` body (everything above the SAVE_CONFIG marker) must match `origin/main`. If they've diverged, run `sync-from-pi` first to capture Pi-side edits.
+- After the deploy + restart, the skill polls Moonraker until Klipper reports `state == "ready"` (timeout 30s). If Klipper enters `error`, the skill surfaces the `state_message` and exits non-zero.
 
 ## What it does
 
@@ -34,10 +40,18 @@ This skill mutates the printer. The user, not Claude, decides when to deploy. Cl
 ## How to run
 
 ```sh
-scripts/deploy_to_pi.sh
+scripts/deploy_to_pi.sh           # interactive: confirms before deploy
+scripts/deploy_to_pi.sh --yes     # skip confirmation
+scripts/deploy_to_pi.sh --dry-run # preconditions + plan only, no changes
 ```
 
 Or, from a Claude session, invoke the skill explicitly: `/deploy-to-pi`.
+
+Exit codes:
+- `0` — success (deploy complete and Klipper is ready, or `--dry-run` finished cleanly)
+- `1` — precondition failed (told you what to fix)
+- `2` — deploy failed mid-flight (rsync/scp errored)
+- `3` — Klipper failed to come back ready (poll timed out, or state went to `error`)
 
 ## Rollback
 
