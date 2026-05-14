@@ -252,7 +252,7 @@ There's no `[update_manager klipper]` block in `config/moonraker.conf`, **and th
 6. **This repo is the canonical config; the Pi is the working copy.** Eventually changes flow `local edit → PR → main → sync to Pi`. Until that CI/CD is built, manual sync is fine, but **never overwrite the Pi's files without confirming** — Mainsail can also edit configs directly and the Pi may be ahead.
 
 7. **Three classes of file on the Pi to be aware of when syncing:**
-   - **Real files we own** — `config/printer.cfg`, everything under `config/macros/`, root-level `.cfg/.conf` files. Edit freely here.
+   - **Real files we own** — `config/printer.cfg`, everything under `config/macros/`, and the other `.cfg`/`.conf` files directly in `config/` (`eddy.cfg`, `btt-ebb-sb-usb-v1.0.cfg`, `moonraker.conf`, `crowsnest.conf`, `sonar.conf`). Edit freely here.
    - **Symlinked-from-third-party** — `config/mmu/base/*.cfg` (Happy-Hare), `config/mainsail.cfg` (mainsail-config), `config/timelapse.cfg` (moonraker-timelapse). Editing these on the Pi mutates the upstream install dir. Edits should generally go in the third-party repo, not here.
    - **Auto-generated** — the `#*# SAVE_CONFIG` block at the bottom of `config/printer.cfg`. Klipper rewrites this on every `SAVE_CONFIG`. Don't merge upstream changes that touch it; always pull the Pi's current version when working with calibration values.
 
@@ -325,7 +325,7 @@ pre-commit install                         # (optional) auto-run hooks on every 
 To re-pull configs from the Pi when it drifts ahead (Mainsail edits, SAVE_CONFIG rewrites):
 
 ```sh
-rsync -av --exclude='printer-2*.cfg' --exclude='mmu-2*' pi@mainsailos.local:~/printer_data/config/ ./
+bash scripts/sync_from_pi.sh   # handles diff + prompt + correct destination (config/) for you
 ```
 
 ---
@@ -398,7 +398,7 @@ voron-2-611/
 ├── .env                         # SSH creds (gitignored)
 ├── .gitignore                   # excludes .env, .venv/, .worktrees/, dict backups, logs
 ├── .pre-commit-config.yaml      # text hygiene + ruff hooks (runs in CI too)
-├── Makefile                     # `make test-py` (macOS) / `make test` (Linux)
+├── Makefile                     # `make test-py` (macOS) / `make test` (Linux); see ## CI checks
 ├── requirements.txt             # tooling deps (pytest, pre-commit) — pinned
 │
 ├── config/                      # everything that deploys to the Pi

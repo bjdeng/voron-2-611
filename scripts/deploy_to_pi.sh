@@ -191,7 +191,7 @@ check_no_pi_drift() {
 build_staged_printer_cfg() {
   # Stage repo printer.cfg minus its own SAVE_CONFIG block, then append Pi's.
   STAGED_PRINTER_CFG=$(mktemp)
-  sed -E "/$SAVE_CONFIG_MARKER/,\$d" config/printer.cfg > "$STAGED_PRINTER_CFG"
+  sed -E "/$SAVE_CONFIG_MARKER/,\$d" "$REPO_ROOT/config/printer.cfg" > "$STAGED_PRINTER_CFG"
   if [[ -s "$SAVE_CONFIG_PI" ]]; then
     printf '\n' >> "$STAGED_PRINTER_CFG"
     cat "$SAVE_CONFIG_PI" >> "$STAGED_PRINTER_CFG"
@@ -237,8 +237,9 @@ choose_restart_kind() {
     RESTART_KIND="restart"
     return
   fi
-  # If any changed file is OUTSIDE macros/ / archive/ / printer.cfg, MCU-level
-  # state may have moved — firmware_restart. Otherwise soft restart is enough.
+  # If any changed file is OUTSIDE config/macros/, config/archive/, or
+  # config/printer.cfg, MCU-level state may have moved — firmware_restart.
+  # Otherwise soft restart is enough.
   if printf '%s\n' "$changed" | grep -vE '^config/(macros/|archive/|printer\.cfg$)' >/dev/null; then
     RESTART_KIND="firmware_restart"
   else

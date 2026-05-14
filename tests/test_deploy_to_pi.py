@@ -226,7 +226,7 @@ def test_chooses_firmware_restart_on_non_macro_change(fake_log):
     env = {
         "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
         "FAKE_LAST_DEPLOY_SHA": "abcd1234",
-        "FAKE_GIT_DIFF_FILES": "eddy.cfg",
+        "FAKE_GIT_DIFF_FILES": "config/eddy.cfg",
         "FAKE_LOG_DIR": str(fake_log),
         "READY_POLL_INTERVAL": "0",
         "READY_POLL_MAX": "3",
@@ -236,6 +236,24 @@ def test_chooses_firmware_restart_on_non_macro_change(fake_log):
     log = fake_log.read_text()
     assert "/printer/firmware_restart" in log, log
     assert "/printer/restart" not in log.replace("/printer/firmware_restart", ""), log
+
+
+def test_chooses_soft_restart_on_macro_only_change(fake_log):
+    """Macro-only diff routes to a soft `restart` (not firmware_restart)."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LAST_DEPLOY_SHA": "abcd1234",
+        "FAKE_GIT_DIFF_FILES": "config/macros/macros.cfg",
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env)
+    assert r.returncode == 0, _diag(r)
+    log = fake_log.read_text()
+    # Soft restart endpoint must be hit; firmware_restart must NOT.
+    assert "/printer/restart" in log, log
+    assert "/printer/firmware_restart" not in log, log
 
 
 def test_corrupt_deploy_marker_defaults_to_firmware_restart(fake_log):

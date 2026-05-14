@@ -16,7 +16,7 @@ case "$1 $2" in
   "diff --name-only")
     # Simulate `git diff <unknown-sha> main` failing (corrupt deploy marker).
     if [[ "${FAKE_GIT_DIFF_ERROR:-0}" == "1" ]]; then exit 128; fi
-    printf '%s\n' "${FAKE_GIT_DIFF_FILES:-macros/macros.cfg}"
+    printf '%s\n' "${FAKE_GIT_DIFF_FILES:-config/macros/macros.cfg}"
     exit 0 ;;
   "status -sb")
     # Diagnostic call from check_tree_clean after detecting a dirty tree.
