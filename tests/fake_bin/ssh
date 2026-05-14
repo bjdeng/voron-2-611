@@ -6,12 +6,18 @@ if [[ "${FAKE_SSH_REACHABLE:-1}" != "1" ]]; then
 fi
 
 # Heuristic: last arg is the remote command. Match on it.
-remote_cmd="${@: -1}"
+# Use ${*: -1} (not ${@: -1}) to satisfy shellcheck: single positional as a
+# string, not an array slice.
+remote_cmd="${*: -1}"
 case "$remote_cmd" in
   true) exit 0 ;;
   *sed*SAVE_CONFIG*) printf '%s\n' "${FAKE_SAVE_CONFIG_BLOCK:-#*# <---------------------- SAVE_CONFIG ---------------------->}" ;;
-  *last-deploy-sha*) printf '%s' "${FAKE_LAST_DEPLOY_SHA:-}" ;;
+  # Marker write: must match before the generic *last-deploy-sha* read pattern.
+  # The script issues `echo '<sha>' > ~/printer_data/config/.last-deploy-sha`.
+  *echo*\>*last-deploy-sha*)
+    if [[ "${FAKE_MARKER_WRITE_OK:-1}" != "1" ]]; then exit 1; fi
+    exit 0 ;;
+  *cat*last-deploy-sha*) printf '%s' "${FAKE_LAST_DEPLOY_SHA:-}" ;;
   *cat*printer.cfg*) printf '%s' "${FAKE_PI_PRINTER_CFG:-}" ;;
-  echo*last-deploy-sha) exit 0 ;;
   *) exit 0 ;;
 esac

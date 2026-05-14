@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 echo "scp $*" >> "${FAKE_LOG_DIR:-/dev/stderr}"
+if [[ "${FAKE_SCP_OK:-1}" != "1" ]]; then exit 1; fi
 exit 0

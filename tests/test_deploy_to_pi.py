@@ -78,10 +78,12 @@ def test_aborts_when_tree_dirty_staged():
 
 def test_aborts_when_local_ahead_of_origin():
     """Local main diverges from origin/main -> abort."""
-    r = _run(env={
-        "FAKE_GIT_LOCAL_SHA": "aaaa1111",
-        "FAKE_GIT_REMOTE_SHA": "bbbb2222",
-    })
+    r = _run(
+        env={
+            "FAKE_GIT_LOCAL_SHA": "aaaa1111",
+            "FAKE_GIT_REMOTE_SHA": "bbbb2222",
+        }
+    )
     assert r.returncode == 1, _diag(r)
     assert "not in sync with origin/main" in r.stderr, _diag(r)
 
@@ -310,3 +312,39 @@ def test_exit_code_2_on_mid_flight_restart_failure(fake_log):
     r = _run(env=env, args=["--yes"])
     assert r.returncode == 2, _diag(r)
     assert "Moonraker restart call failed" in r.stderr, _diag(r)
+
+
+def test_exit_code_2_on_rsync_failure(fake_log):
+    """rsync fails partway through -> exit 2 with mid-deploy message."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "FAKE_RSYNC_OK": "0",
+    }
+    r = _run(env=env, args=["--yes"])
+    assert r.returncode == 2, _diag(r)
+    assert "rsync failed mid-deploy" in r.stderr, _diag(r)
+
+
+def test_exit_code_2_on_scp_failure(fake_log):
+    """scp of staged printer.cfg fails -> exit 2."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "FAKE_SCP_OK": "0",
+    }
+    r = _run(env=env, args=["--yes"])
+    assert r.returncode == 2, _diag(r)
+    assert "scp of staged printer.cfg failed" in r.stderr, _diag(r)
+
+
+def test_exit_code_2_on_marker_write_failure(fake_log):
+    """ssh write of .last-deploy-sha fails -> exit 2."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "FAKE_MARKER_WRITE_OK": "0",
+    }
+    r = _run(env=env, args=["--yes"])
+    assert r.returncode == 2, _diag(r)
+    assert "failed to write deploy marker" in r.stderr, _diag(r)

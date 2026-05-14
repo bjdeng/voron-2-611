@@ -232,8 +232,10 @@ show_plan_and_confirm() {
   if [[ "$DRY_RUN" == 1 ]]; then
     echo "(--dry-run: skipping rsync preview; no network calls to Pi will be made)"
   else
+    # Preview is informational. If it fails (e.g., transient network), let
+    # do_rsync's hard-fail-and-exit-2 path be the authoritative failure.
     rsync -av --dry-run "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/" "${PI_HOST}:~/printer_data/config/" \
-      | tail -20
+      | tail -20 || echo "(preview unavailable; do_rsync will report the real failure)"
   fi
 
   echo
