@@ -392,6 +392,18 @@ def test_deploy_excludes_noise_files(fake_log, tmp_path):
     assert "--exclude=/.ruff_cache/" in log, log
 
 
+def test_aborts_when_pi_symlink_discovery_fails():
+    """ssh/find failure must hard-fail, not silently deploy without excludes.
+
+    Falling back to "no excludes" would destructively overwrite every
+    symlink under ~/printer_data/config/ — exactly what discover_pi_symlinks
+    exists to prevent.
+    """
+    r = _run(env={"FAKE_SSH_FIND_OK": "0", "FAKE_PI_PRINTER_CFG": _matching_pi_cfg()})
+    assert r.returncode == 1, _diag(r)
+    assert "could not discover Pi-side symlinks" in r.stderr, _diag(r)
+
+
 def test_deploy_excludes_pi_side_symlinks(fake_log):
     """Symlinks discovered on the Pi must be added to rsync excludes."""
     env = {

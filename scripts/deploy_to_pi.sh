@@ -125,12 +125,22 @@ discover_pi_symlinks() {
   # otherwise replace these with the source's dereferenced content, breaking
   # third-party install models (Happy-Hare, mainsail-config, moonraker-
   # timelapse all use symlinks here).
-  local relpath
+  #
+  # Hard-fail on ssh/find failure: silent fallback to "no excludes" would
+  # destructively overwrite every Pi-side symlink, which is exactly what
+  # this function exists to prevent.
+  local raw relpath
   PI_SYMLINK_EXCLUDES=()
+  if ! raw=$(ssh "$PI_HOST" 'cd ~/printer_data/config && find . -type l -printf "%P\n"' 2>&1); then
+    echo "ERR: could not discover Pi-side symlinks (ssh or find failed):" >&2
+    printf '  %s\n' "$raw" >&2
+    echo "ERR: aborting — refusing to deploy without symlink-safety excludes." >&2
+    exit 1
+  fi
   while IFS= read -r relpath; do
     [[ -z "$relpath" ]] && continue
     PI_SYMLINK_EXCLUDES+=(--exclude="/$relpath")
-  done < <(ssh "$PI_HOST" 'cd ~/printer_data/config && find . -type l -printf "%P\n"' 2>/dev/null)
+  done <<< "$raw"
 }
 
 check_moonraker_reachable() {
