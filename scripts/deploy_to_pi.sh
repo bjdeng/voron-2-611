@@ -136,11 +136,16 @@ capture_save_config() {
 }
 
 check_no_pi_drift() {
-  local pi_full pi_body repo_body
+  # Compare Pi's printer.cfg body to the repo's, ignoring whitespace-only
+  # differences. Mainsail saves with trailing whitespace that pre-commit
+  # strips here; the gate's intent is to catch SEMANTIC edits (Mainsail
+  # changes, manual SSH tweaks), not whitespace produced by the round-trip.
+  local pi_full
   pi_full=$(ssh "$PI_HOST" 'cat ~/printer_data/config/printer.cfg')
-  pi_body=$(printf '%s\n' "$pi_full" | sed -E "/$SAVE_CONFIG_MARKER/,\$d")
-  repo_body=$(sed -E "/$SAVE_CONFIG_MARKER/,\$d" "$REPO_ROOT/printer.cfg")
-  if [[ "$pi_body" != "$repo_body" ]]; then
+  if ! diff -q -w -B \
+      <(printf '%s\n' "$pi_full" | sed -E "/$SAVE_CONFIG_MARKER/,\$d") \
+      <(sed -E "/$SAVE_CONFIG_MARKER/,\$d" "$REPO_ROOT/printer.cfg") \
+      >/dev/null; then
     echo "ERR: Pi printer.cfg body has drifted from origin/main. Run sync-from-pi to capture changes, then re-run deploy-to-pi." >&2
     exit 1
   fi
