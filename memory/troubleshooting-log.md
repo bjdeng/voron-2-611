@@ -17,6 +17,13 @@ Symptoms encountered, root cause when found, and the fix that worked. Newest at 
 - **Mitigation:** Ben unplugged the webcam. Crowsnest + Sonar services still run with nothing to serve.
 - **Plan:** re-enable after `eddy-ng` → native Klipper Eddy migration (the suspicion is the eddy-ng polling loop conflicts with the webcam pipeline).
 
+### CI klippy-smoke job is disabled
+- **Symptom:** `test_klippy.py` against `printer.cfg` fails with `mcu 'eddy': Unknown command: ldc1612_ng_start_stop`.
+- **Root cause:** the committed `tests/dict/eddy.dict` was built on the Pi without eddy-ng's `src/sensor_ldc1612_ng.c` firmware patch applied. `vendor/eddy-ng/ldc1612_ng.py` hardcodes calls to those MCU commands. The Pi's actually-running Eddy firmware is also missing them (the .c file existed but the Makefile patch didn't), so on the Pi too `[probe_eddy_ng]` couldn't be using the ng-specific commands — needs investigation alongside the migration.
+- **Was hidden by:** missing `set -o pipefail` in the workflow (Codex P1, fixed in d9f53f4). Before the pipefail fix, `tee` swallowed the non-zero exit code from `test_klippy.py` and CI reported green. Multiple "green" CI runs in this session were silently failing.
+- **Mitigation:** `klippy-smoke` job disabled with `if: false` in `.github/workflows/ci.yml`. Lint+refcheck job remains active and works.
+- **Plan:** re-enable after the eddy migration removes `[probe_eddy_ng]` and switches to upstream `[probe_eddy_current]`, which uses vanilla `ldc1612_*` commands that ARE in eddy.dict. The eddy migration plan (docs/superpowers/plans/2026-05-13-eddy-ng-to-native-migration.md) has been cross-referenced with this requirement.
+
 ---
 
 ## Resolved
