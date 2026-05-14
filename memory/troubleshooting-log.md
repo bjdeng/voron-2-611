@@ -17,6 +17,13 @@ Symptoms encountered, root cause when found, and the fix that worked. Newest at 
 - **Mitigation:** Ben unplugged the webcam. Crowsnest + Sonar services still run with nothing to serve.
 - **Plan:** re-enable after `eddy-ng` → native Klipper Eddy migration (the suspicion is the eddy-ng polling loop conflicts with the webcam pipeline).
 
+### CI klippy-smoke job is disabled
+- **Symptom:** `test_klippy.py` against `printer.cfg` fails with `mcu 'eddy': Unknown command: ldc1612_ng_start_stop`.
+- **Root cause:** the committed `tests/dict/eddy.dict` was built on the Pi without eddy-ng's `src/sensor_ldc1612_ng.c` firmware patch applied. `vendor/eddy-ng/ldc1612_ng.py` hardcodes calls to those MCU commands. The Pi's actually-running Eddy firmware is also missing them (the .c file existed but the Makefile patch didn't), so on the Pi too `[probe_eddy_ng]` couldn't be using the ng-specific commands — needs investigation alongside the migration.
+- **Was hidden by:** missing `set -o pipefail` in the workflow (Codex P1, fixed in d9f53f4). Before the pipefail fix, `tee` swallowed the non-zero exit code from `test_klippy.py` and CI reported green. Multiple "green" CI runs in this session were silently failing.
+- **Mitigation:** `klippy-smoke` job disabled with `if: false` in `.github/workflows/ci.yml`. Lint+refcheck job remains active and works.
+- **Plan:** re-enable after the eddy migration removes `[probe_eddy_ng]` and switches to upstream `[probe_eddy_current]`, which uses vanilla `ldc1612_*` commands that ARE in eddy.dict. The eddy migration plan (docs/superpowers/plans/2026-05-13-eddy-ng-to-native-migration.md) has been cross-referenced with this requirement.
+
 ---
 
 ## Resolved
@@ -24,3 +31,11 @@ Symptoms encountered, root cause when found, and the fix that worked. Newest at 
 ### 2026-05-13 — Moonraker missing `[update_manager klipper]` block (non-issue)
 - **Concern:** Initial repo-init review flagged the absence of `[update_manager klipper]` from `moonraker.conf` as a potential quirk.
 - **Resolution:** Verified against Moonraker docs (`vendor/moonraker/docs/configuration.md:2017-2026`). Moonraker auto-detects Klipper; the explicit block is only for overriding update channel, pinned commit, or refresh interval. Current behavior is correct.
+
+### 2026-05-13 — CI scaffold eddy-migration acid test
+- **Goal:** Verify `scripts/macro_refcheck.py`'s ALLOWLIST coupling catches an eddy migration that updates `eddy.cfg` without cleaning up callers of `PROBE_EDDY_NG_*`.
+- **Method:** On a scratch branch, removed the eddy-ng block from `ALLOWLIST` while leaving `macros/print_start.cfg` untouched, ran refcheck.
+- **Result: PASS** — refcheck flagged:
+  - `macros/print_start.cfg:67: [gcode_macro PRINT_START] references unknown command 'PROBE_EDDY_NG_TAP'`
+  - `macros/print_start.cfg:93: [gcode_macro PRINT_END] references unknown command 'PROBE_EDDY_NG_SET_TAP_OFFSET'`
+- **Implication for the eddy migration:** the migration PR must update `eddy.cfg`, remove the eddy-ng entries from `scripts/macro_refcheck.py`'s ALLOWLIST, AND update `macros/print_start.cfg` — in a single PR (or atomic sequence). If any are out of sync, CI catches it.

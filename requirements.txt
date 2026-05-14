@@ -1,0 +1,8 @@
+# Python tooling deps for CI checks + local dev.
+# Klipper's own runtime deps (greenlet, cffi, jinja2, pyserial, etc.)
+# come from vendor/klipper/scripts/klippy-requirements.txt — installed
+# in the klippy CI job and by `make venv` locally.
+#
+# Pin versions for reproducibility — bump deliberately.
+pytest==8.3.3
+pre-commit==4.0.1

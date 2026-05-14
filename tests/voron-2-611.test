@@ -1,0 +1,32 @@
+# Voron 2.611 — parse + macro-graph smoke under simulated MCUs.
+# Run via: cd vendor/klipper && python scripts/test_klippy.py \
+#           -d ../../tests/dict ../../tests/voron-2-611.test
+#
+# This requires Linux (Klipper's chelper uses Linux-only kernel headers).
+# CI runs it on ubuntu-22.04 via .github/workflows/ci.yml.
+
+CONFIG ../printer.cfg
+DICTIONARY mcu.dict z=mcu.dict EBB=ebb-usb.dict eddy=eddy.dict mmu=easy-brd.dict
+
+# --- Boot + leveling smoke ---
+G28
+QUAD_GANTRY_LEVEL
+BED_MESH_CALIBRATE METHOD=rapid_scan
+
+# --- Macro graph smoke: walks every command in PRINT_START → sub-macros.
+# test_klippy.py verifies each command resolves; it does NOT execute the
+# jinja2 bodies at runtime, so conditional branches are not exercised. ---
+PRINT_WARMUP BED=60 EXTRUDER=200
+HEATSOAK T=60 C=30 MOVE=1 WAIT=0
+PRINT_START BED=60 EXTRUDER=200 CHAMBER=0
+PRINT_END
+OFF
+
+# --- MMU surface ---
+MMU_STATUS
+
+# --- Parking macros (one of each) ---
+PARKCENTER
+PARKFRONT
+PARKREAR
+PARKBED

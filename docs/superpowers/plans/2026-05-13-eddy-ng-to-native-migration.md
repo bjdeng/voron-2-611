@@ -778,3 +778,39 @@ These are explicitly out of scope per Spec §9, but worth noting for future work
 5. Sensorless X investigation.
 6. EBB USB → CAN migration.
 7. Microsteps reassessment ("quiet without losing steps" — per Ben).
+
+---
+
+## Note added 2026-05-13 by ci-scaffold plan
+
+The eddy migration must also remove these entries from
+`scripts/macro_refcheck.py` ALLOWLIST (added by the ci-scaffold work)
+in the same PR that removes the `[probe_eddy_ng]` block:
+
+```python
+"PROBE_EDDY_NG_TAP",
+"PROBE_EDDY_NG_PROBE",
+"PROBE_EDDY_NG_CALIBRATE",
+"PROBE_EDDY_NG_STATUS",
+"PROBE_EDDY_NG_SET_TAP_OFFSET",
+```
+
+If this step is skipped, the new CI scaffold will flag the unresolved
+callers in `macros/print_start.cfg` — see acid test result in
+`memory/troubleshooting-log.md` under "Resolved" (2026-05-13).
+
+## Note added 2026-05-14 by ci-scaffold execution
+
+While the CI scaffold was being implemented, the `klippy-smoke` job
+was disabled (`if: false` in `.github/workflows/ci.yml`) because
+`test_klippy.py` fails against `printer.cfg` while `[probe_eddy_ng]`
+is active. Root cause: the committed `tests/dict/eddy.dict` doesn't
+include `ldc1612_ng_*` MCU commands (the eddy-ng C extension wasn't
+fully applied to the Pi's firmware build).
+
+**The eddy migration PR must re-enable klippy-smoke**:
+1. Remove `if: false` from the `klippy-smoke` job in `.github/workflows/ci.yml`.
+2. Verify the new `[probe_eddy_current]` config uses vanilla `ldc1612_*`
+   MCU commands which ARE present in eddy.dict.
+3. If CI fails for any other reason after re-enable, investigate
+   per `memory/troubleshooting-log.md` 2026-05-14.
