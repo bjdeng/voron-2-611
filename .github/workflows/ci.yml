@@ -60,7 +60,8 @@ jobs:
       - name: macro_refcheck against all .cfg files
         # failglob: bash exits nonzero if any glob matches nothing — catches
         # accidental directory renames / restructures that would otherwise
-        # silently shrink coverage.
+        # silently shrink coverage. `shell: bash` for `-eo pipefail` consistency.
+        shell: bash
         run: |
           shopt -s failglob
           python scripts/macro_refcheck.py \
