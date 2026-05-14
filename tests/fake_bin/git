@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
-# Fake git. Reads FAKE_GIT_BRANCH, FAKE_GIT_DIRTY, FAKE_GIT_LOCAL_SHA,
-# FAKE_GIT_REMOTE_SHA. Logs every call.
+# Fake git. Reads FAKE_GIT_BRANCH, FAKE_GIT_DIRTY, FAKE_GIT_CACHED_DIRTY,
+# FAKE_GIT_LOCAL_SHA, FAKE_GIT_REMOTE_SHA, FAKE_GIT_DIFF_FILES,
+# FAKE_GIT_DIFF_ERROR. Logs every call.
 echo "git $*" >> "${FAKE_LOG_DIR:-/dev/stderr}"
 
 case "$1 $2" in
   "branch --show-current") echo "${FAKE_GIT_BRANCH:-main}"; exit 0 ;;
   "diff --quiet")
     if [[ "${FAKE_GIT_DIRTY:-0}" == "1" ]]; then exit 1; else exit 0; fi ;;
-  "diff --cached") exit 0 ;;
+  "diff --cached")
+    if [[ "${FAKE_GIT_CACHED_DIRTY:-0}" == "1" ]]; then exit 1; else exit 0; fi ;;
   "fetch --quiet") exit 0 ;;
   "rev-parse main") echo "${FAKE_GIT_LOCAL_SHA:-abc1234}"; exit 0 ;;
   "rev-parse origin/main") echo "${FAKE_GIT_REMOTE_SHA:-abc1234}"; exit 0 ;;
   "diff --name-only")
+    # Simulate `git diff <unknown-sha> main` failing (corrupt deploy marker).
+    if [[ "${FAKE_GIT_DIFF_ERROR:-0}" == "1" ]]; then exit 128; fi
     printf '%s\n' "${FAKE_GIT_DIFF_FILES:-macros/macros.cfg}"
     exit 0 ;;
   *) echo "fake git: unhandled args: $*" >&2; exit 99 ;;

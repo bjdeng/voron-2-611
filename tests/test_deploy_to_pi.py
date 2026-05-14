@@ -165,6 +165,42 @@ def test_drift_gate_passes_when_pi_matches_repo():
     assert "sync-from-pi" not in r.stderr.lower(), _diag(r)
 
 
+def test_chooses_firmware_restart_on_non_macro_change(fake_log):
+    """A non-macro/non-archive file in the diff routes to firmware_restart."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LAST_DEPLOY_SHA": "abcd1234",
+        "FAKE_GIT_DIFF_FILES": "eddy.cfg",
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env)
+    assert r.returncode == 0, _diag(r)
+    log = fake_log.read_text()
+    assert "/printer/firmware_restart" in log, log
+    assert "/printer/restart" not in log.replace("/printer/firmware_restart", ""), log
+
+
+def test_corrupt_deploy_marker_defaults_to_firmware_restart(fake_log):
+    """Unrecognized marker SHA -> git diff fails -> firmware_restart default."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LAST_DEPLOY_SHA": "deadbeef",
+        "FAKE_GIT_DIFF_ERROR": "1",
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env)
+    assert r.returncode == 0, _diag(r)
+    # User must be warned that we fell back to fresh-deploy treatment.
+    assert "not in git history" in r.stderr, _diag(r)
+    # And the safe restart kind must have been chosen.
+    log = fake_log.read_text()
+    assert "/printer/firmware_restart" in log, log
+
+
 def test_succeeds_when_klipper_returns_ready(fake_log):
     env = {
         "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),

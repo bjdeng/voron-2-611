@@ -200,23 +200,30 @@ build_rsync_excludes() {
 
 choose_restart_kind() {
   # Look at what changed between the last deploy (recorded in a marker file
-  # on the Pi) and HEAD. If we have no marker, treat it as a fresh deploy
-  # and pick firmware_restart to be safe.
+  # on the Pi) and HEAD. Default to firmware_restart whenever we can't be
+  # sure — this includes a missing marker (fresh deploy) and an unrecognized
+  # SHA (corrupt marker, from another repo, etc.).
   local deploy_marker_raw changed
   deploy_marker_raw=$(ssh "$PI_HOST" 'cat ~/printer_data/config/.last-deploy-sha 2>/dev/null || true')
   RESTART_KIND="firmware_restart"
-  if [[ -n "$deploy_marker_raw" ]]; then
-    changed=$(git diff --name-only "$deploy_marker_raw" main 2>/dev/null || echo "")
-    if [[ -n "$changed" ]]; then
-      # If every changed file is purely a macro or archive, soft restart is enough.
-      if printf '%s\n' "$changed" | grep -vE '^(macros/|archive/|printer\.cfg$)' >/dev/null; then
-        RESTART_KIND="firmware_restart"
-      elif printf '%s\n' "$changed" | grep -qE '^(macros/|archive/|printer\.cfg$)'; then
-        RESTART_KIND="restart"
-      fi
-    else
-      RESTART_KIND="restart"
-    fi
+  if [[ -z "$deploy_marker_raw" ]]; then
+    return
+  fi
+  if ! changed=$(git diff --name-only "$deploy_marker_raw" main 2>/dev/null); then
+    echo "WARN: deploy marker SHA '$deploy_marker_raw' not in git history. Treating as fresh deploy (firmware_restart)." >&2
+    return
+  fi
+  if [[ -z "$changed" ]]; then
+    # Marker matches HEAD: nothing changed. Soft restart is fine.
+    RESTART_KIND="restart"
+    return
+  fi
+  # If any changed file is OUTSIDE macros/ / archive/ / printer.cfg, MCU-level
+  # state may have moved — firmware_restart. Otherwise soft restart is enough.
+  if printf '%s\n' "$changed" | grep -vE '^(macros/|archive/|printer\.cfg$)' >/dev/null; then
+    RESTART_KIND="firmware_restart"
+  else
+    RESTART_KIND="restart"
   fi
 }
 
