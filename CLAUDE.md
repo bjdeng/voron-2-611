@@ -264,6 +264,23 @@ The Pi is at `mainsailos.local` (current IP 192.168.0.227). Keyed SSH was set up
 
 ---
 
+## CI checks
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every `pull_request` and `push` to `main`. Two parallel jobs:
+
+- **Klippy parse + smoke gcode** — runs `vendor/klipper/scripts/test_klippy.py` against `tests/voron-2-611.test`, which loads `printer.cfg` with all five MCUs simulated and replays a smoke g-code sequence (G28, QGL, `BED_MESH_CALIBRATE METHOD=rapid_scan`, `PRINT_START`, `PRINT_END`, `OFF`, `MMU_STATUS`, parking macros). Catches: syntax errors, unknown sections, pin clashes, missing modules, every jinja2 template error in any `[gcode_macro]` body, and runtime macro-reference errors reachable from the smoke graph. Klipper's `gcode_macro.py:54` parses every template eagerly at config-load, so this single step covers most reasons CI would fail.
+- **pre-commit + macro refcheck + pytest** — `.pre-commit-config.yaml` runs text hygiene (trailing-whitespace, end-of-file-fixer, mixed-line-ending) plus `ruff` (format + lint) on Python. `scripts/macro_refcheck.py` statically verifies every gcode command referenced in a `[gcode_macro]` body resolves to either a defined macro or an entry in `tests/builtins.txt` / the script's `ALLOWLIST`. `pytest tests/` covers the script's unit tests + a real-repo regression test.
+
+Local run: `make test-py` (macOS-friendly subset). `make test` adds the klippy step (needs Linux because Klipper's C extension uses `sys/prctl.h` and `linux/can.h`).
+
+See [`tests/README.md`](tests/README.md) for full mechanics. **When to regenerate** cached data:
+- `tests/dict/*.dict` — after bumping `vendor/klipper` or modifying `firmware/*.config`. Build on the Pi.
+- `tests/builtins.txt` — after bumping `vendor/klipper`. Run `make builtins`.
+
+The `ALLOWLIST` in `scripts/macro_refcheck.py` has a block keyed to "third-party modules currently loaded in printer.cfg" — when removing a module's `[section]`, the same PR must remove its commands from the ALLOWLIST. This couples module removal to caller-cleanup; if a PR forgets one half, CI flags the other.
+
+---
+
 ## Known quirks
 
 These have already tripped someone up — flag them when relevant.
