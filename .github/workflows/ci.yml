@@ -2,8 +2,25 @@ name: CI
 
 on:
   pull_request:
+    # Docs/memory/spec/plan changes don't affect config validity or Python
+    # code, so skip CI for those — keeps free-tier minutes for changes that
+    # could actually break the printer. A mixed PR (e.g. printer.cfg AND a
+    # README) still triggers CI because GitHub fires the workflow when ANY
+    # non-ignored path changed.
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - 'memory/**'
+      - 'docs/**'
+      - '.claude/**'
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - 'memory/**'
+      - 'docs/**'
+      - '.claude/**'
 
 jobs:
   # DISABLED until the eddy migration removes [probe_eddy_ng] from eddy.cfg.
