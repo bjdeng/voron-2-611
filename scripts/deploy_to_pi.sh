@@ -188,6 +188,11 @@ check_no_pi_drift() {
   #
   # Mainsail saves with trailing whitespace that pre-commit strips here;
   # diff -w -B ignores whitespace-only changes either way.
+  #
+  # NOTE: pi_full and deploy_marker_raw come from two separate ssh calls.
+  # In theory another concurrent deploy could slip between them and we'd
+  # be comparing the new Pi cfg against the old marker. In practice this
+  # is single-user single-printer so the window is irrelevant.
   local pi_full pi_body deploy_marker_raw reference_body
   pi_full=$(ssh "$PI_HOST" 'cat ~/printer_data/config/printer.cfg')
   pi_body=$(printf '%s\n' "$pi_full" | sed -E "/$SAVE_CONFIG_MARKER/,\$d")
@@ -203,8 +208,10 @@ check_no_pi_drift() {
         fi
         return
       fi
+      echo "WARN: deploy marker '$deploy_marker_raw' yielded empty reference body after SAVE_CONFIG strip; comparing Pi to current repo." >&2
+    else
+      echo "WARN: deploy marker SHA '$deploy_marker_raw' not in git history; comparing Pi to current repo (may fire on legitimate repo-ahead drift)." >&2
     fi
-    echo "WARN: deploy marker SHA '$deploy_marker_raw' not resolvable; comparing Pi to current repo (may fire on legitimate repo-ahead drift)." >&2
   fi
 
   # Fallback path (no marker / unresolvable marker).
