@@ -1,6 +1,6 @@
 # Voron 2.611 — Klipper config repo
 
-This repo is the canonical source of truth for the Klipper/Mainsail/Happy-Hare configuration of Ben's Voron 2.4. The on-printer filesystem at `~/printer_data/config/` is the working copy; this repo is where changes are reviewed and tracked. The workflow is: **edit here → PR → merge to `main` → `/deploy-to-pi` to sync to the printer**. The deploy step is currently a manual skill invocation; full automation on merge is Open Investigation #8. Machine state (the files that deploy to the Pi) lives under `config/`; tooling around it (scripts/, tests/, docs/, vendor/, memory/, CI) lives at root.
+This repo is the canonical source of truth for the Klipper/Mainsail/Happy-Hare configuration of Ben's Voron 2.4. The on-printer filesystem at `~/printer_data/config/` is the working copy; this repo is where changes are reviewed and tracked. The workflow is: **edit here → PR → merge to `main` → `/deploy-to-pi` to sync to the printer**. The deploy step is currently a manual skill invocation; full automation on merge is tracked in [#28](https://github.com/bjdeng/voron-2-611/issues/28). Machine state (the files that deploy to the Pi) lives under `config/`; tooling around it (scripts/, tests/, docs/, vendor/, memory/, CI) lives at root.
 
 ---
 
@@ -26,17 +26,19 @@ The machine has years of trial-and-error baked into it. **Do not assume the curr
 - Beefy idlers mod
 
 ### Toolhead
-- **Stealthburner v2** body
+- **Stealthburner v2** body (no SB LEDs installed — only the LCD neopixel chain in `[neopixel lcd]`)
 - **Galileo extruder** — explains the unusual `gear_ratio: 9:1` + `rotation_distance: 48.033` in `config/btt-ebb-sb-usb-v1.0.cfg`
 - **Dragon clone hotend** (vendor unknown; behaves Dragon-compatible)
 - 0.4 mm nozzle, 1.75 mm filament (Generic 3950 thermistor, pullup 2200 Ω)
 - **LIS2DW** accelerometer on toolhead (for resonance testing); `axes_map: z,x,y`
 
 ### Probe
-- **BTT Eddy** running the `vvuk/eddy-ng` Klipper extension (`[probe_eddy_ng btt_eddy]` with butter tap mode)
-- Calibrated drive currents 15 & 16; current `reg_drive_current: 15`, `tap_drive_current: 15`
+- **BTT Eddy** running Klipper's native `[probe_eddy_current btt_eddy]` (migrated from `vvuk/eddy-ng` in PR #17, 2026-05-15)
+- Linked `[temperature_probe btt_eddy]` for thermal drift compensation (shares the postfix; same NTC on `eddy:gpio26`)
+- `reg_drive_current: 15` (carried over from prior eddy-ng calibration; same LDC1612 register)
 - Probe offset: `x_offset: 0`, `y_offset: 21.42`
-- **Open question:** much of eddy-ng is now reportedly in upstream Klipper (`[probe_eddy_current]`) — there's a likely migration off the fork. See [Open investigations](#open-investigations).
+- `[bed_mesh] fade_target: 0` + `zero_reference_position: 175, 175` paired with tap workflow (matches `safe_z_home`)
+- Tap-Z application uses the doc-blessed split-macro pattern: `SET_Z_FROM_PROBE` (runs `PROBE METHOD=tap`) then `_RELOAD_Z_OFFSET_FROM_PROBE` (applies the result via `SET_KINEMATIC_POSITION`). Two macros because jinja templates render once per macro — see [Klipper gotchas](#klipper-gotchas).
 
 ### Bed
 - Textured PEI **magnetic flex plate**
@@ -57,9 +59,23 @@ The machine has years of trial-and-error baked into it. **Do not assume the curr
 - 6 gates, BTT EASY-BRD MCU (SAMD21G18A)
 - LinearSelector + selector servo + Binky-style encoder
 - **No buffer** — spools sit on **Filamentalist rewinders**
-- Add-ons enabled: **Blobifier** (purge tower), **EREC** (toolhead filament cutter), **mmu_eject_buttons**
+- Add-ons enabled: **Blobifier** (purge tower). **Filametrix** is the toolhead filament cutter ([Carrot-collective/Filametrix](https://github.com/Carrot-collective/Filametrix)) — driven via `_MMU_CUT_TIP` which Happy Hare invokes during toolchange (`config/mmu/base/mmu_cut_tip.cfg`, with cutter pin location in `config/mmu/base/mmu_macro_vars.cfg::_MMU_CUT_TIP_VARS`).
+- **Files present but NOT active:** `config/mmu/addons/mmu_erec_cutter.cfg` and `mmu_eject_buttons.cfg` are not `[include]`d from `config/printer.cfg`. EREC is NOT used (Filametrix is); eject buttons are NOT installed.
 - Toolhead/extruder filament sensors on the EBB board (gpio6, gpio21)
 - Sync feedback: tension switch on `mmu:PA7` (compression switch not connected)
+
+### Additional temperature sensors (worth knowing about)
+
+Beyond `[heater_bed]` + `[extruder]` + `[temperature_fan chamber]`, these sensors are wired and active for diagnostics:
+
+| Section | Source | Notes |
+|---|---|---|
+| `[temperature_probe btt_eddy]` | Generic 3950 NTC on `eddy:gpio26` | Coil-adjacent; linked to `[probe_eddy_current btt_eddy]` for drift comp |
+| `[temperature_sensor btt_eddy_mcu]` | RP2040 die temp | MCU temperature for the Eddy board |
+| `[temperature_sensor EBB_NTC]` | Generic 3950 NTC on `EBB:gpio27` | NTC on the EBB toolhead board |
+| `[temperature_sensor raspberry_pi]` | `temperature_host` | Pi SoC temperature |
+
+**`sensor_type: temperature_mcu` is NOT supported on LPC1769** (per `vendor/klipper/klippy/extras/temperature_mcu.py` supported list: rp2/sam3/sam4/samd21/samd51/stm32f1-4/stm32g0/stm32g4/stm32l4/stm32h7). Cannot add die-temp sensors for the two SKR 1.4 boards; the Eddy MCU temp sensor works because it's an RP2040.
 
 ### Installed but **not** in active use (per Ben, 2026-05-13)
 - **moonraker-timelapse** — never used. Included via `[include timelapse.cfg]` and `[update_manager timelapse]` is in `config/moonraker.conf`, but it's effectively dead code. Candidate for removal.
@@ -109,8 +125,8 @@ Every active macro and where it lives. One-liner per macro; deeper context belon
 
 ### `config/macros/print_start.cfg` — print sequence (jontek2 pattern)
 - `PRINT_WARMUP` — pre-heat without printing (caselight on, BED_MESH_CLEAR, home, QGL, start bed+ext heating)
-- `PRINT_START` — full start: home → QGL → bed heat + chamber wait (if bed > 90 °C) → `BLOBIFIER_CLEAN` → re-home Z → `PROBE_EDDY_NG_TAP` → adaptive bed mesh → heat hotend
-- `PRINT_END` — cool, reset Eddy tap offset, clear mesh, wait 60 s, `OFF`, `_RESETSPEEDS`
+- `PRINT_START` — full start: tap_threshold guard → home → QGL → bed heat + chamber wait (if bed > 90 °C) → `BLOBIFIER_CLEAN` → re-home Z → `SET_Z_FROM_PROBE` (tap + apply via split-macro) → adaptive bed mesh → heat hotend
+- `PRINT_END` — cool, clear mesh, wait 60 s, `OFF`, `_RESETSPEEDS`
 
 ### `config/macros/bedfans.cfg` — Ellis BedFans automation
 - `_BEDFANVARS` — config (threshold, fast, slow speeds)
@@ -135,11 +151,13 @@ Every active macro and where it lives. One-liner per macro; deeper context belon
 - `[menu __main __octoprint]` — disabled (Mainsail doesn't use OctoPrint API)
 
 ### `config/eddy.cfg` — probe + bed mesh + safe_z_home + force_move
-- `[probe_eddy_ng btt_eddy]` — Eddy probe in butter tap mode
-- `[bed_mesh]` — 9×9 grid over (15, 21.42) → (335, 330), adaptive_margin 5, scan_overshoot 8
+- `[probe_eddy_current btt_eddy]` — native Klipper Eddy probe with `descend_z: 0.5`, `reg_drive_current: 15`
+- `[temperature_probe btt_eddy]` — drift compensation (calibration_position 175,175,3; bed/extruder targets pre-configured for `TEMPERATURE_PROBE_CALIBRATE`)
+- `[bed_mesh]` — 9×9 grid over (15, 21.42) → (335, 330), `fade_target: 0`, `zero_reference_position: 175, 175`, `adaptive_margin: 5`, `scan_overshoot: 8`
 - `[safe_z_home]` at (175, 175) with 10 mm z-hop
-- `[force_move] enable_force_move: True` (needed when Eddy is both probe and Z endstop)
-- `QUAD_GANTRY_LEVEL` — wraps stock with state save + bed mesh clear + 2-pass tighten
+- `[force_move] enable_force_move: True` (needed when Eddy is both probe and Z endstop; also for circular-dep bootstrap)
+- `SET_Z_FROM_PROBE` / `_RELOAD_Z_OFFSET_FROM_PROBE` — doc-blessed split-macro pattern from `vendor/klipper/docs/Eddy_Probe.md:379-389`. Used in PRINT_START after `G28 Z` to apply the tap result.
+- `QUAD_GANTRY_LEVEL` — wraps stock with state save + bed mesh clear + 2-pass: coarse pass `METHOD=default` (Z=8, out of cal range), tight pass `METHOD=scan` (Z=2, within cal range). See [issue #22](https://github.com/bjdeng/voron-2-611/issues/22) for the path to making both passes scan.
 - `BED_MESH_CALIBRATE` — renames stock to `BTT_BED_MESH_CALIBRATE` and forces `ADAPTIVE=1 METHOD=rapid_scan`
 
 ### `config/mmu/` — Happy Hare MMU
@@ -150,7 +168,7 @@ Key macros from Happy Hare (not exhaustive — see `config/mmu/base/mmu_software
 - `MMU_CALIBRATE_GEAR`, `MMU_CALIBRATE_BOWDEN`, `MMU_CALIBRATE_SELECTOR`
 - `MMU_STATUS`, `MMU_TEST_*`
 - `BLOBIFIER_CLEAN` (from `config/mmu/addons/blobifier.cfg`)
-- `MMU_CUT_TIP` (EREC cutter, from `config/mmu/base/mmu_cut_tip.cfg`)
+- `_MMU_CUT_TIP` (Filametrix toolhead cutter, from `config/mmu/base/mmu_cut_tip.cfg` — file header explicitly says "Filametrix style toolhead cutters")
 
 ### `config/mainsail.cfg` — Mainsail client.cfg (symlink target on Pi)
 - `[gcode_macro PAUSE]` / `RESUME` / `CANCEL_PRINT` / `_CLIENT_*` — standard Mainsail pause/cancel with park behavior
@@ -173,9 +191,9 @@ From the SAVE_CONFIG block at the bottom of `config/printer.cfg`. Per Ben: **ass
 | Input shaper X | mzv @ 51.4 Hz | LIS2DW measurement |
 | Input shaper Y | zv @ 37.4 Hz | LIS2DW measurement |
 | Pressure advance | 0.05 (smooth time 0.040) | from `pressure_advance` in `[extruder]` defaults |
-| Bed mesh `default` | 9×9, (15, 21.42) → (335, 335) | bicubic, full bed |
+| Bed mesh `default` | 9×9, (15, 21.42) → (335, 334.94) | bicubic, full bed |
 | Bed mesh `Default2` | 5×5, (30, 30) → (320, 320) | smaller fallback |
-| Eddy NG calibration | drive currents 15 & 16, calibration_version 5 | from `[probe_eddy_ng btt_eddy]` in SAVE_CONFIG |
+| Eddy native | `reg_drive_current: 15`, freq range ~31607 Hz, Z range 0.25–3 mm, `tap_threshold: 2419.384` | from 2026-05-15 calibration session (post-migration). Thermal drift cal pending — see [#25](https://github.com/bjdeng/voron-2-611/issues/25). Re-run with toolhead higher to widen Z range and resolve [#22](https://github.com/bjdeng/voron-2-611/issues/22) at the same time |
 
 Update [`memory/tuning-log.md`](memory/tuning-log.md) whenever you re-run a calibration.
 
@@ -191,7 +209,7 @@ Ben's note: *"on the machine some updates to klipper, happy hare and others occa
 |---|---|---|---|
 | `~/klipper` | `v0.13.0-649-g4767a8ed` (master) | Klipper3d/klipper | **Has uncommitted local files** from `eddy-ng/install.sh` and `Happy-Hare/install.sh` (symlinks into `klippy/extras/`). |
 | `~/Happy-Hare` | `v3.4.2-22-ga880ac0a` | moggieuk/Happy-Hare | Has `install.sh`. Owns `~/printer_data/config/mmu/base/*` (those files in this repo are dereferenced copies of symlinks). |
-| `~/eddy-ng` | `v0.1-73-gc7ca62e` | vvuk/eddy-ng | Has `install.sh`. Likely **migratable to native Klipper Eddy** — see [Open investigations](#open-investigations). |
+| `~/eddy-ng` | `v0.1-73-gc7ca62e` | vvuk/eddy-ng | Has `install.sh`. **Migrated off to native `[probe_eddy_current]` in PR #17, 2026-05-15.** Install dir retained for rollback; eventual cleanup TBD. |
 | `~/moonraker` | `v0.10.0-19-g1ed102e` | Arksine/moonraker | Standard. |
 | `~/moonraker-timelapse` | `v0.0.1-143-gc7fff11` | mainsail-crew/moonraker-timelapse | Configured but unused. |
 | `~/mainsail` | (web release) | mainsail-crew/mainsail | Static UI files served by nginx. |
@@ -211,6 +229,17 @@ Ben's note: *"on the machine some updates to klipper, happy hare and others occa
 - `~/Happy-Hare/install.sh` — same, for the `klippy/extras/mmu/` and `klippy/extras/mmu_*` files
 
 There's no `[update_manager klipper]` block in `config/moonraker.conf`, **and that's by design.** Moonraker auto-detects Klipper and manages it without an explicit block; the block is only needed to override channel/pinned_commit/refresh_interval. Documented at `vendor/moonraker/docs/configuration.md:2017-2026`.
+
+**Active `[update_manager]` blocks in `config/moonraker.conf`:**
+
+| Block | Manages | Notes |
+|---|---|---|
+| `mainsail` | Mainsail web UI | Active |
+| `mainsail-config` | Upstream mainsail-config (`~/mainsail-config/`) | Active. Note: our `config/mainsail.cfg` is symlinked to it on the Pi; if we ever slim that file locally (per refactor spec Phase 2), the symlink would need to be replaced with a real file and upstream changes would no longer auto-apply |
+| `timelapse` | moonraker-timelapse | Active but unused — see [#26](https://github.com/bjdeng/voron-2-611/issues/26) |
+| `crowsnest` | Webcam stack | Active even though webcam unplugged — see [#27](https://github.com/bjdeng/voron-2-611/issues/27) |
+| `sonar` | Network keepalive daemon | Active |
+| `happy-hare` | HH Klipper extension (`~/Happy-Hare/`) | Active |
 
 ---
 
@@ -264,38 +293,91 @@ The Pi is at `mainsailos.local` (current IP 192.168.0.227). Keyed SSH was set up
 
 ---
 
-## CI checks
+## Testing
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on every `pull_request` and `push` to `main`. Two parallel jobs:
+A 7-layer test pyramid (6 standard + 1 for refactor PRs). New work should add to or extend these rather than inventing new validation patterns ad-hoc.
 
-- **Klippy parse + smoke gcode** — runs `vendor/klipper/scripts/test_klippy.py` against `tests/voron-2-611.test`, which loads `config/printer.cfg` with all five MCUs simulated and walks the gcode dispatcher for a smoke sequence (G28, QGL, `BED_MESH_CALIBRATE METHOD=rapid_scan`, `PRINT_START`, `PRINT_END`, `OFF`, `MMU_STATUS`, parking macros). Catches: syntax errors, unknown sections, pin clashes, missing modules, every jinja2 template error in any `[gcode_macro]` body, and unknown-command errors reachable from the smoke graph. Klipper's `gcode_macro.py` parses every macro template eagerly at config-load (see `env.from_string` in `GCodeMacro.__init__`), so this single step covers most reasons CI would fail. Note: `test_klippy.py` does NOT execute jinja2 bodies at runtime — conditional branches inside macros are not exercised, only the static command graph.
-- **pre-commit + macro refcheck + pytest** — `.pre-commit-config.yaml` runs text hygiene (trailing-whitespace, end-of-file-fixer, mixed-line-ending) plus `ruff` (format + lint) on Python. `scripts/macro_refcheck.py` statically verifies every gcode command referenced in a `[gcode_macro]` body resolves to either a defined macro or an entry in `tests/builtins.txt` / the script's `ALLOWLIST`. `pytest tests/` covers the script's unit tests, the eddy-migration acid-test tripwire, and a real-repo regression test.
+| Layer | What | Where | Runs | Status |
+|---|---|---|---|---|
+| 1 | Pre-commit hooks (trailing-whitespace, end-of-file-fixer, mixed-line-ending, ruff format + lint on Python) | `.pre-commit-config.yaml` | every commit + CI | active |
+| 2 | `macro_refcheck.py` — every gcode command in a `[gcode_macro]` body resolves to a defined macro or an entry in `tests/builtins.txt` / `ALLOWLIST` | `scripts/macro_refcheck.py` | CI | active |
+| 3 | Klippy parse + smoke gcode — `vendor/klipper/scripts/test_klippy.py` loads `config/printer.cfg` with all 5 MCUs simulated and walks the dispatcher for a smoke sequence (G28, QGL, `BED_MESH_CALIBRATE METHOD=rapid_scan`, `PRINT_START`, `PRINT_END`, `OFF`, `MMU_STATUS`, parking macros) | `tests/voron-2-611.test` + `.github/workflows/ci.yml` | CI | currently gated `if: false`; re-enable after Eddy migration verified |
+| 4 | pytest — `scripts/macro_refcheck.py` unit tests, real-repo regression tests, ALLOWLIST-coupling tripwires | `tests/test_*.py` | CI | active |
+| 5 | Structural assertions on `.cfg` files (no deprecated Klipper keys; `[gcode_macro]` description fields; `_USER_VARIABLE.X` references resolve; `[include]` order; `params.X` has default or guard; PAUSE/RESUME/CANCEL_PRINT defined once) | `tests/test_config_structure.py` | CI | **planned** in refactor Phase 1 (`docs/superpowers/specs/2026-05-15-config-macros-refactor.md`) |
+| 6 | Post-deploy smoke (a fixed gcode sequence runs on the Pi after deploy + grep `klippy.log` for `!! Unknown command` / `!! Internal error`) | `scripts/deploy_to_pi.sh --smoke` + `scripts/printer-smoke.sh` on Pi | manual after deploy | **planned** in refactor Phase 1 |
+| 7 (one-shot) | Behavior diff — dump expanded gcode for fixed macro invocations before/after; assert diff is comments/whitespace only | `scripts/macro_behavior_diff.py` + `tests/snapshots/` | manual, before merging refactor PRs | **planned** for refactor Phase 4 only |
 
-Local run: `make test-py` (macOS-friendly subset). `make test` adds the klippy step (needs Linux because Klipper's C extension uses `sys/prctl.h` and `linux/can.h`).
+### What each catches
+- **L1:** text-hygiene drift, Python lint regressions
+- **L2:** macro calls that reference renamed/deleted commands
+- **L3:** Klipper config syntax errors, unknown sections, pin clashes, jinja2 template parse errors. **Does NOT execute jinja2 conditionals** — only the static command graph
+- **L4:** regressions in the testing infrastructure itself
+- **L5:** structural invariants Klipper's own loader misses
+- **L6:** runtime behavior on the actual machine (conditional branches, MCU-specific quirks)
+- **L7:** refactor behavior preservation — proves "values copied verbatim, no behavior change"
 
-A companion workflow `.github/workflows/ci-docs-noop.yml` reports the same required check name as a no-op success on docs-only paths (CLAUDE.md, `memory/**`, `docs/**`, `.claude/**`, `LICENSE`). Without it, branch protection would block any docs-only PR because `paths-ignore` skips `ci.yml` entirely and the required check is never reported. For any push, exactly one of the two workflows runs.
+### Not covered
+- Conditional branches inside jinja2 with varied state (mitigated by L6 + L7 for refactor PRs)
+- Print quality / mechanical regression (manual first-print test after each deploy)
+- Slicer-side template errors (lives in OrcaSlicer, not the repo)
 
-See [`tests/README.md`](tests/README.md) for full mechanics. **When to regenerate** cached data:
+### Running locally
+
+```sh
+make test-py    # macOS-friendly subset: pre-commit + macro_refcheck + pytest + Layer 5 (when built)
+make test       # Adds the klippy step (Linux only — Klipper C extension uses sys/prctl.h and linux/can.h)
+```
+
+### Regenerating cached data
 - `tests/dict/*.dict` — after bumping `vendor/klipper` or modifying `config/firmware/*.config`. Build on the Pi.
 - `tests/builtins.txt` — after bumping `vendor/klipper`. Run `make builtins`.
 
-The **eddy-ng** block in `scripts/macro_refcheck.py`'s `ALLOWLIST` is keyed to `[probe_eddy_ng]` in `config/eddy.cfg` — when the eddy migration removes that section, the same PR must delete those entries. `tests/test_macro_refcheck.py::test_eddy_ng_allowlist_coupling` is a tripwire that fails if one half of this coupling is removed without the other. (The Happy-Hare block in the same ALLOWLIST is **not** coupled this way; those commands are registered by Python and survive any `.cfg` change.)
+### Docs-only CI lane
+A companion workflow `.github/workflows/ci-docs-noop.yml` reports the same required check name as a no-op success on docs-only paths (`CLAUDE.md`, `memory/**`, `docs/**`, `.claude/**`, `LICENSE`). Without it, branch protection would block any docs-only PR because `paths-ignore` skips `ci.yml` entirely. For any push, exactly one of the two workflows runs.
+
+### Coupled allowlists (tripwire patterns)
+The **eddy-ng** block in `scripts/macro_refcheck.py`'s `ALLOWLIST` was keyed to `[probe_eddy_ng]` in `config/eddy.cfg`. When PR #17 removed that section, the same PR had to delete those entries. `tests/test_macro_refcheck.py::test_eddy_ng_allowlist_coupling` was the tripwire that enforced this — now satisfied and the tripwire was removed in PR #17. The **Happy-Hare** block in the same ALLOWLIST is NOT coupled this way; those commands are registered by Python and survive any `.cfg` change.
+
+See [`tests/README.md`](tests/README.md) for full mechanics. Test pyramid rationale lives in `docs/superpowers/specs/2026-05-15-config-macros-refactor.md` Section 5.
 
 ---
 
-## Known quirks
+## Known quirks (this machine's specific weirdness)
 
 These have already tripped someone up — flag them when relevant.
 
 - **MMU `config/mmu/base/*.cfg` are symlinks on the Pi** to `~/Happy-Hare/config/base/*`. In this repo they're files (dereferenced by `tar -h` on pull). If you push this repo back to the Pi without preserving symlinks, you'll break Happy-Hare's update model.
 - **`config/mainsail.cfg` is a symlink** to `~/mainsail-config/client.cfg`. Same caveat.
-- **`config/timelapse.cfg` is a symlink** to `~/moonraker-timelapse/klipper_macro/timelapse.cfg`. Same caveat — but Ben says he never used moonraker-timelapse and it may be broken; it's a removal candidate.
-- **`ModemManager` is masked on this Pi (2026-05-14).** It probes new USB-serial devices and could hold MCUs open during enumeration — a known footgun on this 5-USB-MCU machine. Caused the `mcu 'mmu': Unable to connect` race during the first live `/deploy-to-pi`. Fixed via `sudo systemctl mask --now ModemManager.service`. Verify with `systemctl is-enabled ModemManager` (should print `masked`).
+- **`config/timelapse.cfg` is a symlink** to `~/moonraker-timelapse/klipper_macro/timelapse.cfg`. Same caveat — but Ben says he never used moonraker-timelapse; removal pending decision ([#26](https://github.com/bjdeng/voron-2-611/issues/26)).
+- **`mmu/addons/mmu_erec_cutter*.cfg` and `mmu_eject_buttons*.cfg` are NOT included** from `printer.cfg` but the files remain (likely symlinked from `~/Happy-Hare/config/addons/`). Don't move them to `archive/` — HH install would recreate them. Toolhead cutter is **Filametrix**, not EREC. Eject buttons are not installed.
+- **`ModemManager` is masked on this Pi (2026-05-14).** It probes new USB-serial devices and could hold MCUs open during enumeration — a footgun on this 5-USB-MCU machine. Caused the `mcu 'mmu': Unable to connect` race during the first live `/deploy-to-pi`. Fixed via `sudo systemctl mask --now ModemManager.service`. Verify with `systemctl is-enabled ModemManager` (should print `masked`).
 - **No CAN bus.** The toolhead is on USB (`config/btt-ebb-sb-usb-v1.0.cfg`). EBB SB v1.0 supports both modes; Ben chose USB.
-- **Webcam is unplugged.** Crowsnest + Sonar still run but have nothing to stream.
-- **Klipper has no update_manager block.** Klipper updates are not automated through Moonraker — likely intentional to avoid breaking the `eddy-ng` + Happy-Hare overlay.
+- **Webcam is unplugged.** Crowsnest + Sonar still run but have nothing to stream ([#27](https://github.com/bjdeng/voron-2-611/issues/27)).
+- **Klipper has no update_manager block.** Klipper updates are not automated through Moonraker — likely intentional to avoid breaking the `eddy-ng` + Happy-Hare overlay (note: eddy-ng was migrated off in PR #17 but Happy-Hare overlay still relies on this).
 - **SAVE_CONFIG block lives at the bottom of `config/printer.cfg`.** Klipper rewrites it on every `SAVE_CONFIG`. When syncing this repo → Pi, never overwrite the Pi's SAVE_CONFIG section.
-- **Microsteps 128 on X/Y/Z** (atypically high), plus `interpolate: False` on the TMC2209s. Followed third-party online advice rather than analyzed for this hardware (per Ben). Real goal: quiet without losing steps. Don't change blindly, but this is **worth a deliberate investigation** with current Klipper — the right value could be 16/32/64. See [Open investigations](#open-investigations).
+- **The Pi's SAVE_CONFIG block can outlive section deletions.** If you delete a `[section]` from the body but the Pi still has corresponding `#*# [section]` lines, Klipper fails to start with "section must be specified". Strip stale SAVE_CONFIG entries via ssh + sed before deploying section removals. (Lesson from Eddy migration: stale `[probe_eddy_ng btt_eddy]` calibration in Pi SAVE_CONFIG had to be manually stripped after the section was removed.)
+- **Microsteps 128 on X/Y/Z** (atypically high), plus `interpolate: False` on the TMC2209s. Followed third-party online advice rather than analyzed for this hardware. Real goal: quiet without losing steps. Don't change blindly ([#24](https://github.com/bjdeng/voron-2-611/issues/24) tracks deliberate investigation).
+- **The 2-pass `QUAD_GANTRY_LEVEL` override is load-bearing.** A/B motor weight sags the rear when motors are off; a single-pass QGL would fail. First pass uses `METHOD=default` (descend) because `horizontal_move_z=8` is outside the calibrated eddy freq→Z range; second pass uses `METHOD=scan` at `horizontal_move_z=2`. See `memory/qgl-two-pass-intentional.md` and [#22](https://github.com/bjdeng/voron-2-611/issues/22).
+- **`config/mainsail.cfg` is "read-only" upstream.** mainsail-config's file header says don't edit. We've been pulling Ben's customizations through `[gcode_macro _CLIENT_VARIABLE]` instead. The refactor spec (Phase 2) plans to break the symlink and slim the file locally — when that happens, future mainsail-config updates won't auto-apply.
+
+---
+
+## Klipper gotchas (general — apply to any Klipper config work)
+
+Lessons hard-won during the 2026-05-15 Eddy migration session. None of these are documented in obvious places.
+
+- **`#` is a comment delimiter everywhere in Klipper macros — even inside string literals in `{ ... }` action blocks.** A `#` in `{ action_raise_error("...#TBD...") }` truncates the string and breaks the template, producing a cascading parse error elsewhere in the macro. Workaround: don't put `#` in macro strings. (Caught by PR #18 hotfix after the Eddy migration deploy.)
+- **A gcode_macro template renders ONCE per macro invocation, before any commands execute.** A macro body like `PROBE METHOD=tap; SET_KINEMATIC_POSITION Z={printer.probe.last_z_result}` substitutes `last_z_result` to the PRIOR value because jinja runs before the gcode. Split into two macros (parent calls A then B; B's template renders separately after A finishes) — see `vendor/klipper/docs/Eddy_Probe.md:379-389` and `config/eddy.cfg`'s `SET_Z_FROM_PROBE`/`_RELOAD_Z_OFFSET_FROM_PROBE` pair.
+- **`sensor_type: temperature_mcu` is NOT supported on LPC1769.** Klipper's supported list (`vendor/klipper/klippy/extras/temperature_mcu.py`) covers rp2/sam3/sam4/samd21/samd51/stm32f1-4/stm32g0/stm32g4/stm32l4/stm32h7 only. Cannot add MCU die-temp sensors for the SKR 1.4 boards on this build.
+- **MCU firmware can lag host Klipper version.** Bumping `vendor/klipper` doesn't reflash MCUs. New host features (e.g., `trigger_analog_query_state` for native Eddy) require corresponding firmware. Klipper will report version mismatch + missing commands on `RESTART`.
+- **`.config` files miss new Kconfig options after Klipper bumps.** Run `make olddefconfig` after a Klipper version bump to apply new defaults (e.g., `CONFIG_WANT_TRIGGER_ANALOG=y` auto-enables when `CONFIG_WANT_LDC1612=y` exists).
+- **`make flash FLASH_DEVICE=...` for RP2040 has a USB-reconnect race.** `flash_usb.py` loses track of the device after entering bootloader (reads from a stale sysfs path). Workaround: manually mount the BOOTSEL UF2 volume (`/dev/sda1` typically) and `cp` the `out/klipper.uf2` file. The RP2040 auto-reboots into Klipper mode after the UF2 lands.
+- **SAMD21 boards use BOSSA, not katapult.** For the EASY-BRD MMU MCU, prefer KIAUH's flash flow over hand-driving `~/BOSSA/` — KIAUH handles the bootloader-button timing.
+- **eddy native scan probing refuses out-of-calibrated-range Z.** `PROBE_EDDY_CURRENT_CALIBRATE` covers a Z range; scan/rapid_scan modes error with "sensor not in valid range" outside it. eddy-ng was more permissive. To use scan at higher Z, re-run `PROBE_EDDY_CURRENT_CALIBRATE` with the toolhead positioned higher. See [#22](https://github.com/bjdeng/voron-2-611/issues/22).
+- **`PROBE_EDDY_CURRENT_TAP_CALIBRATE` flow:** `guess` → `refine` → `verify`. **Only `verify` saves to config.** `_refine_tap_threshold` lives in memory only; don't restart Klipper between `refine` and `verify`.
+- **`TEMPERATURE_PROBE_CALIBRATE` requires a paper test at every STEP°C.** Default `STEP=2` → ~25 paper tests over 50°C. Quadratic LSQ fit error ≈ σ × √(3/(N−3)). STEP=2 gives ~1-2µm fit error. Higher STEP = fewer samples, worse fit. Tradeoff is real — see source comments around line 374 of `temperature_probe.py`.
+- **Circular dependency on first Eddy calibration.** Native Eddy needs calibration to home Z, but calibration needs Z-homed first. Workaround: `FORCE_MOVE STEPPER=stepper_z DISTANCE=N VELOCITY=5` to manually position, then `SET_KINEMATIC_POSITION Z=20` to claim Z homed, then run `PROBE_EDDY_CURRENT_CALIBRATE`. Documented at `vendor/klipper/docs/Eddy_Probe.md:402-450`.
+- **`deploy_to_pi.sh` drift gate can't distinguish Pi-ahead from repo-ahead.** When the repo has changes the Pi doesn't have yet, the gate fires anyway. Workaround: temporarily disable the gate (or use the fix from [#19](https://github.com/bjdeng/voron-2-611/issues/19)).
 
 ---
 
@@ -330,20 +412,29 @@ bash scripts/sync_from_pi.sh   # handles diff + prompt + correct destination (co
 
 ## Open investigations
 
-Items Ben has flagged as worth digging into. Track progress in [`memory/troubleshooting-log.md`](memory/troubleshooting-log.md) and [`memory/decisions.md`](memory/decisions.md).
+Tracked as GitHub Issues with the [`future-work`](https://github.com/bjdeng/voron-2-611/labels/future-work) label. Highlights still active (curated, not exhaustive):
 
-1. **`eddy-ng` → native Klipper Eddy migration.** Spec at `docs/superpowers/specs/2026-05-13-eddy-ng-to-native-migration.md`, plan alongside. Awaiting a printer-time window for the calibration session. Re-enables the disabled klippy CI job.
-2. **Sensorless X feasibility on this build.** Currently uses a physical endstop wired to the EBB. Ben's prior understanding was this wasn't viable or was potentially harmful. Worth a fresh look on V2.4 r2 + dual SKR 1.4 + TMC2209.
-3. **Microsteps 128 — is this still the right value?** Followed third-party online advice; real goal is "quiet without losing steps" (per Ben). Investigate step-rate budget of LPC1769 + TMC2209 in current Klipper and measure noise/skip behavior at 32/64/128 to decide.
-4. **Stale tuning values.** Re-run input shaper / PID / PA / Eddy calibration on current Klipper.
-5. **`moonraker-timelapse` is broken.** Ben has never gotten it to work. Decision pending: fix, or remove the include + update_manager entry.
-6. **Webcam re-enable.** Currently unplugged due to timing issues. Plan tied to #1 (Eddy migration).
-7. **CI klippy-smoke is disabled** until the eddy migration ships (test_klippy.py dict/firmware mismatch — see `memory/troubleshooting-log.md` 2026-05-14). Lint+refcheck CI is active and working.
-8. **Automated Pi deploy on every merge** (`main → rsync → Moonraker restart`). v1 (manual `/deploy-to-pi` skill + `scripts/deploy_to_pi.sh`) shipped on 2026-05-14. v2 — wrapping the script in a GH Action so deploys happen automatically when CI goes green on `main` — is still pending. See `.claude/skills/deploy-to-pi/SKILL.md` for the runtime contract.
+- **[#25] Re-tune session** anchored on klippain-shaketune — shaper (X/Y/Z), PID, PA, Eddy verify, plus thermal drift cal that was deferred 2026-05-15. **When doing this session, run `PROBE_EDDY_CURRENT_CALIBRATE` with toolhead at ~10mm first** to widen the freq→Z range — resolves [#22](https://github.com/bjdeng/voron-2-611/issues/22) in the same trip.
+- **[#22] Eddy-ng scan-mode investigation** — how did eddy-ng scan at out-of-range Z? Inform [#25]'s extended cal range.
+- **[#23] Sensorless X feasibility** — TMC2209 + CoreXY is documented; needs EBB schematic check for DIAG pin.
+- **[#24] Microsteps 128 → 32/64/128 deliberate test** — currently followed third-party advice without analysis.
+- **[#27] Webcam re-enable** + **[#26] moonraker-timelapse decision** (coupled).
+- **[#28] Automated Pi deploy v2** (GH Action triggering deploy_to_pi.sh on main green).
+- **[#19] `deploy_to_pi.sh` drift gate** — can't distinguish Pi-ahead from repo-ahead.
+- **[#16] `[homing_override]` for Z post-G28** — doc-blessed automation layer (small follow-up to Eddy migration).
+- **[#15] MMU load/unload calibration failures** (bug, not future-work) — calibration suspicion.
+- **[#29] OrcaSlicer print-profile tuning** — separate "different day" project.
+- **[#30] Logical reorganization audit** — after living with `_USER_VARIABLE` for a quarter.
+- **[#31] PA/Flow calibrator survey** — re-validate Frix-x choice periodically.
+- **[#32] Webcam-feedback auto-calibration** — substantial future project.
 
-**Recently resolved** (kept for context):
+### Recently resolved (historical log)
+
+- ~~`eddy-ng` → native Klipper Eddy migration~~ — shipped PR #17, 2026-05-15. Calibration session completed (main + tap); thermal drift cal deferred to [#25].
+- ~~Initial calibration deploy bugs~~ — `#` in macro strings (PR #18), LPC1769 temp sensors crash (caught by review), tap jinja expansion order (split-macro pattern). All landed.
 - ~~Missing `[update_manager klipper]`~~ — by design; Moonraker auto-detects (`vendor/moonraker/docs/configuration.md:2017-2026`).
-- ~~TDD-equivalent for Klipper configs~~ — landed via the CI scaffold.
+- ~~CI klippy-smoke disabled~~ — being re-enabled (was Open Investigation #7; closes via dedicated PR).
+- ~~TDD-equivalent for Klipper configs~~ — landed via the CI scaffold; pyramid expanded in [Testing](#testing).
 - ~~`ModemManager` USB-MCU footgun~~ — masked on the Pi 2026-05-14.
 - ~~Top-level mixed machine state + tooling~~ — machine state moved into `config/` 2026-05-14.
 
@@ -351,7 +442,7 @@ Items Ben has flagged as worth digging into. Track progress in [`memory/troubles
 
 ## Workflow & CI/CD
 
-**Today:** edit locally on a `feat/*` (or `chore/*`, `fix/*`, `docs/*`) branch → PR → CI gate → squash-merge to `main`. CI is built (`.github/workflows/ci.yml` — see [## CI checks](#ci-checks)).
+**Today:** edit locally on a `feat/*` (or `chore/*`, `fix/*`, `docs/*`) branch → PR → CI gate → squash-merge to `main`. CI is built (`.github/workflows/ci.yml` — see [## Testing](#testing)).
 
 **After every merge to `main`:** run `/deploy-to-pi` to sync the Pi. The skill refuses if CI isn't green, the printer is busy, or the Pi has drift; it tells you what to do next. See [`.claude/skills/deploy-to-pi/SKILL.md`](.claude/skills/deploy-to-pi/SKILL.md) for the full contract (gates, flags, exit codes).
 
@@ -365,7 +456,7 @@ Reference docs are pinned to versions matching the Pi. Always grep these first b
 |---|---|---|---|
 | `vendor/klipper` | Klipper3d/klipper | `4767a8ed` | Source + `docs/`. Sparse-checked to `docs/ klippy/ src/ test/ .github/ scripts/`. |
 | `vendor/happy-hare` | moggieuk/Happy-Hare | `a880ac0a` (v3.4.2-22) | MMU control + `mmu/*` config templates |
-| `vendor/eddy-ng` | vvuk/eddy-ng | `c7ca62e` (v0.1-73) | Third-party probe extension; targeted for removal post-migration |
+| `vendor/eddy-ng` | vvuk/eddy-ng | `c7ca62e` (v0.1-73) | Third-party probe extension; **migration to native shipped PR #17, 2026-05-15**. Retained for reference + rollback ability. Eventual cleanup pending. |
 | `vendor/voron-2` | VoronDesign/Voron-2 | `Voron2.4` branch tip | V2.4 manual/BOM (sparse: `Manual/ firmware/ slicer_profiles/`) |
 | `vendor/mainsail-config` | mainsail-crew/mainsail-config | `ff3869a` (v1.2.1-1) | Source of `client.cfg` symlinked from `config/mainsail.cfg` |
 | `vendor/moonraker` | Arksine/moonraker | `1ed102e` (v0.10.0-19) | Moonraker `docs/` |
@@ -398,14 +489,15 @@ voron-2-611/
 ├── .env                         # SSH creds (gitignored)
 ├── .gitignore                   # excludes .env, .venv/, .worktrees/, dict backups, logs
 ├── .pre-commit-config.yaml      # text hygiene + ruff hooks (runs in CI too)
-├── Makefile                     # `make test-py` (macOS) / `make test` (Linux); see ## CI checks
+├── Makefile                     # `make test-py` (macOS) / `make test` (Linux); see ## Testing
 ├── requirements.txt             # tooling deps (pytest, pre-commit) — pinned
 │
 ├── config/                      # everything that deploys to the Pi
 │   ├── printer.cfg              # top-level Klipper config (includes everything below)
-│   ├── eddy.cfg                 # Eddy probe + bed mesh
-│   ├── btt-ebb-sb-usb-v1.0.cfg  # toolhead MCU config
-│   ├── mainsail.cfg             # symlink target on Pi (→ ~/mainsail-config/client.cfg)
+│   ├── eddy.cfg                 # Eddy probe + bed mesh + temperature_probe + SET_Z_FROM_PROBE pair
+│   ├── btt-ebb-sb-usb-v1.0.cfg  # toolhead MCU config (rename to toolhead.cfg planned in refactor Phase 4)
+│   ├── mainsail.cfg             # symlink target on Pi (→ ~/mainsail-config/client.cfg); refactor Phase 2 plans to slim this to declarations-only
+
 │   ├── timelapse.cfg            # symlink target on Pi (unused per Ben)
 │   ├── moonraker.conf
 │   ├── crowsnest.conf
