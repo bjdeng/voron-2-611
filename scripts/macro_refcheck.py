@@ -74,32 +74,10 @@ ALLOWLIST.update(
     }
 )
 
-# ACID-TEST COUPLING — eddy-ng (vendor/eddy-ng/probe_eddy_ng.py).
-# These commands are provided by the third-party `[probe_eddy_ng]`
-# config block in eddy.cfg. When the eddy migration removes that block,
-# this ALLOWLIST.update() must be deleted in the same PR — otherwise
-# refcheck silently keeps approving callers of PROBE_EDDY_NG_* that no
-# longer resolve.
-#
-# Verified by the eddy-migration acid test (see tests/README.md
-# "ALLOWLIST coupling" and CLAUDE.md "## CI checks"). The tripwire test
-# `test_eddy_ng_allowlist_coupling` in tests/test_macro_refcheck.py
-# fails if this block is removed without updating macros/print_start.cfg.
-ALLOWLIST.update(
-    {
-        "PROBE_EDDY_NG_TAP",
-        "PROBE_EDDY_NG_PROBE",
-        "PROBE_EDDY_NG_CALIBRATE",
-        "PROBE_EDDY_NG_STATUS",
-        "PROBE_EDDY_NG_SET_TAP_OFFSET",
-    }
-)
-
 # Happy-Hare runtime commands — registered by Python (vendor/happy-hare),
 # not by [gcode_macro] blocks in mmu/*.cfg. These are not coupled to any
 # [section] in printer.cfg; they're stable for as long as Happy-Hare is
-# installed on the host. (Contrast with the eddy-ng block above, which
-# IS coupled to a removable [probe_eddy_ng] section.)
+# installed on the host.
 ALLOWLIST.update(
     {
         "MMU_HOME",
