@@ -23,25 +23,18 @@ on:
       - '.claude/**'
 
 jobs:
-  # DISABLED until the eddy migration removes [probe_eddy_ng] from eddy.cfg.
+  # Re-enabled 2026-05-15 after the eddy-ng → native [probe_eddy_current]
+  # migration (PR #17). printer.cfg now uses vanilla `ldc1612_*` MCU
+  # commands which are present in tests/dict/eddy.dict.
   #
-  # The committed tests/dict/eddy.dict was built on the Pi without eddy-ng's
-  # sensor_ldc1612_ng.c firmware patch applied, so the MCU command table is
-  # missing `ldc1612_ng_*` commands that vendor/eddy-ng/ldc1612_ng.py
-  # hardcodes calls to. Pipefail (added in d9f53f4 per Codex P1) unmasked
-  # this — previous "green" CI runs were hiding the failure via the `tee`
-  # pipe swallowing test_klippy's exit code.
+  # If this job fails with "Unknown command: trigger_analog_*" or similar,
+  # the committed tests/dict/eddy.dict is stale relative to the firmware
+  # currently flashed on the Pi. Regenerate by copying ~/klipper/out/klipper.dict
+  # from the Pi after a clean firmware build (see config/firmware/eddy.config).
   #
-  # The eddy migration (docs/superpowers/plans/2026-05-13-eddy-ng-to-native-migration.md)
-  # replaces [probe_eddy_ng] with the native [probe_eddy_current], which uses
-  # vanilla `ldc1612_*` MCU commands that ARE present in eddy.dict. When that
-  # PR lands, re-enable this job by removing the `if: false` line below.
-  #
-  # See memory/troubleshooting-log.md 2026-05-14 for the full history of this
-  # job's "now you see it, now you don't" failures.
+  # See memory/troubleshooting-log.md 2026-05-14 for the prior gating history.
   klippy-smoke:
-    if: false
-    name: Klippy parse + smoke gcode (disabled until eddy-ng → native migration)
+    name: Klippy parse + smoke gcode
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
