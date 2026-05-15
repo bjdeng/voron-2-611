@@ -273,8 +273,7 @@ No destructive Pi operations. `~/eddy-ng/` already removed by the Eddy migration
 
 Tracked as GH Issues with `future-work` label after Phase 3:
 
-- **Re-tune session** — input shaper (X, Y, **and Z** per `accel_chip_z: lis2dw` + `shaper_type_z`), PID, pressure advance, Eddy native calibration verification. Z input shaping was historically not done on this build; native Klipper + Eddy makes it feasible. Worth including when the shaper calibration macro is rebuilt.
-- **klippain-shaketune install** for belt-comparison diagnostics (`COMPARE_BELTS_RESPONSES`); also supports Z-axis shaper tuning if its current version covers it (verify at install time).
+- **Re-tune session, anchored on klippain-shaketune** — install [klippain-shaketune](https://github.com/Frix-x/klippain-shaketune) (v6.0+, standalone install, not full Klippain). Run shaketune's `COMPARE_BELTS_RESPONSES` for belt-tension diagnostics (V2 saggy-rear); rebuild X/Y shaper calibration via shaketune's flow; verify shaketune covers Z-axis shaping (`accel_chip_z: lis2dw` + `shaper_type_z`) — if it does, that supersedes a standalone Z-shaper rebuild; if it doesn't, run native `SHAPER_CALIBRATE` for Z separately. Also in this session: PID re-tune, pressure advance, Eddy native calibration verification.
 - Microsteps re-evaluation (128 → 64 deliberate test).
 - Sensorless X feasibility.
 - OrcaSlicer print-profile tuning.
