@@ -28,9 +28,13 @@ These items are coupled to the Eddy native migration and land with it (or as an 
 
 - `[bed_mesh] fade_target: 0`
 - `[bed_mesh] zero_reference_position: 175, 175`
-- `[temperature_sensor mcu]` + `[temperature_sensor mcu z]`
-- **`[temperature_probe btt_eddy]`** — native Klipper feature; thermistor is already wired (`config/eddy.cfg:23-25`). Drift compensation for QGL (which uses default probing, not tap). The earlier "declined" decision was framed against eddy-ng's tap-everywhere philosophy; native Klipper makes this a first-class feature worth using.
-- **`[homing_override]` for Z post-G28** — adopts the doc-blessed pattern from `vendor/klipper/docs/Eddy_Probe.md:398-400`. Replaces the inline `SET_KINEMATIC_POSITION` in `print_start.cfg:67-70`. Side benefit: ensures the pattern runs on every `G28 Z`, not just at print start. Slightly simplifies Phase 4's `PRINT_START` refactor.
+- **`[temperature_probe btt_eddy]`** — native Klipper feature; thermistor is already wired (`config/eddy.cfg:23-25`). Drift compensation for QGL (which uses default probing, not tap). Replaces the prior `[temperature_sensor btt_eddy]` (same hardware pin).
+- **Doc-blessed split-macro pattern for tap-Z application** (`SET_Z_FROM_PROBE` + `_RELOAD_Z_OFFSET_FROM_PROBE` in `config/eddy.cfg`) replaces an inline `PROBE METHOD=tap` + `SET_KINEMATIC_POSITION Z={...last_z_result}` pair in `PRINT_START`. The inline pair was a real bug: Klipper renders each macro template ONCE at invocation, so `{...last_z_result}` substituted before `PROBE` ran. The split-macro approach is the canonical pattern from `vendor/klipper/docs/Eddy_Probe.md:379-389`.
+
+**Not folded in (deferred to GH `future-work` issues):**
+
+- **`[homing_override]` for Z post-G28** — the doc-blessed *automation* layer (per `vendor/klipper/docs/Eddy_Probe.md:398-400`) so `SET_Z_FROM_PROBE` runs on every `G28 Z`, not just at print start. The split-macro fix above is sufficient for `PRINT_START`'s safety; `[homing_override]` is a "nice to have" that adds behavior across all G28 contexts. Deferred to a separate small PR after Eddy calibration verifies the macro pattern works.
+- **`[temperature_sensor]` for SKR 1.4 MCU die temps** — **infeasible**. Klipper's `temperature_mcu` doesn't support LPC1769 (per `vendor/klipper/klippy/extras/temperature_mcu.py` supported-MCU list: rp2, sam3/4, samd21/51, stm32f/g/l/h7). Filed as a permanent limitation.
 
 ### Out of scope (tracked as GH Issues with `future-work` label)
 

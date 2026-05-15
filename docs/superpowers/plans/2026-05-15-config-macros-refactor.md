@@ -19,10 +19,12 @@
 Run:
 ```sh
 git switch main && git pull --ff-only
-grep -E "fade_target|zero_reference_position|temperature_probe btt_eddy|temperature_sensor mcu|homing_override" config/eddy.cfg config/printer.cfg
+grep -E "fade_target|zero_reference_position|temperature_probe btt_eddy|SET_Z_FROM_PROBE" config/eddy.cfg config/macros/print_start.cfg
 ```
 
-Expected: matches for `fade_target: 0`, `zero_reference_position: 175, 175`, `[temperature_probe btt_eddy]`, `[temperature_sensor mcu]`, `[temperature_sensor mcu z]`, `[homing_override]`. If any are missing, that work belongs on the Eddy branch — pause and address there first.
+Expected: matches for `fade_target: 0`, `zero_reference_position: 175, 175`, `[temperature_probe btt_eddy]`, `SET_Z_FROM_PROBE`. If any are missing, that work belongs on the Eddy branch — pause and address there first.
+
+(SKR MCU die-temp sensors were *not* folded in — LPC1769 is unsupported by Klipper's `temperature_mcu`. `[homing_override]` is also deferred — see spec §2.)
 
 - [ ] **Step 0.2: Create a new branch from main for Phase 1**
 
@@ -528,7 +530,7 @@ Inspect `config/macros/lcd_tweaks.cfg` around line 87-91. There are two `[displa
 
 - [ ] **Step 4: Remove orphan comment in printer.cfg**
 
-Delete the stray `; set logo back to white` comment at `config/printer.cfg:332` (it has no corresponding command).
+Delete the stray `; set logo back to white` comment at `config/printer.cfg:345` (within the `[idle_timeout]` gcode body — it has no corresponding command).
 
 - [ ] **Step 5: Run all tests**
 
