@@ -173,14 +173,50 @@ capture_save_config() {
 }
 
 check_no_pi_drift() {
-  # Compare Pi's printer.cfg body to the repo's, ignoring whitespace-only
-  # differences. Mainsail saves with trailing whitespace that pre-commit
-  # strips here; the gate's intent is to catch SEMANTIC edits (Mainsail
-  # changes, manual SSH tweaks), not whitespace produced by the round-trip.
-  local pi_full
+  # The gate's intent: catch SEMANTIC edits on the Pi (Mainsail changes,
+  # manual SSH tweaks) that weren't synced back to git. NOT to block
+  # legitimate repo-ahead deploys (which is the whole point of running this).
+  #
+  # Compare Pi's printer.cfg body to the version AT THE LAST-DEPLOYED COMMIT
+  # (recorded in ~/printer_data/config/.last-deploy-sha). Any difference =
+  # the Pi has changes the repo doesn't know about → Pi-ahead drift → fail.
+  #
+  # Fallback: if the marker is missing (fresh deploy) or its SHA isn't in
+  # git history (corrupt marker, from another repo), fall back to comparing
+  # against current-repo printer.cfg — conservative, may fire on repo-ahead
+  # drift in edge cases.
+  #
+  # Mainsail saves with trailing whitespace that pre-commit strips here;
+  # diff -w -B ignores whitespace-only changes either way.
+  #
+  # NOTE: pi_full and deploy_marker_raw come from two separate ssh calls.
+  # In theory another concurrent deploy could slip between them and we'd
+  # be comparing the new Pi cfg against the old marker. In practice this
+  # is single-user single-printer so the window is irrelevant.
+  local pi_full pi_body deploy_marker_raw reference_body
   pi_full=$(ssh "$PI_HOST" 'cat ~/printer_data/config/printer.cfg')
+  pi_body=$(printf '%s\n' "$pi_full" | sed -E "/$SAVE_CONFIG_MARKER/,\$d")
+
+  deploy_marker_raw=$(ssh "$PI_HOST" 'cat ~/printer_data/config/.last-deploy-sha 2>/dev/null || true')
+  if [[ -n "$deploy_marker_raw" ]]; then
+    if reference_body=$(git show "$deploy_marker_raw:config/printer.cfg" 2>/dev/null); then
+      reference_body=$(printf '%s\n' "$reference_body" | sed -E "/$SAVE_CONFIG_MARKER/,\$d")
+      if [[ -n "$reference_body" ]]; then
+        if ! diff -q -w -B <(printf '%s\n' "$pi_body") <(printf '%s\n' "$reference_body") >/dev/null; then
+          echo "ERR: Pi printer.cfg body has drifted from the last-deployed commit ($deploy_marker_raw). Run sync-from-pi to capture changes, then re-run deploy-to-pi." >&2
+          exit 1
+        fi
+        return
+      fi
+      echo "WARN: deploy marker '$deploy_marker_raw' yielded empty reference body after SAVE_CONFIG strip; comparing Pi to current repo." >&2
+    else
+      echo "WARN: deploy marker SHA '$deploy_marker_raw' not in git history; comparing Pi to current repo (may fire on legitimate repo-ahead drift)." >&2
+    fi
+  fi
+
+  # Fallback path (no marker / unresolvable marker).
   if ! diff -q -w -B \
-      <(printf '%s\n' "$pi_full" | sed -E "/$SAVE_CONFIG_MARKER/,\$d") \
+      <(printf '%s\n' "$pi_body") \
       <(sed -E "/$SAVE_CONFIG_MARKER/,\$d" "$REPO_ROOT/config/printer.cfg") \
       >/dev/null; then
     echo "ERR: Pi printer.cfg body has drifted from origin/main. Run sync-from-pi to capture changes, then re-run deploy-to-pi." >&2

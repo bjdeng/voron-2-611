@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Fake git. Reads FAKE_GIT_BRANCH, FAKE_GIT_DIRTY, FAKE_GIT_CACHED_DIRTY,
 # FAKE_GIT_LOCAL_SHA, FAKE_GIT_REMOTE_SHA, FAKE_GIT_DIFF_FILES,
-# FAKE_GIT_DIFF_ERROR. Logs every call.
+# FAKE_GIT_DIFF_ERROR, FAKE_LAST_DEPLOY_PRINTER_CFG, FAKE_GIT_SHOW_ERROR.
+# Logs every call.
 echo "git $*" >> "${FAKE_LOG_DIR:-/dev/stderr}"
 
 case "$1 $2" in
@@ -17,6 +18,15 @@ case "$1 $2" in
     # Simulate `git diff <unknown-sha> main` failing (corrupt deploy marker).
     if [[ "${FAKE_GIT_DIFF_ERROR:-0}" == "1" ]]; then exit 128; fi
     printf '%s\n' "${FAKE_GIT_DIFF_FILES:-config/macros/macros.cfg}"
+    exit 0 ;;
+  "show "*)
+    # `git show <sha>:config/printer.cfg` — used by check_no_pi_drift to
+    # compare Pi's body to the last-deployed commit's printer.cfg body.
+    # FAKE_LAST_DEPLOY_PRINTER_CFG provides the content; if unset, exit 128
+    # like real git would for an unknown SHA.
+    if [[ "${FAKE_GIT_SHOW_ERROR:-0}" == "1" ]]; then exit 128; fi
+    if [[ -z "${FAKE_LAST_DEPLOY_PRINTER_CFG:-}" ]]; then exit 128; fi
+    printf '%s' "${FAKE_LAST_DEPLOY_PRINTER_CFG}"
     exit 0 ;;
   "status -sb")
     # Diagnostic call from check_tree_clean after detecting a dirty tree.

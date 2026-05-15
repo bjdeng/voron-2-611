@@ -221,6 +221,100 @@ def test_drift_gate_ignores_whitespace_only_differences():
     assert "sync-from-pi" not in r.stderr.lower(), _diag(r)
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# Marker-aware drift gate (issue #19)
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def test_drift_gate_passes_when_pi_matches_last_deploy_even_if_repo_ahead():
+    """The whole point of the gate fix: repo-ahead drift is OK.
+
+    Scenario: Pi has whatever was last deployed (matches last-deploy SHA's
+    printer.cfg). Repo HEAD has new changes since that deploy. Without the
+    fix, the gate fires (Pi != repo HEAD). With the fix, the gate compares
+    Pi vs `git show <last-deploy-sha>:config/printer.cfg` — match — pass.
+    """
+    marker = "#*# <---------------------- SAVE_CONFIG ---------------------->"
+    old_deployed_body = "[printer]\n" "max_velocity: 450\n" "# previous content\n"
+    # Pi matches the OLD deployed body (it was deployed but no Mainsail edits since).
+    fake_pi_cfg = old_deployed_body + marker + "\n#*# [heater_bed]\n"
+    r = _run(
+        env={
+            "FAKE_PI_PRINTER_CFG": fake_pi_cfg,
+            "FAKE_LAST_DEPLOY_SHA": "abcd1234",
+            "FAKE_LAST_DEPLOY_PRINTER_CFG": old_deployed_body,
+            "FAKE_GIT_DIFF_FILES": "config/macros/macros.cfg",
+            "READY_POLL_INTERVAL": "0",
+            "READY_POLL_MAX": "3",
+        }
+    )
+    # Drift gate must not fire — repo-ahead drift is the intended state.
+    assert "Pi printer.cfg body has drifted" not in r.stderr, _diag(r)
+
+
+def test_drift_gate_fires_when_pi_diverges_from_last_deploy():
+    """Pi-ahead drift (real risk): someone edited the Pi-side printer.cfg
+    after last deploy. The gate should catch that even if repo HEAD also
+    moved on (we don't know if Pi's edits are captured upstream).
+    """
+    marker = "#*# <---------------------- SAVE_CONFIG ---------------------->"
+    old_deployed_body = "[printer]\n" "max_velocity: 450\n"
+    # Pi has UNSYNCED edits (max_velocity changed via Mainsail).
+    fake_pi_cfg = (
+        ("[printer]\n" "max_velocity: 999   # someone-edited-on-pi\n")
+        + marker
+        + "\n#*# [heater_bed]\n"
+    )
+    r = _run(
+        env={
+            "FAKE_PI_PRINTER_CFG": fake_pi_cfg,
+            "FAKE_LAST_DEPLOY_SHA": "abcd1234",
+            "FAKE_LAST_DEPLOY_PRINTER_CFG": old_deployed_body,
+        }
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "drifted from the last-deployed commit" in r.stderr, _diag(r)
+
+
+def test_drift_gate_falls_back_to_repo_compare_when_marker_unresolvable():
+    """If the marker SHA isn't in git history (corrupt marker / different
+    repo / fresh deploy), fall back to the conservative repo-HEAD comparison.
+    """
+    r = _run(
+        env={
+            "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+            "FAKE_LAST_DEPLOY_SHA": "deadbeef",
+            "FAKE_GIT_SHOW_ERROR": "1",  # git show <sha> fails
+        }
+    )
+    # Pi matches repo HEAD → fallback path passes.
+    assert "Pi printer.cfg body has drifted" not in r.stderr, _diag(r)
+    # WARN should be emitted noting the fallback (unresolved-SHA path).
+    assert "not in git history" in r.stderr, _diag(r)
+
+
+def test_drift_gate_falls_back_when_reference_body_empty_after_strip():
+    """git show succeeds with content that's ONLY the SAVE_CONFIG marker
+    (or is empty). After stripping SAVE_CONFIG, reference_body is empty;
+    fall back to current-repo comparison with a distinct WARN.
+    """
+    marker = "#*# <---------------------- SAVE_CONFIG ---------------------->"
+    # Pi has only SAVE_CONFIG (no body) and FAKE_LAST_DEPLOY_PRINTER_CFG
+    # also has only SAVE_CONFIG → reference_body is empty after strip.
+    only_save_config = marker + "\n#*# [heater_bed]\n"
+    r = _run(
+        env={
+            "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+            "FAKE_LAST_DEPLOY_SHA": "abcd1234",
+            "FAKE_LAST_DEPLOY_PRINTER_CFG": only_save_config,
+        }
+    )
+    # Pi matches repo HEAD → fallback comparison passes.
+    assert "Pi printer.cfg body has drifted" not in r.stderr, _diag(r)
+    # Distinct WARN identifying the empty-reference reason.
+    assert "yielded empty reference body" in r.stderr, _diag(r)
+
+
 def test_chooses_firmware_restart_on_non_macro_change(fake_log):
     """A non-macro/non-archive file in the diff routes to firmware_restart."""
     env = {
