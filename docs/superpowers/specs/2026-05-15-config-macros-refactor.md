@@ -24,11 +24,13 @@ Make the Klipper config and macros for voron-2-611 maintainable for the next sev
 
 ### Folded into the in-flight `feat/eddy-native` branch (not this spec)
 
-These three items are coupled to the Eddy native migration and land with it before this spec's PRs start:
+These items are coupled to the Eddy native migration and land with it (or as an immediate follow-up PR) before this spec's PRs start:
 
 - `[bed_mesh] fade_target: 0`
 - `[bed_mesh] zero_reference_position: 175, 175`
 - `[temperature_sensor mcu]` + `[temperature_sensor mcu z]`
+- **`[temperature_probe btt_eddy]`** — native Klipper feature; thermistor is already wired (`config/eddy.cfg:23-25`). Drift compensation for QGL (which uses default probing, not tap). The earlier "declined" decision was framed against eddy-ng's tap-everywhere philosophy; native Klipper makes this a first-class feature worth using.
+- **`[homing_override]` for Z post-G28** — adopts the doc-blessed pattern from `vendor/klipper/docs/Eddy_Probe.md:398-400`. Replaces the inline `SET_KINEMATIC_POSITION` in `print_start.cfg:67-70`. Side benefit: ensures the pattern runs on every `G28 Z`, not just at print start. Slightly simplifies Phase 4's `PRINT_START` refactor.
 
 ### Out of scope (tracked as GH Issues with `future-work` label)
 
@@ -271,19 +273,16 @@ No destructive Pi operations. `~/eddy-ng/` already removed by the Eddy migration
 
 Tracked as GH Issues with `future-work` label after Phase 3:
 
-- `[temperature_probe btt_eddy]` re-evaluation (post-Eddy real-world drift data).
-- `[homing_override]` for Z post-G28 (current pattern works; switch only if reason emerges).
-- Z-axis input shaping (rolls into re-tune session).
-- klippain-shaketune install for belt-comparison diagnostics.
-- Re-tune session (input shaper, PID, PA, Eddy native).
-- Microsteps re-evaluation.
+- **Re-tune session** — input shaper (X, Y, **and Z** per `accel_chip_z: lis2dw` + `shaper_type_z`), PID, pressure advance, Eddy native calibration verification. Z input shaping was historically not done on this build; native Klipper + Eddy makes it feasible. Worth including when the shaper calibration macro is rebuilt.
+- **klippain-shaketune install** for belt-comparison diagnostics (`COMPARE_BELTS_RESPONSES`); also supports Z-axis shaper tuning if its current version covers it (verify at install time).
+- Microsteps re-evaluation (128 → 64 deliberate test).
 - Sensorless X feasibility.
 - OrcaSlicer print-profile tuning.
 - Webcam re-enable.
 - moonraker-timelapse removal.
 - Logical reorganization audit (after living with `_USER_VARIABLE` for a quarter).
-- Better PA / Flow calibration macros.
-- Webcam-feedback-driven auto-calibration.
+- Better PA / Flow calibration macros (survey of community options vs. current Frix-x v1.2/v1.6).
+- Webcam-feedback-driven auto-calibration (flow / PA / temp from camera observation of test prints).
 
 ## 10. References
 
