@@ -76,7 +76,7 @@ After the in-flight `feat/eddy-native` branch merges to `main`, implementation p
 - Remove commented-out blocks: `print_start.cfg:20`, `print_start.cfg:32-36, 43-47, 51, 58-62, 76-81`; `macros.cfg:172-181, 199`; `lcd_tweaks.cfg:87-91`; `printer.cfg:332`.
 - Save the Mainsail/HH divergence rationale to `memory/decisions.md`.
 
-### Phase 3 — CLAUDE.md corrections + Open Investigations migration (~50 line diff, docs-only)
+### Phase 3 — CLAUDE.md corrections + Open Investigations migration + test pyramid enshrining (~80 line diff, docs-only)
 
 - **Fix factual errors** in CLAUDE.md:
   - "EREC (toolhead filament cutter)" → **Filametrix** ([Carrot-collective/Filametrix](https://github.com/Carrot-collective/Filametrix)).
@@ -91,6 +91,7 @@ After the in-flight `feat/eddy-native` branch merges to `main`, implementation p
   - File one issue per current Open Investigation (8 items), each linking back to the relevant CLAUDE.md context.
   - Replace the CLAUDE.md `## Open investigations` section with a one-line pointer: "Tracked as GitHub Issues with the `future-work` label: <link>". Keep the "Recently resolved" sub-section as a historical log.
   - Add the new "out of scope" items from Section 2 as additional issues (`[temperature_probe]` revisit, shaketune install, Z-axis shaping, logical reorganization audit, PA/Flow macro survey, webcam-feedback auto-calibration).
+- **Enshrine the test pyramid in CLAUDE.md:** expand the existing `## CI checks` section into a full `## Testing` section that documents the 6+1 test pyramid layers, what each catches, when to extend, how to run locally. The spec's Section 5 stays the source of truth for rationale; CLAUDE.md's section is the contributor-facing summary.
 
 ### Phase 4 — Macros refactor + file reorg (~400-600 line diff — the largest)
 
