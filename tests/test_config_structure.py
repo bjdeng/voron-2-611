@@ -31,9 +31,7 @@ def _cfg_files() -> list[Path]:
     """
     excluded_path_parts = {"archive", "base", "optional", "addons"}
     return [
-        p
-        for p in CONFIG_DIR.rglob("*.cfg")
-        if not (set(p.parts) & excluded_path_parts)
+        p for p in CONFIG_DIR.rglob("*.cfg") if not (set(p.parts) & excluded_path_parts)
     ]
 
 
