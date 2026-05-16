@@ -80,6 +80,7 @@ def test_no_deprecated_klipper_config_keys() -> None:
 
 OWNED_MACRO_FILES = sorted(glob.glob(str(REPO_ROOT / "config/macros/*.cfg"))) + [
     str(REPO_ROOT / "config/eddy.cfg"),
+    str(REPO_ROOT / "config/mainsail.cfg"),
 ]
 
 
@@ -94,12 +95,16 @@ def _parse_macros(cfg_path):
         body = text[body_start:body_end]
         # description: must be a top-level key (no leading whitespace),
         # not just the literal string appearing inside a gcode comment.
-        desc = bool(re.search(r"^description:\s*\S+", body, re.MULTILINE))
+        desc = bool(re.search(r"^description:[^\S\n]*\S", body, re.MULTILINE))
         yield name, body, desc
 
 
 def test_every_owned_macro_has_description():
     """Every [gcode_macro] in config/macros/* and config/eddy.cfg has a non-empty description: field."""
+    assert len(OWNED_MACRO_FILES) >= 8, (
+        f"OWNED_MACRO_FILES has {len(OWNED_MACRO_FILES)} entries; expected "
+        f"≥8 (7 macros/*.cfg + eddy.cfg + mainsail.cfg). Path drift?"
+    )
     missing = []
     for cfg in OWNED_MACRO_FILES:
         for name, _body, has_desc in _parse_macros(cfg):
