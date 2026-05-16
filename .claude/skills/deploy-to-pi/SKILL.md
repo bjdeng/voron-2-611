@@ -40,8 +40,7 @@ After the deploy + restart, the skill polls Moonraker (`GET /printer/info`) ever
 Opt-in smoke test that runs after Klipper reports `ready`. Catches runtime regressions L3 (CI parse + MCU load) can't see — macros referencing undefined commands at render time, calibration-state bugs, kinematics misconfig.
 
 **Gcode sequence** (synchronous via Moonraker `/printer/gcode/script`):
-- `G28` — full home (exercises safe_z_home + Eddy probe at runtime)
-- `QUERY_PROBE` — sanity-checks probe object
+- `G28` — full home (exercises safe_z_home + Eddy probe at runtime end-to-end: descend, measure, return)
 - `PARKCENTER` — exercises a custom park macro end-to-end
 - `OFF` — runs the all-off shutdown sequence
 - `_RESETSPEEDS` — restores configured velocity/accel/SCV

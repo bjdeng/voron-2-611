@@ -164,8 +164,8 @@ ssh pi@mainsailos.local /home/pi/printer_data/printer-smoke.sh
 
 `scripts/printer-smoke.sh` (new, deployed to Pi):
 
-1. POST to Moonraker `printer.gcode.script`: `G28`, `QUERY_PROBE`, `PARKCENTER`, `OFF`, `_RESETSPEEDS`.
-2. After each command, `grep` `~/printer_data/logs/klippy.log` for `!! Unknown command` and `!! Internal error`.
+1. POST to Moonraker `printer.gcode.script`: `G28`, `PARKCENTER`, `OFF`, `_RESETSPEEDS`. (Originally included `QUERY_PROBE` — dropped 2026-05-16 because native `[probe_eddy_current]` doesn't implement it; G28 already exercises the probe end-to-end.)
+2. After each command, `grep` `~/printer_data/logs/klippy.log` for `^!! ` (Klipper's runtime-error prefix).
 3. Exit non-zero on any error.
 
 **Layer 7 (Phase 4 only):**
