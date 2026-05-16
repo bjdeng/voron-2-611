@@ -138,3 +138,55 @@ def test_extruder_section_single_file():
         if re.search(r"^\[extruder\]\s*$", cfg.read_text(), re.MULTILINE)
     ]
     assert len(hits) == 1, f"[extruder] in {hits} (expect exactly one owned file)"
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 PR-B: _USER_VARIABLE reference + definition coherence
+# ---------------------------------------------------------------------------
+
+USER_VAR_FILE = REPO_ROOT / "config/macros/_user_variables.cfg"
+# Matches printer["gcode_macro _USER_VARIABLE"].name and the single-quote
+# variant. The optional quote class covers both idioms; the closing `]`
+# anchors to the dict subscript so we don't false-match a literal mention
+# of the macro name in a comment.
+USER_VAR_REF_RE = re.compile(r"""_USER_VARIABLE['"]?\]\.(\w+)""")
+
+
+def _user_variable_definitions():
+    """Return set of `variable_X` names defined in _user_variables.cfg."""
+    if not USER_VAR_FILE.exists():
+        return set()
+    text = USER_VAR_FILE.read_text()
+    return set(re.findall(r"^variable_(\w+):", text, re.MULTILINE))
+
+
+def _user_variable_refs():
+    """Return set of `variable_X` names referenced anywhere in our owned macros."""
+    refs = set()
+    files = list(OWNED_MACRO_FILES) + [str(USER_VAR_FILE)]
+    for cfg in files:
+        if not Path(cfg).exists():
+            continue
+        for m in USER_VAR_REF_RE.finditer(Path(cfg).read_text()):
+            refs.add(m.group(1))
+    return refs
+
+
+def test_user_variable_refs_resolve():
+    """Every _USER_VARIABLE.X reference resolves to a variable_X: definition."""
+    defs = _user_variable_definitions()
+    refs = _user_variable_refs()
+    unresolved = refs - defs
+    assert (
+        not unresolved
+    ), f"_USER_VARIABLE refs without matching variable_X: {sorted(unresolved)}"
+
+
+def test_user_variable_definitions_used():
+    """Every variable_X: definition is referenced somewhere (no orphans)."""
+    defs = _user_variable_definitions()
+    if not defs:
+        return  # _user_variables.cfg doesn't exist yet — skip this PR-B-only test
+    refs = _user_variable_refs()
+    orphans = defs - refs
+    assert not orphans, f"Orphan variable_X definitions: {sorted(orphans)}"
