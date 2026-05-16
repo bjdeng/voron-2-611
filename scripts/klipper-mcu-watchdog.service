@@ -1,0 +1,33 @@
+[Unit]
+Description=Klipper MCU USB watchdog (auto-recover from re-enumeration races)
+Documentation=https://github.com/bjdeng/voron-2-611/issues/37
+# Start after Klipper is up. We poll Moonraker rather than gating Klipper,
+# so After= here is for log-ordering convenience, not a hard dependency.
+After=klipper.service moonraker.service
+Wants=moonraker.service
+
+[Service]
+Type=simple
+# Runs as root because the script writes to /sys/bus/usb/drivers/usb/{,un}bind
+# which is root-only. The script is small and audited; see scripts/klipper-mcu-watchdog.sh.
+User=root
+ExecStart=/usr/local/bin/klipper-mcu-watchdog.sh daemon
+Restart=on-failure
+RestartSec=10
+# Crash-loop protection: if the daemon keeps dying, give up rather than
+# burning CPU forever. systemctl reset-failed clears the failure count.
+StartLimitBurst=5
+StartLimitIntervalSec=300
+# StandardOutput=journal and StandardError=journal are systemd defaults; the
+# script logs to stderr so its messages land in journalctl -u klipper-mcu-watchdog.
+
+# Light sandboxing: reads printer.cfg under printer_data, writes only state
+# file and sysfs paths needed for hub rebind.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/klipper-mcu-watchdog /sys/bus/usb/drivers/usb
+ProtectHome=read-only
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
