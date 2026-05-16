@@ -26,7 +26,8 @@ PI_HOST="${PI_HOST:-pi@mainsailos.local}"
 PI_API="${PI_API:-http://mainsailos.local:7125}"
 
 # Gcode sequence — short on purpose so deploys finish in <90s. Each command
-# exercises a different surface:
+# is sent as its own POST (see SMOKE_GCODE below for why) and exercises a
+# different surface:
 #   G28           — full home; runs safe_z_home → Eddy probe at runtime.
 #                   Catches probe-state regressions, missing tap_threshold
 #                   guards, kinematics misconfig. G28 alone exercises the
@@ -41,12 +42,21 @@ PI_API="${PI_API:-http://mainsailos.local:7125}"
 #   _RESETSPEEDS  — restores configured velocity/accel/SCV. Catches
 #                   accidental removal of speed-management macros.
 #
-# Joined with \n; Moonraker /printer/gcode/script runs the whole batch
-# atomically and only returns once every line completes (or one errors).
-SMOKE_GCODE='G28
-PARKCENTER
-OFF
-_RESETSPEEDS'
+# Each command is POSTed separately (not as a single \n-joined batch) so
+# Klipper doesn't see queue-ahead pressure across G28's tap boundary.
+# G28 embeds PROBE METHOD=tap (via [homing_override]), which captures a
+# fixed 160ms sample window relative to toolhead.get_last_move_time() when
+# planning the retract. With downstream commands already queued, look-ahead
+# can shift that timestamp vs the MCU's actual retract execution, producing
+# spurious "Unable to detect tap: insufficient lift (0.000000 vs 0.350000)"
+# errors. Seen on 2026-05-16 deploy of refactor Phase 4 PR-A; manual
+# console G28 immediately after succeeded. See memory/eddy-first-tap-flake.md.
+SMOKE_GCODE=(
+  "G28"
+  "PARKCENTER"
+  "OFF"
+  "_RESETSPEEDS"
+)
 
 # Klipper reserves `!! ` as the runtime-error prefix in klippy.log and the
 # gcode response stream. Matching any `^!! ` line is the right gate — an
@@ -81,19 +91,28 @@ if ! [[ "$before_inode" =~ ^[0-9]+$ && "$before_lines" =~ ^[0-9]+$ ]]; then
 fi
 echo "    klippy.log: inode=$before_inode lines=$before_lines"
 
-# 2. POST the gcode sequence. Moonraker /printer/gcode/script blocks until
-#    every command finishes. --max-time 120 covers a normal G28 (~30s) +
-#    park moves + a generous buffer.
-echo "==> Running smoke gcode (G28 + parks; ~30-60s)"
-moonraker_response=$(curl -fsS -X POST "$PI_API/printer/gcode/script" \
-  --data-urlencode "script=$SMOKE_GCODE" \
-  --max-time 120 \
-  2>&1) || {
-    echo "ERR: smoke gcode rejected by Moonraker:" >&2
-    printf '  %s\n' "$moonraker_response" >&2
-    exit 2
-}
-echo "    Moonraker: $moonraker_response"
+# 2. POST each gcode command separately. Moonraker /printer/gcode/script
+#    blocks until the command finishes; sending one at a time means
+#    Klipper has nothing queued behind the current command and look-ahead
+#    can't shift PROBE METHOD=tap's sample window timestamps. --max-time
+#    120 covers a normal G28 (~30s) plus a generous buffer.
+if [[ ${#SMOKE_GCODE[@]} -eq 0 ]]; then
+  echo "ERR: SMOKE_GCODE is empty — nothing to run. This is a script bug." >&2
+  exit 1
+fi
+echo "==> Running smoke gcode (${#SMOKE_GCODE[@]} commands; ~30-60s total)"
+for cmd in "${SMOKE_GCODE[@]}"; do
+  echo "    -> $cmd"
+  moonraker_response=$(curl -fsS -X POST "$PI_API/printer/gcode/script" \
+    --data-urlencode "script=$cmd" \
+    --max-time 120 \
+    2>&1) || {
+      echo "ERR: smoke gcode '$cmd' rejected by Moonraker:" >&2
+      printf '  %s\n' "$moonraker_response" >&2
+      exit 2
+  }
+done
+echo "    All commands accepted."
 
 # 3. Read what got logged since the snapshot. Re-check inode first — if it
 #    changed, the log rotated mid-smoke (Klipper restart, log rotation
