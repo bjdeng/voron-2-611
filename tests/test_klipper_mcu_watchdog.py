@@ -337,6 +337,181 @@ def test_map_empty_when_state_absent(tmp_path):
     assert r.stdout.strip() == "", _diag(r)
 
 
+# ───────────────────────── learn / discover_hub_for_serial ─────────────────────────
+
+
+def test_learn_records_correct_hub_per_serial(tmp_path):
+    """End-to-end smoke test of `learn`: builds a fake /dev/serial/by-id
+    tree pointing at a fake sysfs layout that mirrors what the Pi shows
+    (devices at 1-1.3.X under hub 1-1.3, devices at 1-1.4.X under 1-1.4).
+    Verifies the state file ends up with correct hub assignments per serial.
+
+    This is a regression test for the bug where every serial got mapped
+    to the same too-shallow hub (`1-1` instead of `1-1.3` / `1-1.4`)
+    when `discover_hub_for_serial` used a fragile udevadm-path regex.
+    """
+    # Build fake sysfs: /sys/class/tty/ttyACM<N>/device → interface dir
+    # at ../bus/usb/devices/1-1.X.Y/1-1.X.Y:1.0
+    sysfs = tmp_path / "sys"
+    devices_dir = sysfs / "bus" / "usb" / "devices"
+    tty_dir = sysfs / "class" / "tty"
+    devices_dir.mkdir(parents=True)
+    tty_dir.mkdir(parents=True)
+    by_id = tmp_path / "by-id"
+    by_id.mkdir()
+    dev_dir = tmp_path / "dev"
+    dev_dir.mkdir()
+
+    # Three MCUs across two hubs. cases: (serial, hub_path, leaf_port, tty_idx)
+    layout = [
+        ("usb-Klipper_lpc_A-if00", "1-1.3", "1-1.3.4", 0),
+        ("usb-Klipper_samd_B-if00", "1-1.3", "1-1.3.1", 1),
+        ("usb-Klipper_rp_C-if00", "1-1.4", "1-1.4.3", 2),
+    ]
+
+    for serial, hub, leaf, idx in layout:
+        # Mirror sysfs hub + leaf dirs (they don't need contents).
+        (devices_dir / hub).mkdir(exist_ok=True)
+        leaf_dir = devices_dir / hub / leaf
+        leaf_dir.mkdir(exist_ok=True)
+        iface = leaf_dir / f"{leaf}:1.0"
+        iface.mkdir(exist_ok=True)
+        # /sys/class/tty/ttyACMN/device → the interface dir
+        tty_name = f"ttyACM{idx}"
+        (tty_dir / tty_name).mkdir(parents=True, exist_ok=True)
+        (tty_dir / tty_name / "device").symlink_to(iface)
+        # /dev/ttyACMN exists as a real file (readlink -f resolves it)
+        (dev_dir / tty_name).touch()
+        # /dev/serial/by-id/<serial> → /dev/ttyACMN
+        (by_id / serial).symlink_to(dev_dir / tty_name)
+
+    # printer.cfg with all three MCUs
+    cfg = tmp_path / "printer.cfg"
+    cfg.write_text(
+        textwrap.dedent(
+            """
+            [mcu]
+            serial: /dev/serial/by-id/usb-Klipper_lpc_A-if00
+
+            [mcu z]
+            serial: /dev/serial/by-id/usb-Klipper_samd_B-if00
+
+            [mcu eddy]
+            serial: /dev/serial/by-id/usb-Klipper_rp_C-if00
+            """
+        ).lstrip()
+    )
+
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    # The script uses readlink -f on /sys/class/tty/<name>/device — symlinks
+    # already resolve to absolute paths inside tmp_path, so we don't need to
+    # remap SYS root. Just point SERIAL_BY_ID_DIR at the fake tree.
+    r = _run(
+        ["learn"],
+        env={
+            "PRINTER_CFG": str(cfg),
+            "STATE_DIR": str(state_dir),
+            "SERIAL_BY_ID_DIR": str(by_id),
+            "TTY_CLASS_DIR": str(tty_dir),
+        },
+    )
+    assert r.returncode == 0, _diag(r)
+
+    state_file = state_dir / "mcu-hub-map"
+    assert state_file.exists(), f"state file not created: {_diag(r)}"
+    mapping = dict(line.split() for line in state_file.read_text().strip().splitlines())
+    assert mapping == {
+        "usb-Klipper_lpc_A-if00": "1-1.3",
+        "usb-Klipper_samd_B-if00": "1-1.3",
+        "usb-Klipper_rp_C-if00": "1-1.4",
+    }, f"expected per-serial hub, got: {mapping}"
+
+
+def test_learn_refuses_root_hub_topology(tmp_path):
+    """Guard: if an MCU sits directly on a Pi root port (interface dir
+    under .../1-1/1-1:1.0 with no nested hub), the two-dirname walk
+    bottoms out at the controller (`usb1`). `discover_hub_for_serial`
+    must refuse — unbinding `usb1` would knock out every USB device
+    on that bus.
+    """
+    sysfs = tmp_path / "sys"
+    devices_dir = sysfs / "bus" / "usb" / "devices"
+    tty_dir = sysfs / "class" / "tty"
+    devices_dir.mkdir(parents=True)
+    tty_dir.mkdir(parents=True)
+    by_id = tmp_path / "by-id"
+    by_id.mkdir()
+    dev_dir = tmp_path / "dev"
+    dev_dir.mkdir()
+
+    usb1 = devices_dir / "usb1"
+    usb1.mkdir()
+    port = usb1 / "1-1"
+    port.mkdir()
+    iface = port / "1-1:1.0"
+    iface.mkdir()
+    (tty_dir / "ttyACM0").mkdir()
+    (tty_dir / "ttyACM0" / "device").symlink_to(iface)
+    (dev_dir / "ttyACM0").touch()
+    serial = "usb-Klipper_root_port_mcu-if00"
+    (by_id / serial).symlink_to(dev_dir / "ttyACM0")
+
+    cfg = tmp_path / "printer.cfg"
+    cfg.write_text(f"[mcu]\nserial: /dev/serial/by-id/{serial}\n")
+
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    r = _run(
+        ["learn"],
+        env={
+            "PRINTER_CFG": str(cfg),
+            "STATE_DIR": str(state_dir),
+            "SERIAL_BY_ID_DIR": str(by_id),
+            "TTY_CLASS_DIR": str(tty_dir),
+        },
+    )
+    assert r.returncode == 0, _diag(r)
+    assert not (state_dir / "mcu-hub-map").exists(), _diag(r)
+    assert "only resolved 0/1" in r.stderr, _diag(r)
+
+
+def test_learn_refuses_partial_mapping(tmp_path):
+    """If `discover_hub_for_serial` can't resolve every expected MCU,
+    `learn_mapping` must leave the existing state file intact rather
+    than installing an empty/partial map.
+    """
+    cfg = tmp_path / "printer.cfg"
+    cfg.write_text(
+        "[mcu]\nserial: /dev/serial/by-id/usb-Klipper_present-if00\n"
+        "[mcu z]\nserial: /dev/serial/by-id/usb-Klipper_absent-if00\n"
+    )
+    by_id = tmp_path / "by-id"
+    by_id.mkdir()
+    # No symlinks created → discover_hub_for_serial returns empty for both
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    # Seed a good prior state
+    (state_dir / "mcu-hub-map").write_text(
+        "usb-Klipper_present-if00 1-1.3\nusb-Klipper_absent-if00 1-1.3\n"
+    )
+    r = _run(
+        ["learn"],
+        env={
+            "PRINTER_CFG": str(cfg),
+            "STATE_DIR": str(state_dir),
+            "SERIAL_BY_ID_DIR": str(by_id),
+        },
+    )
+    assert r.returncode == 0, _diag(r)
+    # Existing map MUST be preserved
+    contents = (state_dir / "mcu-hub-map").read_text()
+    assert "usb-Klipper_present-if00 1-1.3" in contents, _diag(r)
+    assert "only resolved" in r.stderr, _diag(r)
+
+
 # ───────────────────────── help / unknown ─────────────────────────
 
 
