@@ -128,5 +128,5 @@ jobs:
         run: |
           shopt -s failglob
           python scripts/macro_refcheck.py \
-            config/printer.cfg config/eddy.cfg config/btt-ebb-sb-usb-v1.0.cfg config/mainsail.cfg config/timelapse.cfg \
+            config/printer.cfg config/eddy.cfg config/toolhead.cfg config/mainsail.cfg config/timelapse.cfg \
             config/macros/*.cfg config/mmu/base/*.cfg config/mmu/addons/*.cfg config/mmu/optional/*.cfg

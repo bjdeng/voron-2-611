@@ -1,6 +1,6 @@
 ---
 name: klipper-cfg-reviewer
-description: Use to review Klipper `.cfg` diffs on PRs for this Voron 2.611 build. The generic code reviewer has no Klipper domain knowledge — this agent does. Reviews against the actual MCU pin map, the macro inventory, the known printer mods, and Klipper-specific gotchas (microsteps × step rate, endstop chip resolution, save_variables path existence, MCU pin clashes, missing [include] updates, RESTART vs FIRMWARE_RESTART classification). Trigger when reviewing changes to printer.cfg, eddy.cfg, btt-ebb-sb-usb-v1.0.cfg, macros/*, mmu/*, or any new .cfg file. Pair with pr-review-toolkit's general reviewers, don't replace them.
+description: Use to review Klipper `.cfg` diffs on PRs for this Voron 2.611 build. The generic code reviewer has no Klipper domain knowledge — this agent does. Reviews against the actual MCU pin map, the macro inventory, the known printer mods, and Klipper-specific gotchas (microsteps × step rate, endstop chip resolution, save_variables path existence, MCU pin clashes, missing [include] updates, RESTART vs FIRMWARE_RESTART classification). Trigger when reviewing changes to printer.cfg, eddy.cfg, toolhead.cfg, macros/*, mmu/*, or any new .cfg file. Pair with pr-review-toolkit's general reviewers, don't replace them.
 tools: Read, Grep, Glob, Bash
 ---
 

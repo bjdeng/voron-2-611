@@ -33,10 +33,29 @@ These weren't load-bearing — `PRINT_WARMUP` and `PRINT_START` already do the r
 
 ---
 
+## 2026-05-16 — Defer status sections to Happy Hare
+
+`[respond]`, `[exclude_object]`, `[pause_resume]`, `[display_status]` now have a
+single declaration in HH-owned files (`config/mmu/base/mmu_macro_vars.cfg`
+and `config/mmu/addons/blobifier.cfg`) — our copies in `config/printer.cfg`
+and `config/mainsail.cfg` are removed.
+
+**Why:** Defer-to-HH rule from `memory/defer-to-happy-hare.md`. Reduces
+duplicate-declaration noise; matches one-canonical-home discipline.
+
+**How to apply:** If HH is ever disabled (`mmu/base/*.cfg` includes commented
+out), Klipper load breaks until these declarations are restored in
+`config/printer.cfg` / `config/mainsail.cfg`. Acceptable trade because HH is
+structurally load-bearing on this build.
+
+See `docs/superpowers/specs/2026-05-16-phase4-macros-refactor-design.md` for design rationale.
+
+---
+
 ## 2026-05-13 — repo initialized
 
 ### Chose USB over CAN for toolhead
-The EBB SB v1.0 supports both USB and CAN modes. Currently USB (`config/btt-ebb-sb-usb-v1.0.cfg`); no `can0` interface on the Pi. **Reason (per Ben, 2026-05-13):** when he got the EBB, USB was the only mode that supported rapid bed scanning, temperature-offset-2 calibration, and touch sensing on the BTT Eddy. CAN support for those features lagged. This couples the USB choice to the [eddy-ng → native] migration: re-evaluate USB-vs-CAN once Eddy is on native Klipper.
+The EBB SB v1.0 supports both USB and CAN modes. Currently USB (`config/toolhead.cfg`); no `can0` interface on the Pi. **Reason (per Ben, 2026-05-13):** when he got the EBB, USB was the only mode that supported rapid bed scanning, temperature-offset-2 calibration, and touch sensing on the BTT Eddy. CAN support for those features lagged. This couples the USB choice to the [eddy-ng → native] migration: re-evaluate USB-vs-CAN once Eddy is on native Klipper.
 
 ### eddy-ng (vvuk/eddy-ng) chosen over native [probe_eddy_current]
 At install time, native Klipper Eddy didn't support tap or had limited scanning features. As of Klipper `4767a8ed` (2026-05-04, the version on the Pi), the native module **covers every feature eddy-ng provides and adds one eddy-ng deliberately omits** (per investigation 2026-05-13):
@@ -68,7 +87,7 @@ Both Klipper and Moonraker are **auto-detected** by the update_manager. An expli
 **How to apply:** treat the absence of `[update_manager klipper]` as normal. Add the block only if we deliberately want to pin or change update behavior (e.g., pinning to a known-good commit while the eddy-ng / Happy-Hare overlays are still in place).
 
 ### Stealthburner v2 + Galileo over v1 + CW2
-Standard mod path. Galileo's 9:1 gear ratio explains the unusual `gear_ratio: 9:1` + `rotation_distance: 48.033` in `config/btt-ebb-sb-usb-v1.0.cfg`.
+Standard mod path. Galileo's 9:1 gear ratio explains the unusual `gear_ratio: 9:1` + `rotation_distance: 48.033` in `config/toolhead.cfg`.
 
 ### Self-printed ERCF v2 over commercial MMU (e.g. BoxTurtle, Tradrack, AMS)
 Reason: Ben chose to print and build it himself. No buffer (Filamentalist rewinders instead).
