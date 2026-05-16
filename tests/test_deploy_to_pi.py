@@ -698,6 +698,6 @@ def test_smoke_gcode_sequence_does_not_include_unsupported_commands():
     # Forbid commands known not to work on this build.
     forbidden = ["QUERY_PROBE"]  # add others here if we discover more
     for cmd in forbidden:
-        assert cmd not in smoke_tokens, (
-            f"{cmd} re-introduced into SMOKE_GCODE — see PR #46 for why this fails on hardware"
-        )
+        assert (
+            cmd not in smoke_tokens
+        ), f"{cmd} re-introduced into SMOKE_GCODE — see PR #46 for why this fails on hardware"
