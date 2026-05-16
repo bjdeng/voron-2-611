@@ -39,6 +39,7 @@ The machine has years of trial-and-error baked into it. **Do not assume the curr
 - Probe offset: `x_offset: 0`, `y_offset: 21.42`
 - `[bed_mesh] fade_target: 0` + `zero_reference_position: 175, 175` paired with tap workflow (matches `safe_z_home`)
 - Tap-Z application uses the doc-blessed split-macro pattern: `SET_Z_FROM_PROBE` (runs `PROBE METHOD=tap`) then `_RELOAD_Z_OFFSET_FROM_PROBE` (applies the result via `SET_KINEMATIC_POSITION`). Two macros because jinja templates render once per macro — see [Klipper gotchas](#klipper-gotchas).
+- Tap-Z auto-applies via `[homing_override] axes: z` in `config/eddy.cfg` — every `G28 Z` (or full `G28`) runs `SET_Z_FROM_PROBE` automatically, including ad-hoc homes from the Mainsail console. `G28 X` / `G28 Y` alone bypass the override.
 
 ### Bed
 - Textured PEI **magnetic flex plate**
@@ -124,7 +125,7 @@ Every active macro and where it lives. One-liner per macro; deeper context belon
 
 ### `config/macros/print_start.cfg` — print sequence (jontek2 pattern)
 - `PRINT_WARMUP` — pre-heat without printing (caselight on, BED_MESH_CLEAR, home, QGL, start bed+ext heating)
-- `PRINT_START` — full start: tap_threshold guard → home → QGL → bed heat + chamber wait (if bed > 90 °C) → `BLOBIFIER_CLEAN` → re-home Z → `SET_Z_FROM_PROBE` (tap + apply via split-macro) → adaptive bed mesh → heat hotend
+- `PRINT_START` — full start: tap_threshold guard → home → QGL → bed heat + chamber wait (if bed > 90 °C) → `BLOBIFIER_CLEAN` → re-home Z (auto-applies tap via `[homing_override]`) → adaptive bed mesh → heat hotend
 - `PRINT_END` — cool, clear mesh, wait 60 s, `OFF`, `_RESETSPEEDS`
 
 ### `config/macros/bedfans.cfg` — Ellis BedFans automation
@@ -155,7 +156,8 @@ Every active macro and where it lives. One-liner per macro; deeper context belon
 - `[bed_mesh]` — 9×9 grid over (15, 21.42) → (335, 330), `fade_target: 0`, `zero_reference_position: 175, 175`, `adaptive_margin: 5`, `scan_overshoot: 8`
 - `[safe_z_home]` at (175, 175) with 10 mm z-hop
 - `[force_move] enable_force_move: True` (needed when Eddy is both probe and Z endstop; also for circular-dep bootstrap)
-- `SET_Z_FROM_PROBE` / `_RELOAD_Z_OFFSET_FROM_PROBE` — doc-blessed split-macro pattern from `vendor/klipper/docs/Eddy_Probe.md:379-389`. Used in PRINT_START after `G28 Z` to apply the tap result.
+- `SET_Z_FROM_PROBE` / `_RELOAD_Z_OFFSET_FROM_PROBE` — doc-blessed split-macro pattern from `vendor/klipper/docs/Eddy_Probe.md:379-389`. Auto-applied via `[homing_override] axes: z` (below) on every `G28 Z`.
+- `[homing_override] axes: z` — fires on `G28` and `G28 Z` (not `G28 X` / `G28 Y` alone). Runs Klipper's normal Z homing (`G28 Z`) then `SET_Z_FROM_PROBE`. X/Y are conditionally homed first if not already homed (safe_z_home needs them). Doc-blessed per `vendor/klipper/docs/Eddy_Probe.md:391-400`.
 - `QUAD_GANTRY_LEVEL` — wraps stock with state save + bed mesh clear + 2-pass: coarse pass `METHOD=default` (Z=8, out of cal range), tight pass `METHOD=scan` (Z=2, within cal range). See [issue #22](https://github.com/bjdeng/voron-2-611/issues/22) for the path to making both passes scan.
 - `BED_MESH_CALIBRATE` — renames stock to `BTT_BED_MESH_CALIBRATE` and forces `ADAPTIVE=1 METHOD=rapid_scan`
 
@@ -423,7 +425,6 @@ Tracked as GitHub Issues with the [`future-work`](https://github.com/bjdeng/voro
 - **[#27] Webcam re-enable** + **[#26] moonraker-timelapse decision** (coupled).
 - **[#28] Automated Pi deploy v2** (GH Action triggering deploy_to_pi.sh on main green).
 - **[#19] `deploy_to_pi.sh` drift gate** — can't distinguish Pi-ahead from repo-ahead.
-- **[#16] `[homing_override]` for Z post-G28** — doc-blessed automation layer (small follow-up to Eddy migration).
 - **[#15] MMU load/unload calibration failures** (bug, not future-work) — calibration suspicion.
 - **[#29] OrcaSlicer print-profile tuning** — separate "different day" project.
 - **[#30] Logical reorganization audit** — after living with `_USER_VARIABLE` for a quarter.
