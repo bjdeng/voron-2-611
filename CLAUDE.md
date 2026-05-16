@@ -120,7 +120,6 @@ Every active macro and where it lives. One-liner per macro; deeper context belon
 - `M109` (renames original to `M99109`) — wait for hotend within ±1 °C of target
 - `DELAYED_OFF` — delayed-gcode wrapper around `OFF`
 - `HEATSOAK` — heat bed (+ optional chamber wait) + park center
-- `FIRST_LAYER_Z_TEST` — print N parallel lines at incrementing Z-offsets to dial in squish
 - `SET_ACTIVE_SPOOL` / `CLEAR_ACTIVE_SPOOL` — Spoolman handoff via Moonraker remote method
 
 ### `config/macros/print_start.cfg` — print sequence (jontek2 pattern)
@@ -213,7 +212,7 @@ Ben's note: *"on the machine some updates to klipper, happy hare and others occa
 | `~/moonraker` | `v0.10.0-19-g1ed102e` | Arksine/moonraker | Standard. |
 | `~/moonraker-timelapse` | `v0.0.1-143-gc7fff11` | mainsail-crew/moonraker-timelapse | Configured but unused. |
 | `~/mainsail` | (web release) | mainsail-crew/mainsail | Static UI files served by nginx. |
-| `~/mainsail-config` | `v1.2.1-1-gff3869a` | mainsail-crew/mainsail-config | Owns the `client.cfg` that `config/mainsail.cfg` symlinks to. |
+| `~/mainsail-config` | `v1.2.1-1-gff3869a` | mainsail-crew/mainsail-config | Owns `mainsail.cfg` (the actual symlink target — `client.cfg` in the same dir is an identical copy, unused by us). |
 | `~/kiauh` | `v6.0.6` | dw-0/kiauh | Klipper installer/manager (interactive helper). |
 | `~/crowsnest` | `v4.2.0-1-gcf936da` | mainsail-crew/crowsnest | Webcam stack. Daemon runs even though webcam is unplugged. |
 | `~/sonar` | `v0.2.0-1-g0d1d7c8` | mainsail-crew/sonar | Network keepalive. Daemon runs. |
@@ -349,7 +348,7 @@ See [`tests/README.md`](tests/README.md) for full mechanics. Test pyramid ration
 These have already tripped someone up — flag them when relevant.
 
 - **MMU `config/mmu/base/*.cfg` are symlinks on the Pi** to `~/Happy-Hare/config/base/*`. In this repo they're files (dereferenced by `tar -h` on pull). If you push this repo back to the Pi without preserving symlinks, you'll break Happy-Hare's update model.
-- **`config/mainsail.cfg` is a symlink** to `~/mainsail-config/client.cfg`. Same caveat.
+- **`config/mainsail.cfg` is a symlink** to `~/mainsail-config/mainsail.cfg`. Same caveat. (The upstream repo ships both `client.cfg` and `mainsail.cfg` as identical copies; the symlink target is the latter — verify with `ls -l` on the Pi.)
 - **`config/timelapse.cfg` is a symlink** to `~/moonraker-timelapse/klipper_macro/timelapse.cfg`. Same caveat — but Ben says he never used moonraker-timelapse; removal pending decision ([#26](https://github.com/bjdeng/voron-2-611/issues/26)).
 - **`mmu/addons/mmu_erec_cutter*.cfg` and `mmu_eject_buttons*.cfg` are NOT included** from `printer.cfg` but the files remain (likely symlinked from `~/Happy-Hare/config/addons/`). Don't move them to `archive/` — HH install would recreate them. Toolhead cutter is **Filametrix**, not EREC. Eject buttons are not installed.
 - **`ModemManager` is masked on this Pi (2026-05-14).** It probes new USB-serial devices and could hold MCUs open during enumeration — a footgun on this 5-USB-MCU machine. Caused the `mcu 'mmu': Unable to connect` race during the first live `/deploy-to-pi`. Fixed via `sudo systemctl mask --now ModemManager.service`. Verify with `systemctl is-enabled ModemManager` (should print `masked`).
@@ -461,7 +460,7 @@ Reference docs are pinned to versions matching the Pi. Always grep these first b
 | `vendor/happy-hare` | moggieuk/Happy-Hare | `a880ac0a` (v3.4.2-22) | MMU control + `mmu/*` config templates |
 | `vendor/eddy-ng` | vvuk/eddy-ng | `c7ca62e` (v0.1-73) | Third-party probe extension; **migration to native shipped PR #17, 2026-05-15**. Retained for reference + rollback ability. Eventual cleanup pending. |
 | `vendor/voron-2` | VoronDesign/Voron-2 | `Voron2.4` branch tip | V2.4 manual/BOM (sparse: `Manual/ firmware/ slicer_profiles/`) |
-| `vendor/mainsail-config` | mainsail-crew/mainsail-config | `ff3869a` (v1.2.1-1) | Source of `client.cfg` symlinked from `config/mainsail.cfg` |
+| `vendor/mainsail-config` | mainsail-crew/mainsail-config | `ff3869a` (v1.2.1-1) | Source of `mainsail.cfg` (the actual symlink target on the Pi) |
 | `vendor/moonraker` | Arksine/moonraker | `1ed102e` (v0.10.0-19) | Moonraker `docs/` |
 | `vendor/btt-docs` | bigtreetech/docs | shallow `main` | BTT hardware reference (sparse: text only, no images) |
 
@@ -499,7 +498,7 @@ voron-2-611/
 │   ├── printer.cfg              # top-level Klipper config (includes everything below)
 │   ├── eddy.cfg                 # Eddy probe + bed mesh + temperature_probe + SET_Z_FROM_PROBE pair
 │   ├── btt-ebb-sb-usb-v1.0.cfg  # toolhead MCU config (rename to toolhead.cfg planned in refactor Phase 4)
-│   ├── mainsail.cfg             # symlink target on Pi (→ ~/mainsail-config/client.cfg); refactor Phase 2 plans to slim this to declarations-only
+│   ├── mainsail.cfg             # slimmed local copy (Phase 2); Pi symlink → ~/mainsail-config/mainsail.cfg means our copy doesn't deploy
 
 │   ├── timelapse.cfg            # symlink target on Pi (unused per Ben)
 │   ├── moonraker.conf
