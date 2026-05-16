@@ -86,10 +86,19 @@ jobs:
         # GitHub Actions runs `bash -e {0}` (no pipefail), so `tee`'s
         # exit code (0) would mask a non-zero from test_klippy.py and
         # the job would falsely report green. Codex P1.
+        #
+        # We deliberately omit `-v` here. test_klippy.py only adds
+        # `-l TEMP_LOG_FILE` to its klippy.py invocation when verbose
+        # is OFF (test_klippy.py:98-99). Without `-l`, klippy.py
+        # never populates `start_args['log_file']` (klippy.py:304-305),
+        # and Happy-Hare crashes with KeyError on bare-bracket lookup
+        # at mmu.py:733 + mmu_sync_feedback_manager.py:417. On failure,
+        # test_klippy's own show_log() dumps the captured log, and we
+        # upload it as an artifact below.
         shell: bash
         working-directory: vendor/klipper
         run: |
-          python scripts/test_klippy.py -v -d ../../tests/dict ../../tests/voron-2-611.test 2>&1 | tee klippy-test.log
+          python scripts/test_klippy.py -d ../../tests/dict ../../tests/voron-2-611.test 2>&1 | tee klippy-test.log
       - name: Upload klippy log on failure
         if: failure()
         uses: actions/upload-artifact@v4
