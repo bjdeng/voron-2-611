@@ -25,6 +25,8 @@
 #                     (one per line; used by pytest)
 #   missing           print missing MCU serial basenames (expected - present)
 #   map               print known serial → hub-path mapping from the state file
+#   learn             update the serial→hub state file (no-op if any MCU
+#                     missing — refuses partial updates)
 #   help              this help text
 #
 # Configuration via env vars:
@@ -201,17 +203,31 @@ discover_hub_for_serial() {
 # learn_mapping
 # ─────────────────────────────────────────────────────────────────────────
 # When all expected MCUs are present, walk them and record serial→hub.
-# Atomic write (.tmp → mv) so a concurrent read never sees a half-written file.
+# Atomic write (.tmp → mv) so a concurrent read never sees a half-written
+# file. Refuses to install a partial mapping (would clobber a good map
+# with bad data on a transient sysfs hiccup): the new mapping must cover
+# every expected serial, else discard.
 learn_mapping() {
   mkdir -p "$STATE_DIR"
-  local tmp serial hub
+  local tmp serial hub expected_count learned_count
   tmp="$(mktemp "${STATE_FILE}.XXXXXX")"
+  expected_count=0
+  learned_count=0
   while IFS= read -r serial; do
     [[ -z "$serial" ]] && continue
+    expected_count=$((expected_count + 1))
     hub=$(discover_hub_for_serial "$serial") || true
-    [[ -n "$hub" ]] && printf '%s %s\n' "$serial" "$hub" >> "$tmp"
+    if [[ -n "$hub" ]]; then
+      printf '%s %s\n' "$serial" "$hub" >> "$tmp"
+      learned_count=$((learned_count + 1))
+    fi
   done < <(parse_expected_serials "$PRINTER_CFG")
-  mv "$tmp" "$STATE_FILE"
+  if (( expected_count > 0 && learned_count == expected_count )); then
+    mv "$tmp" "$STATE_FILE"
+  else
+    log "learn_mapping: only resolved $learned_count/$expected_count serials; leaving existing $STATE_FILE intact"
+    rm -f "$tmp"
+  fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -285,8 +301,15 @@ except Exception:
 # ─────────────────────────────────────────────────────────────────────────
 # trigger_firmware_restart
 # ─────────────────────────────────────────────────────────────────────────
+# Best-effort POST to Moonraker. Logs on failure (Moonraker may reject if
+# Klipper is in 'shutdown' or 'error' state — manual `/printer/restart`
+# needed in those cases) but never aborts the daemon.
 trigger_firmware_restart() {
-  curl -fsS -X POST --max-time 10 "${MOONRAKER_URL}/printer/firmware_restart" >/dev/null 2>&1 || true
+  local rc=0
+  curl -fsS -X POST --max-time 10 "${MOONRAKER_URL}/printer/firmware_restart" >/dev/null 2>&1 || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    log "trigger_firmware_restart: curl exited $rc (Moonraker may have rejected; check /printer/info state)"
+  fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -330,9 +353,10 @@ recover_once() {
 # learned mapping (when state is ready and all MCUs present).
 daemon() {
   log "starting (printer.cfg=$PRINTER_CFG; poll=${POLL_INTERVAL}s; grace=${STARTUP_GRACE}s)"
-  local state stuck_since now retries
+  local state stuck_since now retries backoff_logged
   stuck_since=0
   retries=0
+  backoff_logged=0
   while true; do
     state=$(klipper_state)
     now=$(date +%s)
@@ -340,12 +364,14 @@ daemon() {
       ready)
         stuck_since=0
         retries=0
+        backoff_logged=0
         # Refresh learned mapping while everything is healthy.
         learn_mapping
         ;;
       startup|error|disconnected|unknown)
         if [[ "$stuck_since" -eq 0 ]]; then
           stuck_since="$now"
+          backoff_logged=0
           log "Klipper state=$state; starting ${STARTUP_GRACE}s grace window"
         elif (( now - stuck_since >= STARTUP_GRACE )); then
           if (( retries < RECOVERY_RETRIES )); then
@@ -356,8 +382,11 @@ daemon() {
               # to come up after firmware_restart.
               stuck_since="$now"
             fi
-          else
-            log "max recovery retries reached for current stuck-startup window; backing off"
+          elif [[ "$backoff_logged" -eq 0 ]]; then
+            # Log once when we exhaust retries; skip future polls until
+            # state recovers (which resets backoff_logged via the `ready` case).
+            log "max recovery retries reached for current stuck-startup window; backing off (will stop trying until Klipper recovers on its own)"
+            backoff_logged=1
           fi
         fi
         ;;
@@ -365,6 +394,7 @@ daemon() {
         # User-initiated; not our problem.
         stuck_since=0
         retries=0
+        backoff_logged=0
         ;;
     esac
     sleep "$POLL_INTERVAL"

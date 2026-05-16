@@ -14,6 +14,10 @@ User=root
 ExecStart=/usr/local/bin/klipper-mcu-watchdog.sh daemon
 Restart=on-failure
 RestartSec=10
+# Crash-loop protection: if the daemon keeps dying, give up rather than
+# burning CPU forever. systemctl reset-failed clears the failure count.
+StartLimitBurst=5
+StartLimitIntervalSec=300
 # StandardOutput=journal and StandardError=journal are systemd defaults; the
 # script logs to stderr so its messages land in journalctl -u klipper-mcu-watchdog.
 
