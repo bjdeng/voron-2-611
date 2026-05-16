@@ -17,6 +17,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SCRIPT = REPO / "scripts" / "klipper-mcu-watchdog.sh"
+FAKE_BIN = REPO / "tests" / "fake_bin"
 
 
 def _run(args, env=None, cwd=None):
@@ -520,7 +521,15 @@ def test_help_subcommand_prints_usage():
     assert r.returncode == 0, _diag(r)
     assert "klipper-mcu-watchdog" in r.stdout, _diag(r)
     # Document the subcommand surface so future renames don't go unnoticed.
-    for sub in ("daemon", "check", "recover", "expected", "missing", "map"):
+    for sub in (
+        "daemon",
+        "check",
+        "recover",
+        "wait-recover",
+        "expected",
+        "missing",
+        "map",
+    ):
         assert sub in r.stdout, f"help text missing '{sub}': {_diag(r)}"
 
 
@@ -528,3 +537,67 @@ def test_unknown_subcommand_exits_nonzero():
     r = _run(["frobnicate"])
     assert r.returncode != 0, _diag(r)
     assert "unknown subcommand" in r.stderr, _diag(r)
+
+
+# ───────────────────────── wait_for_klipper_self_recovery (GH #45) ─────────────────────────
+
+
+def _run_with_fakes(args, env=None):
+    """Variant of _run that puts tests/fake_bin/ first on PATH so the
+    fake curl shim handles Moonraker requests. The watchdog reads
+    klipper_state via `curl /printer/info`, which the fake answers from
+    FAKE_PRINTER_INFO_JSON."""
+    full_env = {**os.environ}
+    full_env["PATH"] = f"{FAKE_BIN}:{full_env['PATH']}"
+    if env:
+        full_env.update(env)
+    return subprocess.run(
+        ["bash", str(SCRIPT), *args],
+        cwd=REPO,
+        env=full_env,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+
+
+def test_wait_recover_returns_zero_when_klipper_ready():
+    """If Moonraker reports state=ready on the first poll, the helper
+    returns 0 immediately. This is the early-exit path used by
+    recover_once to skip a redundant firmware_restart (GH #45)."""
+    r = _run_with_fakes(
+        ["wait-recover"],
+        env={
+            "RECOVERY_SETTLE_WINDOW": "5",
+            "FAKE_PRINTER_INFO_JSON": '{"result":{"state":"ready"}}',
+        },
+    )
+    assert r.returncode == 0, _diag(r)
+
+
+def test_wait_recover_times_out_when_klipper_stuck():
+    """If Moonraker reports a non-ready state for the full window, the
+    helper returns non-zero — recover_once then falls back to forcing
+    firmware_restart."""
+    r = _run_with_fakes(
+        ["wait-recover"],
+        env={
+            "RECOVERY_SETTLE_WINDOW": "2",
+            "FAKE_PRINTER_INFO_JSON": '{"result":{"state":"startup"}}',
+        },
+    )
+    assert r.returncode != 0, _diag(r)
+
+
+def test_wait_recover_treats_unknown_state_as_not_ready():
+    """If Moonraker returns malformed JSON (missing state field),
+    klipper_state prints 'unknown' — not 'ready' — and the loop
+    continues. Defensive against a transient Moonraker shape change."""
+    r = _run_with_fakes(
+        ["wait-recover"],
+        env={
+            "RECOVERY_SETTLE_WINDOW": "2",
+            "FAKE_PRINTER_INFO_JSON": '{"result":{}}',
+        },
+    )
+    assert r.returncode != 0, _diag(r)

@@ -27,6 +27,10 @@
 #   map               print known serial → hub-path mapping from the state file
 #   learn             update the serial→hub state file (no-op if any MCU
 #                     missing — refuses partial updates)
+#   wait-recover      poll Klipper state for RECOVERY_SETTLE_WINDOW seconds;
+#                     exits 0 if state becomes `ready`, non-zero on timeout.
+#                     Used by recover_once to avoid forcing a redundant
+#                     firmware_restart when Klipper self-recovered (GH #45)
 #   help              this help text
 #
 # Configuration via env vars:
@@ -37,6 +41,9 @@
 #   SYSFS_USB_DIR     /sys/bus/usb (default /sys/bus/usb)
 #   TTY_CLASS_DIR     /sys/class/tty (default /sys/class/tty; overridable for tests)
 #   POLL_INTERVAL     daemon-mode loop interval, seconds (default 10)
+#   RECOVERY_SETTLE_WINDOW  seconds to wait for Klipper to self-recover
+#                     after hub rebind before forcing firmware_restart
+#                     (default 10; see GH #45)
 #   STARTUP_GRACE     after Klipper enters startup state, wait this long for
 #                     its own retries before intervening, seconds (default 30)
 #   RECOVERY_RETRIES  max rebind+restart attempts per stuck-startup window
@@ -56,6 +63,7 @@ TTY_CLASS_DIR="${TTY_CLASS_DIR:-/sys/class/tty}"
 POLL_INTERVAL="${POLL_INTERVAL:-10}"
 STARTUP_GRACE="${STARTUP_GRACE:-30}"
 RECOVERY_RETRIES="${RECOVERY_RETRIES:-2}"
+RECOVERY_SETTLE_WINDOW="${RECOVERY_SETTLE_WINDOW:-10}"
 FALLBACK_HUB="${FALLBACK_HUB:-1-1.3}"
 
 log() {
@@ -352,10 +360,39 @@ recover_once() {
   fi
   log "recovery succeeded"
   if [[ "$trigger_restart" == "1" ]]; then
-    log "triggering Klipper firmware_restart"
-    trigger_firmware_restart
+    # After hub rebind, Klipper's own startup-state retry loop may have
+    # reconnected to the newly-enumerated MCUs without our help. Wait
+    # for self-recovery before forcing a firmware_restart — a redundant
+    # restart races with any in-flight deploy_to_pi.sh `wait_for_klipper_ready`,
+    # where the deploy briefly sees `ready` between our rebind and our
+    # (now-skipped) restart. See GH issue #45.
+    if wait_for_klipper_self_recovery; then
+      log "Klipper reconnected on its own after rebind (state=ready); skipping firmware_restart"
+    else
+      log "Klipper did not self-recover within ${RECOVERY_SETTLE_WINDOW}s; triggering firmware_restart"
+      trigger_firmware_restart
+    fi
   fi
   return 0
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+# wait_for_klipper_self_recovery
+# ─────────────────────────────────────────────────────────────────────────
+# Returns 0 if Klipper reaches `ready` state within RECOVERY_SETTLE_WINDOW
+# seconds (polling at 1s intervals); non-zero otherwise. Used by recover_once
+# to decide whether to force firmware_restart after a hub rebind.
+wait_for_klipper_self_recovery() {
+  local state=""
+  # shellcheck disable=SC2034  # i is loop counter; only iteration count needed
+  for i in $(seq 1 "$RECOVERY_SETTLE_WINDOW"); do
+    state=$(klipper_state)
+    if [[ "$state" == "ready" ]]; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -423,6 +460,7 @@ main() {
     daemon)     daemon ;;
     check)      missing_serials | grep -q . && exit 1 || exit 0 ;;
     recover)    recover_once 1 ;;
+    wait-recover) wait_for_klipper_self_recovery ;;
     expected)   parse_expected_serials "${2:-$PRINTER_CFG}" ;;
     missing)    missing_serials ;;
     map)        cat "$STATE_FILE" 2>/dev/null || true ;;
