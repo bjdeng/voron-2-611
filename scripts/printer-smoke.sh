@@ -96,6 +96,10 @@ echo "    klippy.log: inode=$before_inode lines=$before_lines"
 #    Klipper has nothing queued behind the current command and look-ahead
 #    can't shift PROBE METHOD=tap's sample window timestamps. --max-time
 #    120 covers a normal G28 (~30s) plus a generous buffer.
+if [[ ${#SMOKE_GCODE[@]} -eq 0 ]]; then
+  echo "ERR: SMOKE_GCODE is empty — nothing to run. This is a script bug." >&2
+  exit 1
+fi
 echo "==> Running smoke gcode (${#SMOKE_GCODE[@]} commands; ~30-60s total)"
 for cmd in "${SMOKE_GCODE[@]}"; do
   echo "    -> $cmd"
