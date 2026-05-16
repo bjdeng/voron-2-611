@@ -415,20 +415,9 @@ bash scripts/sync_from_pi.sh   # handles diff + prompt + correct destination (co
 
 ## Open investigations
 
-Tracked as GitHub Issues with the [`future-work`](https://github.com/bjdeng/voron-2-611/labels/future-work) label. Highlights still active (curated, not exhaustive):
+All open investigations are tracked as GitHub Issues with the [`future-work`](https://github.com/bjdeng/voron-2-611/labels/future-work) label. Use `gh issue list --label future-work` for the current list. Active highlights worth knowing about today: **[#25] weekend re-tune session** (shaper + PID + PA + Eddy thermal drift), **[#42] Layer 6 post-deploy smoke** (mostly shipped via PR #43 — gating on real-world soak), **[#45] deploy/watchdog race** (discovered during PR #43's live validation), **[#15] MMU load/unload calibration failures** (actual bug, not future-work).
 
-- **[#25] Re-tune session** anchored on klippain-shaketune — shaper (X/Y/Z), PID, PA, Eddy verify, plus thermal drift cal that was deferred 2026-05-15. **When doing this session, run `PROBE_EDDY_CURRENT_CALIBRATE` with toolhead at ~10mm first** to widen the freq→Z range — resolves [#22](https://github.com/bjdeng/voron-2-611/issues/22) in the same trip.
-- **[#22] Eddy-ng scan-mode investigation** — how did eddy-ng scan at out-of-range Z? Inform [#25]'s extended cal range.
-- **[#23] Sensorless X feasibility** — TMC2209 + CoreXY is documented; needs EBB schematic check for DIAG pin.
-- **[#24] Microsteps 128 → 32/64/128 deliberate test** — currently followed third-party advice without analysis.
-- **[#27] Webcam re-enable** + **[#26] moonraker-timelapse decision** (coupled).
-- **[#28] Automated Pi deploy v2** (GH Action triggering deploy_to_pi.sh on main green).
-- **[#19] `deploy_to_pi.sh` drift gate** — can't distinguish Pi-ahead from repo-ahead.
-- **[#15] MMU load/unload calibration failures** (bug, not future-work) — calibration suspicion.
-- **[#29] OrcaSlicer print-profile tuning** — separate "different day" project.
-- **[#30] Logical reorganization audit** — after living with `_USER_VARIABLE` for a quarter.
-- **[#31] PA/Flow calibrator survey** — re-validate Frix-x choice periodically.
-- **[#32] Webcam-feedback auto-calibration** — substantial future project.
+Browsing the full label view in GitHub is the authoritative way to see what's open — this section is intentionally not exhaustive to avoid drift between repo state and CLAUDE.md.
 
 ### Recently resolved (historical log)
 
