@@ -685,16 +685,17 @@ def test_smoke_gcode_sequence_does_not_include_unsupported_commands():
     semantics this way; this test asserts on the script TEXT directly.
     """
     smoke_script = (REPO / "scripts" / "printer-smoke.sh").read_text()
-    # Extract the SMOKE_GCODE assignment block.
-    assert "SMOKE_GCODE='" in smoke_script, "SMOKE_GCODE variable missing"
+    # Extract the SMOKE_GCODE assignment block. The script declares the
+    # sequence as a bash array (PR-fix smoke per-command POST): one
+    # "<cmd>" entry per line between `SMOKE_GCODE=(` and the closing `)`.
+    assert "SMOKE_GCODE=(" in smoke_script, "SMOKE_GCODE array missing"
+    smoke_value_block = smoke_script.split("SMOKE_GCODE=(", 1)[1].split(")", 1)[0]
+    # Strip wrapping quotes so the equality check below operates on bare
+    # gcode tokens regardless of how the array entries are quoted.
+    smoke_tokens = [tok.strip().strip("'").strip('"') for tok in smoke_value_block.split()]
     # Forbid commands known not to work on this build.
     forbidden = ["QUERY_PROBE"]  # add others here if we discover more
     for cmd in forbidden:
-        # Match the command on its own line within SMOKE_GCODE — avoid
-        # false positives from the COMMENT block that explains the drop.
-        # The SMOKE_GCODE value uses bare command names, one per line,
-        # between the opening `'` and closing `'`.
-        smoke_value_block = smoke_script.split("SMOKE_GCODE='", 1)[1].split("'", 1)[0]
         assert (
-            cmd not in smoke_value_block.split()
+            cmd not in smoke_tokens
         ), f"{cmd} re-introduced into SMOKE_GCODE — see PR #46 for why this fails on hardware"
