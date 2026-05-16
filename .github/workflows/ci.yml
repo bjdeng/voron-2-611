@@ -24,17 +24,23 @@ on:
 
 jobs:
   # Re-enabled 2026-05-15 after the eddy-ng → native [probe_eddy_current]
-  # migration (PR #17). printer.cfg now uses vanilla `ldc1612_*` MCU
-  # commands which are present in tests/dict/eddy.dict.
+  # migration (PR #17). Scope is parse + MCU load only: we deliberately do
+  # NOT execute gcode (see tests/voron-2-611.test for why). What this job
+  # actually catches:
+  #   • config syntax errors, unknown sections
+  #   • pin clashes across MCUs
+  #   • unsupported sensor types (the LPC1769 `temperature_mcu` trap)
+  #   • jinja2 *parse* errors in macro bodies
   #
-  # If this job fails with "Unknown command: trigger_analog_*" or similar,
-  # the committed tests/dict/eddy.dict is stale relative to the firmware
-  # currently flashed on the Pi. Regenerate by copying ~/klipper/out/klipper.dict
-  # from the Pi after a clean firmware build (see config/firmware/eddy.config).
+  # Failure modes worth knowing:
+  #   • "Unknown command: trigger_analog_*" / "ldc1612_*" → tests/dict/eddy.dict
+  #     is stale relative to the firmware on the Pi. Regenerate via
+  #     `scp pi@mainsailos.local:~/klipper/out/klipper.dict tests/dict/eddy.dict`
+  #     after a clean firmware build (see config/firmware/eddy.config).
   #
   # See memory/troubleshooting-log.md 2026-05-14 for the prior gating history.
   klippy-smoke:
-    name: Klippy parse + smoke gcode
+    name: Klippy parse + MCU load
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
@@ -46,41 +52,14 @@ jobs:
           cache: pip
       - name: Install Klipper's runtime deps (greenlet, cffi, jinja2, …)
         run: pip install -r vendor/klipper/scripts/klippy-requirements.txt -r vendor/klipper/scripts/tests-requirements.txt
-      - name: Pre-create paths referenced by config (Happy-Hare save_variables, etc.)
-        # printer.cfg references files at ~/printer_data/config/mmu/mmu_vars.cfg
-        # (via Happy-Hare's [save_variables] in mmu/base/mmu_macro_vars.cfg).
-        # save_variables.py does open(path, 'w') which won't create parents.
-        # On a real Pi those paths exist; on a fresh runner they don't.
-        run: mkdir -p ~/printer_data/config/mmu
-      - name: Symlink third-party Klipper extensions
-        # printer.cfg uses [probe_eddy_ng] (provided by vvuk/eddy-ng) and
-        # [mmu] / [mmu_machine] etc. (provided by moggieuk/Happy-Hare). On
-        # the printer these are symlinked into ~/klipper/klippy/extras/ by
-        # each project's install.sh. In CI vendor/klipper is vanilla, so
-        # we replicate the symlink layer here. Source of truth for what
-        # gets linked:
-        #   eddy-ng: install.py FILES_TO_COPY (Python files only — the .c
-        #     file is firmware-only and test_klippy.py doesn't compile MCUs)
-        #   Happy-Hare: install.sh link_mmu_plugins (extras + extras/mmu)
-        # Bumping vendor/eddy-ng or vendor/happy-hare may require updating
-        # this list — check their install scripts for the file set.
-        shell: bash
-        run: |
-          set -euo pipefail
-          KLIPPER_EXTRAS=vendor/klipper/klippy/extras
-          # eddy-ng — two Python files
-          ln -sf "$PWD/vendor/eddy-ng/probe_eddy_ng.py" "$KLIPPER_EXTRAS/probe_eddy_ng.py"
-          ln -sf "$PWD/vendor/eddy-ng/ldc1612_ng.py"   "$KLIPPER_EXTRAS/ldc1612_ng.py"
-          # Happy-Hare — extras/*.py + extras/mmu/*.py
-          mkdir -p "$KLIPPER_EXTRAS/mmu"
-          for f in vendor/happy-hare/extras/*.py; do
-            ln -sf "$PWD/$f" "$KLIPPER_EXTRAS/$(basename "$f")"
-          done
-          for f in vendor/happy-hare/extras/mmu/*.py; do
-            ln -sf "$PWD/$f" "$KLIPPER_EXTRAS/mmu/$(basename "$f")"
-          done
-          echo "Symlinked extras:"
-          ls -la "$KLIPPER_EXTRAS/probe_eddy_ng.py" "$KLIPPER_EXTRAS/ldc1612_ng.py" "$KLIPPER_EXTRAS/mmu_machine.py" "$KLIPPER_EXTRAS/mmu/mmu.py"
+      # No third-party Klipper extensions need to be linked in:
+      #   • eddy-ng: PR #17 migrated to the native [probe_eddy_current] which
+      #     lives in vanilla vendor/klipper/klippy/extras/. No symlink needed.
+      #   • Happy-Hare: its includes are stripped in the next step, so
+      #     Klipper never instantiates [mmu]/[mmu_machine]. No symlink needed.
+      # If a future change re-introduces a third-party Klipper section that
+      # isn't in vanilla Klipper, the install.sh / install.py from that
+      # project documents the file set to symlink — add a step here.
       - name: Strip MMU includes from printer.cfg (Happy-Hare incompat)
         # Happy-Hare's mmu.py:_setup_logging is invoked at handle_connect
         # (load time, before any gcode) and crashes under test_klippy.py in
