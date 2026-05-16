@@ -71,11 +71,12 @@ jobs:
         #     → PermissionError on filesystem root (mmu.py:735-738)
         # Both patterns have lived in HH `main` since 2023-10-02 with zero
         # upstream reports — HH has never been tested under test_klippy.
-        # Tracked upstream at moggieuk/Happy-Hare#TBD. Until that lands,
-        # strip the four `[include mmu/...]` lines from printer.cfg so the
+        # Strip the four `[include mmu/...]` lines from printer.cfg so the
         # rest of the config (pin clashes across the 4 non-MMU MCUs, sensor
         # validity, jinja parse, the LPC1769 temperature_mcu trap) is still
         # validated. MMU load + runtime is L6's job (post-deploy smoke).
+        # If HH ever happens to fix the pattern (we'd notice at vendor bump
+        # time), this strip can go and L3 picks up MMU coverage for free.
         shell: bash
         run: |
           set -euo pipefail
