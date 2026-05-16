@@ -223,6 +223,9 @@ learn_mapping() {
     fi
   done < <(parse_expected_serials "$PRINTER_CFG")
   if (( expected_count > 0 && learned_count == expected_count )); then
+    # mktemp creates with mode 0600; make readable for `klipper-mcu-watchdog.sh
+    # map` invocations as non-root user (and for human inspection).
+    chmod 0644 "$tmp"
     mv "$tmp" "$STATE_FILE"
   else
     log "learn_mapping: only resolved $learned_count/$expected_count serials; leaving existing $STATE_FILE intact"

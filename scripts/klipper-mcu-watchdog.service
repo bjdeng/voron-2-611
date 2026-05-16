@@ -5,6 +5,13 @@ Documentation=https://github.com/bjdeng/voron-2-611/issues/37
 # so After= here is for log-ordering convenience, not a hard dependency.
 After=klipper.service moonraker.service
 Wants=moonraker.service
+# Crash-loop protection: if the daemon keeps dying, give up rather than
+# burning CPU forever. systemctl reset-failed clears the failure count.
+# NOTE: StartLimit* directives must live in [Unit], not [Service] — moving
+# them caused "Unknown key name 'StartLimitIntervalSec' in section 'Service'"
+# warnings on the Pi's systemd.
+StartLimitBurst=5
+StartLimitIntervalSec=300
 
 [Service]
 Type=simple
@@ -14,10 +21,6 @@ User=root
 ExecStart=/usr/local/bin/klipper-mcu-watchdog.sh daemon
 Restart=on-failure
 RestartSec=10
-# Crash-loop protection: if the daemon keeps dying, give up rather than
-# burning CPU forever. systemctl reset-failed clears the failure count.
-StartLimitBurst=5
-StartLimitIntervalSec=300
 # StandardOutput=journal and StandardError=journal are systemd defaults; the
 # script logs to stderr so its messages land in journalctl -u klipper-mcu-watchdog.
 
