@@ -25,5 +25,17 @@ case "$remote_cmd" in
     exit 0 ;;
   *cat*last-deploy-sha*) printf '%s' "${FAKE_LAST_DEPLOY_SHA:-}" ;;
   *cat*printer.cfg*) printf '%s' "${FAKE_PI_PRINTER_CFG:-}" ;;
+  # Smoke-test helpers (L6, printer-smoke.sh).
+  *stat*-c*klippy.log*wc*-l*klippy.log*)
+    # Combined inode + line-count snapshot at start of smoke.
+    # stat output first line, wc -l second.
+    printf '%s\n%s\n' "${FAKE_KLIPPY_LOG_INODE:-12345}" "${FAKE_KLIPPY_LOG_LINES_BEFORE:-100}" ;;
+  *stat*-c*klippy.log*)
+    # Post-smoke inode re-check. Lets a test simulate log rotation by
+    # setting FAKE_KLIPPY_LOG_INODE_AFTER different from BEFORE.
+    printf '%s\n' "${FAKE_KLIPPY_LOG_INODE_AFTER:-${FAKE_KLIPPY_LOG_INODE:-12345}}" ;;
+  *tail*klippy.log*grep*)
+    # New-error scan. Returns whatever errors the test set up; empty by default.
+    printf '%s' "${FAKE_KLIPPY_LOG_NEW_ERRORS:-}" ;;
   *) exit 0 ;;
 esac

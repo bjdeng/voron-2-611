@@ -35,6 +35,35 @@ The skill refuses to deploy if any of these gates fail (it tells you what to fix
 
 After the deploy + restart, the skill polls Moonraker (`GET /printer/info`) every second for up to 30 seconds, waiting for `state == "ready"`. If Klipper enters `error`, the skill surfaces the `state_message` and exits non-zero (rc=3). If the timeout elapses without a `ready` state, exits 3 with a pointer at klippy.log.
 
+## Layer 6 post-deploy smoke (`--smoke`)
+
+Opt-in smoke test that runs after Klipper reports `ready`. Catches runtime regressions L3 (CI parse + MCU load) can't see — macros referencing undefined commands at render time, calibration-state bugs, kinematics misconfig.
+
+**Gcode sequence** (synchronous via Moonraker `/printer/gcode/script`):
+- `G28` — full home (exercises safe_z_home + Eddy probe at runtime)
+- `QUERY_PROBE` — sanity-checks probe object
+- `PARKCENTER` — exercises a custom park macro end-to-end
+- `OFF` — runs the all-off shutdown sequence
+- `_RESETSPEEDS` — restores configured velocity/accel/SCV
+
+After the sequence completes, the smoke step `grep`s `~/printer_data/logs/klippy.log` for ANY new `^!! ` lines (Klipper's runtime-error prefix — covers `Unknown command`, `Internal error`, `Move out of range`, TMC errors, MCU shutdowns, probe-sample tolerance, "Timer too close", etc.) emitted since the smoke started. Any match fails the deploy with rc=4.
+
+The smoke also captures the log inode at snapshot time and re-checks it before reading. If it changed, klippy.log rotated mid-smoke (a second Klipper restart, MCU disconnect race) — the line-offset comparison would be meaningless against the new file, so the smoke aborts with rc=4 and tells you to inspect manually.
+
+**rc=4 means the deploy was applied** (files synced, Klipper is `ready`). The smoke step is purely post-validation — a smoke failure doesn't roll anything back. Inspect klippy.log on the Pi and either accept (e.g. the regression was an MMU command not used at print time) or roll back via the procedure below.
+
+**Why opt-in:** `G28` is a real toolhead movement (~30s). If a user is right next to the printer with hands inside it during a deploy, that's a safety surprise. Today the flag is explicit; once we trust it, we can flip the default ON.
+
+```sh
+scripts/deploy_to_pi.sh --smoke           # interactive + smoke
+scripts/deploy_to_pi.sh --yes --smoke     # CI-friendly
+```
+
+Can also run standalone (after a manual deploy):
+```sh
+scripts/printer-smoke.sh
+```
+
 ## What it does NOT do
 
 - Does not push to GitHub. Run `git push` separately if needed.
@@ -45,9 +74,11 @@ After the deploy + restart, the skill polls Moonraker (`GET /printer/info`) ever
 ## How to run
 
 ```sh
-scripts/deploy_to_pi.sh           # interactive: confirms before deploy
-scripts/deploy_to_pi.sh --yes     # skip confirmation
-scripts/deploy_to_pi.sh --dry-run # preconditions + plan only, no changes
+scripts/deploy_to_pi.sh                   # interactive: confirms before deploy
+scripts/deploy_to_pi.sh --yes             # skip confirmation
+scripts/deploy_to_pi.sh --dry-run         # preconditions + plan only, no changes
+scripts/deploy_to_pi.sh --smoke           # run L6 post-deploy smoke (G28 + parks)
+scripts/deploy_to_pi.sh --yes --smoke     # both
 ```
 
 Or, from a Claude session, invoke the skill explicitly: `/deploy-to-pi`.
@@ -57,6 +88,7 @@ Exit codes:
 - `1` — precondition failed (told you what to fix)
 - `2` — deploy failed mid-flight (rsync/scp/marker-write/restart-call errored)
 - `3` — Klipper failed to come back ready (poll timed out, or state went to `error`)
+- `4` — `--smoke` detected new errors in klippy.log or Moonraker rejected the gcode script
 
 ## Rollback
 

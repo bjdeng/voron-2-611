@@ -542,3 +542,132 @@ def test_dry_run_does_not_print_deploy_complete(fake_log):
     r = _run(env=env, args=["--dry-run"])
     assert r.returncode == 0, _diag(r)
     assert "Deploy complete" not in r.stdout, _diag(r)
+
+
+# ───────────────────────── L6 post-deploy smoke (--smoke) ─────────────────────────
+
+
+def test_smoke_skipped_by_default(fake_log):
+    """Without --smoke, no gcode-script POST and no smoke-banner output."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env, args=["--yes"])
+    assert r.returncode == 0, _diag(r)
+    log = fake_log.read_text()
+    assert "printer/gcode/script" not in log, log
+    assert "L6 post-deploy smoke" not in r.stdout, _diag(r)
+
+
+def test_smoke_runs_when_flag_set(fake_log):
+    """--smoke triggers the gcode script POST and passes when no log errors."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+        # Empty new-errors → smoke passes
+        "FAKE_KLIPPY_LOG_NEW_ERRORS": "",
+    }
+    r = _run(env=env, args=["--yes", "--smoke"])
+    assert r.returncode == 0, _diag(r)
+    log = fake_log.read_text()
+    assert "printer/gcode/script" in log, log
+    assert "L6 post-deploy smoke" in r.stdout, _diag(r)
+    assert "Smoke test passed" in r.stdout, _diag(r)
+
+
+def test_smoke_fails_on_klippy_log_errors(fake_log):
+    """When klippy.log shows new !! errors, deploy exits 4."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+        "FAKE_KLIPPY_LOG_NEW_ERRORS": "!! Unknown command:'MMU_HOME'",
+    }
+    r = _run(env=env, args=["--yes", "--smoke"])
+    assert r.returncode == 4, _diag(r)
+    assert "smoke FAILED" in r.stderr, _diag(r)
+    assert "Unknown command" in r.stderr, _diag(r)
+
+
+def test_smoke_fails_when_gcode_script_rejected(fake_log):
+    """When Moonraker rejects the gcode script, deploy exits 4."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+        "FAKE_GCODE_SCRIPT_OK": "0",
+    }
+    r = _run(env=env, args=["--yes", "--smoke"])
+    assert r.returncode == 4, _diag(r)
+    assert "smoke FAILED" in r.stderr, _diag(r)
+
+
+def test_smoke_skipped_in_dry_run(fake_log):
+    """--dry-run + --smoke must NOT actually invoke the smoke step (no Pi mutation)."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+    }
+    r = _run(env=env, args=["--dry-run", "--smoke"])
+    assert r.returncode == 0, _diag(r)
+    log = fake_log.read_text() if fake_log.exists() else ""
+    assert "printer/gcode/script" not in log, log
+    assert "L6 post-deploy smoke" not in r.stdout, _diag(r)
+
+
+def test_smoke_aborts_when_log_rotates_midflight(fake_log):
+    """If klippy.log's inode changes between snapshot and re-check,
+    the log rotated mid-smoke (Klipper restart, MCU disconnect race).
+    Tail offset would be meaningless against the new file — must
+    abort with rc=4 rather than misreport pass/fail."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+        "FAKE_KLIPPY_LOG_INODE": "12345",
+        "FAKE_KLIPPY_LOG_INODE_AFTER": "99999",  # rotated
+    }
+    r = _run(env=env, args=["--yes", "--smoke"])
+    assert r.returncode == 4, _diag(r)
+    assert "klippy.log rotated during smoke" in r.stderr, _diag(r)
+
+
+def test_smoke_tails_from_snapshot_offset(fake_log):
+    """The tail step must read from line `before_lines + 1`, not from line 1.
+    Otherwise the smoke would flag every historical !! error as new."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+        "FAKE_KLIPPY_LOG_LINES_BEFORE": "9001",
+    }
+    r = _run(env=env, args=["--yes", "--smoke"])
+    assert r.returncode == 0, _diag(r)
+    log = fake_log.read_text()
+    # The ssh-tail invocation should contain `tail -n +9002` (line N+1).
+    assert "tail -n +9002" in log, log
+
+
+def test_smoke_detects_tmc_error_not_in_old_whitelist(fake_log):
+    """Reviewer concern: an enumerated allowlist of !! suffixes would
+    silently pass TMC stepper errors. The fix matches all `^!! ` lines,
+    so a TMC failure DOES get flagged."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+        "FAKE_KLIPPY_LOG_NEW_ERRORS": "!! TMC 'stepper_x' reports error: GSTAT: 00000001 reset=1(Reset)",
+    }
+    r = _run(env=env, args=["--yes", "--smoke"])
+    assert r.returncode == 4, _diag(r)
+    assert "TMC 'stepper_x'" in r.stderr, _diag(r)
