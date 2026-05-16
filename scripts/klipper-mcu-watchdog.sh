@@ -27,6 +27,10 @@
 #   map               print known serial → hub-path mapping from the state file
 #   learn             update the serial→hub state file (no-op if any MCU
 #                     missing — refuses partial updates)
+#   wait-recover      poll Klipper state for RECOVERY_SETTLE_WINDOW seconds;
+#                     exits 0 if state becomes `ready`, non-zero on timeout.
+#                     Used by recover_once to avoid forcing a redundant
+#                     firmware_restart when Klipper self-recovered (GH #45)
 #   help              this help text
 #
 # Configuration via env vars:

@@ -17,6 +17,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SCRIPT = REPO / "scripts" / "klipper-mcu-watchdog.sh"
+FAKE_BIN = REPO / "tests" / "fake_bin"
 
 
 def _run(args, env=None, cwd=None):
@@ -520,7 +521,15 @@ def test_help_subcommand_prints_usage():
     assert r.returncode == 0, _diag(r)
     assert "klipper-mcu-watchdog" in r.stdout, _diag(r)
     # Document the subcommand surface so future renames don't go unnoticed.
-    for sub in ("daemon", "check", "recover", "expected", "missing", "map"):
+    for sub in (
+        "daemon",
+        "check",
+        "recover",
+        "wait-recover",
+        "expected",
+        "missing",
+        "map",
+    ):
         assert sub in r.stdout, f"help text missing '{sub}': {_diag(r)}"
 
 
@@ -531,13 +540,6 @@ def test_unknown_subcommand_exits_nonzero():
 
 
 # ───────────────────────── wait_for_klipper_self_recovery (GH #45) ─────────────────────────
-
-
-FAKE_BIN = REPO / "tests" / "fake_bin"
-
-
-def _diag(r):
-    return f"rc={r.returncode}\n--- stdout ---\n{r.stdout}\n--- stderr ---\n{r.stderr}"
 
 
 def _run_with_fakes(args, env=None):
