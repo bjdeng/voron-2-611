@@ -4,6 +4,35 @@ Why things are the way they are. Use this to capture context that won't be obvio
 
 ---
 
+## 2026-05-16 — Phase 2 refactor (Mainsail/HH cleanup)
+
+### Mainsail config slim — defer PAUSE/RESUME/CANCEL_PRINT to upstream
+`config/mainsail.cfg` was previously a verbatim copy of upstream `mainsail-crew/mainsail-config/mainsail.cfg` (313 lines). The Pi symlinks `~/printer_data/config/mainsail.cfg` → `~/mainsail-config/mainsail.cfg` (NOT `client.cfg`; the upstream repo ships both files as identical copies, but the symlink target is `mainsail.cfg`). The upstream definitions of `PAUSE`, `RESUME`, `CANCEL_PRINT`, `SET_PAUSE_NEXT_LAYER`, `SET_PAUSE_AT_LAYER`, and `SET_PRINT_STATS_INFO` are what actually run.
+
+**Slimmed the repo copy to declarations + helpers only:** kept `[virtual_sdcard]`, `[pause_resume]`, `[display_status]`, `[respond]`, `_TOOLHEAD_PARK_PAUSE_CANCEL`, `_CLIENT_EXTRUDE`, `_CLIENT_RETRACT`, `_CLIENT_LINEAR_MOVE`. Stripped the 6 macros we delegate to upstream.
+
+**Deploy behavior unchanged.** `scripts/deploy_to_pi.sh::discover_pi_symlinks()` rsync-excludes any Pi-side symlink, so our local copy never overwrites the Pi's symlink → upstream. The slim is purely a documentation + macro_refcheck win.
+
+**Activation steps IF you ever want to override upstream (e.g. add custom PAUSE behavior):**
+1. Wait for any in-flight deploy to finish (`discover_pi_symlinks` runs live; mid-swap state would confuse it).
+2. SSH into the Pi: `rm ~/printer_data/config/mainsail.cfg && cp <repo>/config/mainsail.cfg ~/printer_data/config/mainsail.cfg`
+3. The next deploy sees a real file, syncs our local copy normally (no `--exclude=/mainsail.cfg`).
+4. Update `CLAUDE.md`'s Known quirks entry on the mainsail.cfg symlink to note it's been broken.
+5. **Coupling note:** the slim depends on the upstream macro names (`_TOOLHEAD_PARK_PAUSE_CANCEL`, `_CLIENT_EXTRUDE/RETRACT/LINEAR_MOVE`) staying stable. `[update_manager mainsail-config]` in `moonraker.conf` keeps pulling upstream changes into `~/mainsail-config/` on the Pi. If upstream ever renames those helpers, our PRINT_START/PAUSE chain breaks at next mainsail-config update. Worth a vendor-bump audit before approving an upstream pin update.
+6. Once the symlink is broken, future mainsail-config updates pulled by Moonraker no longer auto-apply — you'd manually merge upstream changes into our local file.
+
+### Defer Spoolman activation to Happy Hare
+Deleted `SET_ACTIVE_SPOOL` and `CLEAR_ACTIVE_SPOOL` from `config/macros/macros.cfg`. Both called `spoolman_set_active_spool` via Moonraker's remote-method API — but Happy Hare already does this automatically via its `spoolman_support: push` config (see `config/mmu/base/mmu.cfg` and `vendor/happy-hare/.../mmu.py`). Every tool change publishes the active spool to Spoolman without needing a Klipper macro.
+
+The custom macros were dead code: nothing in our config tree called them. Removing them follows the [Defer to Happy Hare](../.claude/projects/-Users-ben-code-voron-2-611/memory/defer-to-happy-hare.md) rule.
+
+### Dead-commented-code sweep in print_start.cfg
+Removed ~30 lines of commented-out alternative paths from PRINT_START/PRINT_END/PRINT_WARMUP: an unused `HEATSOAK` branch, an unused prime-line block, redundant `BED_MESH_CLEAR`/`SET_PIN`/`M140` lines (already done in `PRINT_WARMUP`), and a few `# G1 ... # ; park nozzle at rear`-style dangling alternatives.
+
+These weren't load-bearing — `PRINT_WARMUP` and `PRINT_START` already do the right work via the uncommented paths. The git history retains the alternatives if anyone wants to resurrect them.
+
+---
+
 ## 2026-05-13 — repo initialized
 
 ### Chose USB over CAN for toolhead
