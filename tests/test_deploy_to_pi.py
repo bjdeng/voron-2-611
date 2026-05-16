@@ -671,3 +671,30 @@ def test_smoke_detects_tmc_error_not_in_old_whitelist(fake_log):
     r = _run(env=env, args=["--yes", "--smoke"])
     assert r.returncode == 4, _diag(r)
     assert "TMC 'stepper_x'" in r.stderr, _diag(r)
+
+
+def test_smoke_gcode_sequence_does_not_include_unsupported_commands():
+    """Tripwire: PR #46 dropped QUERY_PROBE from the smoke sequence after a
+    live deploy revealed native [probe_eddy_current] doesn't implement it
+    (Moonraker returned HTTP 400 "Probe does not support QUERY_PROBE").
+
+    Pin the current sequence so a future revert reintroducing QUERY_PROBE
+    (or any other known-unsupported command) fails fast in CI instead of
+    silently in production. The failure mode here was invisible until live
+    deploy — the test infra mocks Moonraker, so we can't validate gcode
+    semantics this way; this test asserts on the script TEXT directly.
+    """
+    smoke_script = (REPO / "scripts" / "printer-smoke.sh").read_text()
+    # Extract the SMOKE_GCODE assignment block.
+    assert "SMOKE_GCODE='" in smoke_script, "SMOKE_GCODE variable missing"
+    # Forbid commands known not to work on this build.
+    forbidden = ["QUERY_PROBE"]  # add others here if we discover more
+    for cmd in forbidden:
+        # Match the command on its own line within SMOKE_GCODE — avoid
+        # false positives from the COMMENT block that explains the drop.
+        # The SMOKE_GCODE value uses bare command names, one per line,
+        # between the opening `'` and closing `'`.
+        smoke_value_block = smoke_script.split("SMOKE_GCODE='", 1)[1].split("'", 1)[0]
+        assert (
+            cmd not in smoke_value_block.split()
+        ), f"{cmd} re-introduced into SMOKE_GCODE — see PR #46 for why this fails on hardware"
