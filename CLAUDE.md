@@ -27,7 +27,7 @@ The machine has years of trial-and-error baked into it. **Do not assume the curr
 
 ### Toolhead
 - **Stealthburner v2** body (no SB LEDs installed — only the LCD neopixel chain in `[neopixel lcd]`)
-- **Galileo extruder** — explains the unusual `gear_ratio: 9:1` + `rotation_distance: 48.033` in `config/btt-ebb-sb-usb-v1.0.cfg`
+- **Galileo extruder** — explains the unusual `gear_ratio: 9:1` + `rotation_distance: 48.033` in `config/toolhead.cfg`
 - **Dragon clone hotend** (vendor unknown; behaves Dragon-compatible)
 - 0.4 mm nozzle, 1.75 mm filament (Generic 3950 thermistor, pullup 2200 Ω)
 - **LIS2DW** accelerometer on toolhead (for resonance testing); `axes_map: z,x,y`
@@ -283,7 +283,7 @@ There's no `[update_manager klipper]` block in `config/moonraker.conf`, **and th
 6. **This repo is the canonical config; the Pi is the working copy.** Eventually changes flow `local edit → PR → main → sync to Pi`. Until that CI/CD is built, manual sync is fine, but **never overwrite the Pi's files without confirming** — Mainsail can also edit configs directly and the Pi may be ahead.
 
 7. **Three classes of file on the Pi to be aware of when syncing:**
-   - **Real files we own** — `config/printer.cfg`, everything under `config/macros/`, and the other `.cfg`/`.conf` files directly in `config/` (`eddy.cfg`, `btt-ebb-sb-usb-v1.0.cfg`, `moonraker.conf`, `crowsnest.conf`, `sonar.conf`). Edit freely here.
+   - **Real files we own** — `config/printer.cfg`, everything under `config/macros/`, and the other `.cfg`/`.conf` files directly in `config/` (`eddy.cfg`, `toolhead.cfg`, `moonraker.conf`, `crowsnest.conf`, `sonar.conf`). Edit freely here.
    - **Symlinked-from-third-party** — `config/mmu/base/*.cfg` (Happy-Hare), `config/mainsail.cfg` (mainsail-config), `config/timelapse.cfg` (moonraker-timelapse). Editing these on the Pi mutates the upstream install dir. Edits should generally go in the third-party repo, not here.
    - **Auto-generated** — the `#*# SAVE_CONFIG` block at the bottom of `config/printer.cfg`. Klipper rewrites this on every `SAVE_CONFIG`. Don't merge upstream changes that touch it; always pull the Pi's current version when working with calibration values.
 
@@ -354,7 +354,7 @@ These have already tripped someone up — flag them when relevant.
 - **`mmu/addons/mmu_erec_cutter*.cfg` and `mmu_eject_buttons*.cfg` are NOT included** from `printer.cfg` but the files remain (likely symlinked from `~/Happy-Hare/config/addons/`). Don't move them to `archive/` — HH install would recreate them. Toolhead cutter is **Filametrix**, not EREC. Eject buttons are not installed.
 - **`ModemManager` is masked on this Pi (2026-05-14).** It probes new USB-serial devices and could hold MCUs open during enumeration — a footgun on this 5-USB-MCU machine. Caused the `mcu 'mmu': Unable to connect` race during the first live `/deploy-to-pi`. Fixed via `sudo systemctl mask --now ModemManager.service`. Verify with `systemctl is-enabled ModemManager` (should print `masked`).
 - **SKR Z + EASY-BRD MMU consistently fail USB re-enumeration after `FIRMWARE_RESTART`** — root-caused as a kernel timing race, NOT ModemManager and NOT a physical disconnect. Both MCUs boot slower than the kernel's USB enumeration retry budget (~5s). dmesg pattern: `device descriptor read/64, error 2` → `device not accepting address, error -22` → `unable to enumerate USB device`. The boards are physically connected and electrically fine; the kernel just gave up. **One-shot recovery:** `sudo sh -c 'echo 1-1.3 > /sys/bus/usb/drivers/usb/unbind; sleep 2; echo 1-1.3 > /sys/bus/usb/drivers/usb/bind'`. **Permanent fix:** `klipper-mcu-watchdog.service` (GH issue #37, `scripts/klipper-mcu-watchdog.sh`).
-- **No CAN bus.** The toolhead is on USB (`config/btt-ebb-sb-usb-v1.0.cfg`). EBB SB v1.0 supports both modes; Ben chose USB.
+- **No CAN bus.** The toolhead is on USB (`config/toolhead.cfg`). EBB SB v1.0 supports both modes; Ben chose USB.
 - **Webcam is unplugged.** Crowsnest + Sonar still run but have nothing to stream ([#27](https://github.com/bjdeng/voron-2-611/issues/27)).
 - **Klipper has no update_manager block.** Klipper updates are not automated through Moonraker — likely intentional to avoid breaking the `eddy-ng` + Happy-Hare overlay (note: eddy-ng was migrated off in PR #17 but Happy-Hare overlay still relies on this).
 - **SAVE_CONFIG block lives at the bottom of `config/printer.cfg`.** Klipper rewrites it on every `SAVE_CONFIG`. When syncing this repo → Pi, never overwrite the Pi's SAVE_CONFIG section.
@@ -462,7 +462,7 @@ These hardware projects ship with CAD / STLs / heavy assets that aren't worth ve
 | Hardware | Upstream | Why we don't vendor |
 |---|---|---|
 | **ERCF v2** (MMU) | [Carrot-collective/ERCF_v2](https://github.com/Carrot-collective/ERCF_v2) | 1.3 GB — CAD + STLs + recommended-mods assets. `Documentation/` alone is 91 MB. |
-| **Galileo 2** (extruder; 9:1 ratio matches our `config/btt-ebb-sb-usb-v1.0.cfg`) | [JaredC01/Galileo2](https://github.com/JaredC01/Galileo2) | CAD-heavy. The Voron Stealthburner drop-in (G2E) is what's on this build. The original (7.5:1) lives at [JaredC01/Galileo](https://github.com/JaredC01/Galileo) — not what we have. |
+| **Galileo 2** (extruder; 9:1 ratio matches our `config/toolhead.cfg`) | [JaredC01/Galileo2](https://github.com/JaredC01/Galileo2) | CAD-heavy. The Voron Stealthburner drop-in (G2E) is what's on this build. The original (7.5:1) lives at [JaredC01/Galileo](https://github.com/JaredC01/Galileo) — not what we have. |
 | **EASY-BRD** (ERCF SAMD21 MCU) | [Tircown/ERCF-easy-brd](https://github.com/Tircown/ERCF-easy-brd) | Schematic + KiCad files + reference configs. Probably small enough to vendor if we ever need to dig in — check size first. |
 | **Stealthburner v2** (toolhead) | [VoronDesign/Voron-Stealthburner](https://github.com/VoronDesign/Voron-Stealthburner) | CAD + STLs + assembly manual. Separate from `vendor/voron-2` (the main Voron 2 repo doesn't include the SB toolhead). |
 
@@ -486,7 +486,7 @@ voron-2-611/
 ├── config/                      # everything that deploys to the Pi
 │   ├── printer.cfg              # top-level Klipper config (includes everything below)
 │   ├── eddy.cfg                 # Eddy probe + bed mesh + temperature_probe + SET_Z_FROM_PROBE pair
-│   ├── btt-ebb-sb-usb-v1.0.cfg  # toolhead MCU config (rename to toolhead.cfg planned in refactor Phase 4)
+│   ├── toolhead.cfg             # toolhead MCU config (RP2040 EBB SB v1.0, USB mode)
 │   ├── mainsail.cfg             # slimmed local copy (Phase 2); Pi symlink → ~/mainsail-config/mainsail.cfg means our copy doesn't deploy
 
 │   ├── timelapse.cfg            # symlink target on Pi (unused per Ben)

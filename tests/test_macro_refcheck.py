@@ -105,7 +105,7 @@ def test_real_repo_passes():
         [
             "config/printer.cfg",
             "config/eddy.cfg",
-            "config/btt-ebb-sb-usb-v1.0.cfg",
+            "config/toolhead.cfg",
             "config/mainsail.cfg",
             "config/timelapse.cfg",
         ]

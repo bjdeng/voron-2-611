@@ -18,7 +18,7 @@ Make the Klipper config and macros for voron-2-611 maintainable for the next sev
 1. **Tier-1 config fixes** — `test_speed.cfg` swap to current Ellis upstream (Klipper v0.13 compat), `[resonance_tester] probe_points: 175, 175, 20`.
 2. **Mainsail/HH cleanup (Option B) + archive/dead-code cleanup** — strip PAUSE/RESUME/CANCEL_PRINT/SET_PAUSE_*/SET_PRINT_STATS_INFO from `config/mainsail.cfg`; delete dead `SET_ACTIVE_SPOOL`/`CLEAR_ACTIVE_SPOOL` from `config/macros/macros.cfg`; remove commented-out blocks throughout.
 3. **CLAUDE.md corrections + Open Investigations → GH Issues migration** — Filametrix (not EREC), SB LEDs not installed, Eddy native migrated, addon list trimmed, missing temp sensors documented, `[update_manager]` block list updated, bed_mesh max-y typo fixed, PRINT_START/PRINT_END inventory corrected. Each Open Investigation becomes a GH Issue under `future-work` label; CLAUDE.md section slims to a one-line pointer.
-4. **Macros refactor + file reorg** — new `config/macros/_user_variables.cfg` with single `_USER_VARIABLE` macro for tunables; rename `btt-ebb-sb-usb-v1.0.cfg` → `toolhead.cfg`; `description:` field on every macro; consolidate `[extruder]` PA + limits into `toolhead.cfg`; resolve duplicate section declarations; reorganize `[include]` order in `printer.cfg` with section comments. No macro behavior change.
+4. **Macros refactor + file reorg** — new `config/macros/_user_variables.cfg` with single `_USER_VARIABLE` macro for tunables; rename `btt-ebb-sb-usb-v1.0.cfg` → `toolhead.cfg` (done in PR-A); `description:` field on every macro; consolidate `[extruder]` PA + limits into `toolhead.cfg`; resolve duplicate section declarations; reorganize `[include]` order in `printer.cfg` with section comments. No macro behavior change.
 5. **OrcaSlicer-side hooks + PRINT_START harmonization** — document slicer-side `MMU_START_SETUP / MMU_START_CHECK / PRINT_START / MMU_START_LOAD_INITIAL_TOOL` 4-call pattern (lives at `docs/slicer-templates/`); update PRINT_START to consume the same params it already uses (no new params required, MMU info flows through `MMU_START_SETUP`).
 6. **Two skills** — `.claude/skills/klipper-config-work/SKILL.md` and `.claude/skills/happy-hare-integration/SKILL.md`.
 
@@ -70,7 +70,7 @@ After the in-flight `feat/eddy-native` branch merges to `main`, implementation p
 ### Phase 1 — Tier-1 config fixes (~30 line diff)
 
 - Replace `config/macros/test_speed.cfg` with current upstream from [AndrewEllis93/Print-Tuning-Guide](https://github.com/AndrewEllis93/Print-Tuning-Guide) `macros/TEST_SPEED.cfg`. Current copy will fail at runtime on Klipper v0.13 (uses removed `max_accel_to_decel`).
-- Change `[resonance_tester] probe_points` in `config/btt-ebb-sb-usb-v1.0.cfg:21` from `100, 100, 20` to `175, 175, 20`.
+- Change `[resonance_tester] probe_points` in `config/toolhead.cfg:21` from `100, 100, 20` to `175, 175, 20`.
 
 ### Phase 2 — Mainsail/HH cleanup (Option B) + archive cleanup (~80 line diff)
 
@@ -98,6 +98,8 @@ After the in-flight `feat/eddy-native` branch merges to `main`, implementation p
 - **Enshrine the test pyramid in CLAUDE.md:** expand the existing `## CI checks` section into a full `## Testing` section that documents the 6+1 test pyramid layers, what each catches, when to extend, how to run locally. The spec's Section 5 stays the source of truth for rationale; CLAUDE.md's section is the contributor-facing summary.
 
 ### Phase 4 — Macros refactor + file reorg (~400-600 line diff — the largest)
+
+> **Note:** Phase 4 implementation moved to [`2026-05-16-phase4-macros-refactor-design.md`](2026-05-16-phase4-macros-refactor-design.md) and split into PR-A (structural) + PR-B (`_USER_VARIABLE` migration).
 
 - **Rename `config/btt-ebb-sb-usb-v1.0.cfg` → `config/toolhead.cfg`** (and update references in `config/printer.cfg`, `tests/voron-2-611.test`, `scripts/macro_refcheck.py`, CLAUDE.md, this spec).
 - **Add `config/macros/_user_variables.cfg`** with a single `[gcode_macro _USER_VARIABLE]` block. Variables grouped by category:
@@ -240,7 +242,7 @@ Pi-side new file (not in repo):
 - **Include order matters for documentation, not function.** Klipper resolves `printer["gcode_macro _USER_VARIABLE"].foo` at macro-call time. So `_user_variables.cfg` can technically be included anywhere; we put it early in `printer.cfg` so a reader sees it before the macros that reference it.
 - **The 2-pass QGL override stays as-is.** Per [[qgl-two-pass-intentional]], the saggy-rear V2 quirk makes this load-bearing. Documented in the macro's `description:` field as part of Phase 4.
 - **Filename rename touches a few non-config files:**
-  - `config/printer.cfg` — the `[include btt-ebb-sb-usb-v1.0.cfg]` line.
+  - `config/printer.cfg` — the `[include toolhead.cfg]` line.
   - `tests/voron-2-611.test` — any path references.
   - `scripts/macro_refcheck.py` — any path constants.
   - `CLAUDE.md` — hardware section + macro section + ## CI checks section.
