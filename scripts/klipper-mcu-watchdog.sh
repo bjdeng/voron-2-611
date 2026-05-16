@@ -200,7 +200,13 @@ discover_hub_for_serial() {
   [[ -n "$iface_sysfs" ]] || return 0
   # Two parents up from the interface dir: interface → device → hub.
   hub_sysfs=$(dirname "$(dirname "$iface_sysfs")")
-  basename "$hub_sysfs"
+  local hub_name
+  hub_name=$(basename "$hub_sysfs")
+  # Sanity: hub name must look like a nested USB port (e.g. 1-1.3 or 1-1.4.2).
+  # If the chain bottoms out at `usb1` or a bare root port like `1-1`, refuse
+  # — unbinding either would take down every device on that controller.
+  [[ "$hub_name" =~ ^[0-9]+-[0-9]+\.[0-9]+ ]] || return 0
+  printf '%s\n' "$hub_name"
 }
 
 # ─────────────────────────────────────────────────────────────────────────

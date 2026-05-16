@@ -429,6 +429,55 @@ def test_learn_records_correct_hub_per_serial(tmp_path):
     }, f"expected per-serial hub, got: {mapping}"
 
 
+def test_learn_refuses_root_hub_topology(tmp_path):
+    """Guard: if an MCU sits directly on a Pi root port (interface dir
+    under .../1-1/1-1:1.0 with no nested hub), the two-dirname walk
+    bottoms out at the controller (`usb1`). `discover_hub_for_serial`
+    must refuse — unbinding `usb1` would knock out every USB device
+    on that bus.
+    """
+    sysfs = tmp_path / "sys"
+    devices_dir = sysfs / "bus" / "usb" / "devices"
+    tty_dir = sysfs / "class" / "tty"
+    devices_dir.mkdir(parents=True)
+    tty_dir.mkdir(parents=True)
+    by_id = tmp_path / "by-id"
+    by_id.mkdir()
+    dev_dir = tmp_path / "dev"
+    dev_dir.mkdir()
+
+    usb1 = devices_dir / "usb1"
+    usb1.mkdir()
+    port = usb1 / "1-1"
+    port.mkdir()
+    iface = port / "1-1:1.0"
+    iface.mkdir()
+    (tty_dir / "ttyACM0").mkdir()
+    (tty_dir / "ttyACM0" / "device").symlink_to(iface)
+    (dev_dir / "ttyACM0").touch()
+    serial = "usb-Klipper_root_port_mcu-if00"
+    (by_id / serial).symlink_to(dev_dir / "ttyACM0")
+
+    cfg = tmp_path / "printer.cfg"
+    cfg.write_text(f"[mcu]\nserial: /dev/serial/by-id/{serial}\n")
+
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    r = _run(
+        ["learn"],
+        env={
+            "PRINTER_CFG": str(cfg),
+            "STATE_DIR": str(state_dir),
+            "SERIAL_BY_ID_DIR": str(by_id),
+            "TTY_CLASS_DIR": str(tty_dir),
+        },
+    )
+    assert r.returncode == 0, _diag(r)
+    assert not (state_dir / "mcu-hub-map").exists(), _diag(r)
+    assert "only resolved 0/1" in r.stderr, _diag(r)
+
+
 def test_learn_refuses_partial_mapping(tmp_path):
     """If `discover_hub_for_serial` can't resolve every expected MCU,
     `learn_mapping` must leave the existing state file intact rather
