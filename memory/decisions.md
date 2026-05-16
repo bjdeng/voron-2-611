@@ -84,3 +84,20 @@ Artifact from an old CAN bus Klipper mod Ben no longer uses (per Ben, 2026-05-13
 
 ### Macro lineage: Andrew Ellis v2.247_backup_klipper_config
 The macro set (Ellis-style `OFF`, `PARK*`, `HEATSOAK`, M109/M190 overrides) traces back to Andrew Ellis's V2.4 profile. Modifications since are minor.
+
+## 2026-05-16 — Defer status sections to Happy Hare
+
+`[respond]`, `[exclude_object]`, `[pause_resume]`, `[display_status]` now have a
+single declaration in HH-owned files (`config/mmu/base/mmu_macro_vars.cfg`
+and `config/mmu/addons/blobifier.cfg`) — our copies in `config/printer.cfg`
+and `config/mainsail.cfg` are removed.
+
+**Why:** Defer-to-HH rule from `memory/defer-to-happy-hare.md`. Reduces
+duplicate-declaration noise; matches one-canonical-home discipline.
+
+**How to apply:** If HH is ever disabled (`mmu/base/*.cfg` includes commented
+out), Klipper load breaks until these declarations are restored in
+`config/printer.cfg` / `config/mainsail.cfg`. Acceptable trade because HH is
+structurally load-bearing on this build.
+
+Refs: PR-A of Phase 4 (`docs/superpowers/specs/2026-05-16-phase4-macros-refactor-design.md`).
