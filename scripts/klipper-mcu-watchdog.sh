@@ -35,6 +35,7 @@
 #   MOONRAKER_URL     Moonraker base URL (default http://localhost:7125)
 #   SERIAL_BY_ID_DIR  /dev/serial/by-id directory (default /dev/serial/by-id)
 #   SYSFS_USB_DIR     /sys/bus/usb (default /sys/bus/usb)
+#   TTY_CLASS_DIR     /sys/class/tty (default /sys/class/tty; overridable for tests)
 #   POLL_INTERVAL     daemon-mode loop interval, seconds (default 10)
 #   STARTUP_GRACE     after Klipper enters startup state, wait this long for
 #                     its own retries before intervening, seconds (default 30)
@@ -51,6 +52,7 @@ STATE_FILE="${STATE_DIR}/mcu-hub-map"
 MOONRAKER_URL="${MOONRAKER_URL:-http://localhost:7125}"
 SERIAL_BY_ID_DIR="${SERIAL_BY_ID_DIR:-/dev/serial/by-id}"
 SYSFS_USB_DIR="${SYSFS_USB_DIR:-/sys/bus/usb}"
+TTY_CLASS_DIR="${TTY_CLASS_DIR:-/sys/class/tty}"
 POLL_INTERVAL="${POLL_INTERVAL:-10}"
 STARTUP_GRACE="${STARTUP_GRACE:-30}"
 RECOVERY_RETRIES="${RECOVERY_RETRIES:-2}"
@@ -178,25 +180,27 @@ missing_serials() {
 # Given a serial basename (e.g. usb-Klipper_rp2040_xxx-if00), return its
 # PARENT USB hub sysfs name (e.g. 1-1.3). Returns empty if not enumerated.
 #
-# The serial-by-id symlink resolves into /sys/.../ttyACM<N> which lives under
-# the cdc_acm interface dir, whose parent's parent is the USB device dir
-# (e.g. /sys/bus/usb/devices/1-1.3.4). Stripping the last `.N` gives the hub.
+# Implementation: walk sysfs directly rather than parse `udevadm info -q
+# path` output (the prior approach was fragile because USB-device path
+# segments and PCIe path segments can ambiguously match common regex
+# patterns).
+#
+# Chain: /dev/serial/by-id/<serial> → /dev/ttyACMN → /sys/class/tty/ttyACMN/
+# device → USB interface dir (e.g. .../1-1.3.4/1-1.3.4:1.0) →
+# parent = USB device dir (1-1.3.4) → parent = USB hub dir (1-1.3). The hub
+# is what we ultimately rebind. basename gives us the bare port name.
 discover_hub_for_serial() {
   local serial="$1"
-  local link target device port_id hub_id
+  local link target tty_name iface_sysfs hub_sysfs
   link="${SERIAL_BY_ID_DIR}/${serial}"
   [[ -L "$link" ]] || return 0
   target=$(readlink -f "$link") || return 0
-  # target is /dev/ttyACM<N> — but readlink -f resolves dev nodes; we want sysfs.
-  # Use udevadm to get the chain.
-  device=$(udevadm info -q path -n "$target" 2>/dev/null) || return 0
-  # device looks like /devices/.../usb1/1-1/1-1.3/1-1.3.4/1-1.3.4:1.0/tty/ttyACM1
-  # Extract the last hop that matches NN-N.N.N pattern (USB device path).
-  port_id=$(printf '%s\n' "$device" | grep -oE '/[0-9]+-[0-9]+(\.[0-9]+)+(/|$)' | tail -1 | tr -d '/')
-  [[ -n "$port_id" ]] || return 0
-  # Hub is the parent: strip the last `.N` component.
-  hub_id="${port_id%.*}"
-  printf '%s\n' "$hub_id"
+  tty_name=$(basename "$target")
+  iface_sysfs=$(readlink -f "${TTY_CLASS_DIR}/${tty_name}/device" 2>/dev/null) || return 0
+  [[ -n "$iface_sysfs" ]] || return 0
+  # Two parents up from the interface dir: interface → device → hub.
+  hub_sysfs=$(dirname "$(dirname "$iface_sysfs")")
+  basename "$hub_sysfs"
 }
 
 # ─────────────────────────────────────────────────────────────────────────
