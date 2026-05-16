@@ -11,6 +11,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Flags (honored in a later task; declared here so parse_flags can set them)
 YES=0
 DRY_RUN=0
+SMOKE=0
 
 # Globals populated by setup functions
 LOCAL=""
@@ -39,6 +40,7 @@ parse_flags() {
     case "$1" in
       --yes) YES=1 ;;
       --dry-run) DRY_RUN=1 ;;
+      --smoke) SMOKE=1 ;;
       *) echo "ERR: unknown flag: $1" >&2; exit 1 ;;
     esac
     shift
@@ -371,6 +373,23 @@ wait_for_klipper_ready() {
   exit 3
 }
 
+run_post_deploy_smoke() {
+  # Layer 6 of the test pyramid. See scripts/printer-smoke.sh for the
+  # gcode sequence + what it catches. Opt-in via --smoke because the
+  # physical G28 is a real toolhead movement; users with hands inside
+  # the printer need to know it's coming.
+  echo
+  echo "==> Running L6 post-deploy smoke (--smoke)"
+  local rc=0
+  PI_HOST="$PI_HOST" PI_API="$PI_API" "$REPO_ROOT/scripts/printer-smoke.sh" || rc=$?
+  if (( rc != 0 )); then
+    echo "ERR: post-deploy smoke FAILED (rc=$rc). Klipper is up but the deployed config" >&2
+    echo "    has runtime regressions. Inspect ~/printer_data/logs/klippy.log on the Pi" >&2
+    echo "    and roll back via the procedure in .claude/skills/deploy-to-pi/SKILL.md." >&2
+    exit 4
+  fi
+}
+
 cleanup() {
   rm -f "$SAVE_CONFIG_PI" "$STAGED_PRINTER_CFG"
 }
@@ -403,6 +422,9 @@ main() {
   update_deploy_marker
   trigger_restart
   wait_for_klipper_ready
+  if [[ "$SMOKE" == 1 ]]; then
+    run_post_deploy_smoke
+  fi
   cleanup
   echo
   echo "==> Deploy complete. Verify printer state in Mainsail."

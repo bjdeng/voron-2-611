@@ -19,5 +19,15 @@ case "$url" in
     exit 0 ;;
   *printer/restart|*printer/firmware_restart)
     if [[ "${FAKE_RESTART_OK:-1}" == "1" ]]; then echo '{"result":"ok"}'; exit 0; else exit 1; fi ;;
+  *printer/gcode/script)
+    # L6 smoke: post a gcode script. Default success; tests can set
+    # FAKE_GCODE_SCRIPT_OK=0 to simulate Moonraker rejecting the script.
+    if [[ "${FAKE_GCODE_SCRIPT_OK:-1}" == "1" ]]; then
+      echo '{"result":"ok"}'
+      exit 0
+    else
+      echo '{"error":{"code":400,"message":"Klippy is not connected"}}' >&2
+      exit 22
+    fi ;;
   *) echo "fake curl: unhandled url: $url" >&2; exit 99 ;;
 esac
