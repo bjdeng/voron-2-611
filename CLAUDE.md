@@ -303,7 +303,7 @@ A 7-layer test pyramid (6 standard + 1 for refactor PRs). New work should add to
 |---|---|---|---|---|
 | 1 | Pre-commit hooks (trailing-whitespace, end-of-file-fixer, mixed-line-ending, ruff format + lint on Python) | `.pre-commit-config.yaml` | every commit + CI | active |
 | 2 | `macro_refcheck.py` — every gcode command in a `[gcode_macro]` body resolves to a defined macro or an entry in `tests/builtins.txt` / `ALLOWLIST` | `scripts/macro_refcheck.py` | CI | active |
-| 3 | Klippy parse + smoke gcode — `vendor/klipper/scripts/test_klippy.py` loads `config/printer.cfg` with all 5 MCUs simulated and walks the dispatcher for a smoke sequence (G28, QGL, `BED_MESH_CALIBRATE METHOD=rapid_scan`, `PRINT_START`, `PRINT_END`, `OFF`, `MMU_STATUS`, parking macros) | `tests/voron-2-611.test` + `.github/workflows/ci.yml` | CI | currently gated `if: false`; re-enable after Eddy migration verified |
+| 3 | Klippy parse + MCU load — `vendor/klipper/scripts/test_klippy.py` loads `config/printer.cfg` with the 4 non-MMU MCUs simulated (MMU stripped at CI time; see Known quirks) and verifies Klipper reaches steady state. No gcode is executed — calibration state required by `G28`/QGL/PRINT_START doesn't exist in CI, and macro→macro reference rot is already covered by L2. | `tests/voron-2-611.test` + `.github/workflows/ci.yml` | CI | active (PR #34) |
 | 4 | pytest — `scripts/macro_refcheck.py` unit tests, real-repo regression tests, ALLOWLIST-coupling tripwires | `tests/test_*.py` | CI | active |
 | 5 | Structural assertions on `.cfg` files (no deprecated Klipper keys; `[gcode_macro]` description fields; `_USER_VARIABLE.X` references resolve; `[include]` order; `params.X` has default or guard; PAUSE/RESUME/CANCEL_PRINT defined once) | `tests/test_config_structure.py` | CI | **planned** in refactor Phase 1 (`docs/superpowers/specs/2026-05-15-config-macros-refactor.md`) |
 | 6 | Post-deploy smoke (a fixed gcode sequence runs on the Pi after deploy + grep `klippy.log` for `!! Unknown command` / `!! Internal error`) | `scripts/deploy_to_pi.sh --smoke` + `scripts/printer-smoke.sh` on Pi | manual after deploy | **planned** in refactor Phase 1 |
@@ -312,7 +312,7 @@ A 7-layer test pyramid (6 standard + 1 for refactor PRs). New work should add to
 ### What each catches
 - **L1:** text-hygiene drift, Python lint regressions
 - **L2:** macro calls that reference renamed/deleted commands
-- **L3:** Klipper config syntax errors, unknown sections, pin clashes, jinja2 template parse errors. **Does NOT execute jinja2 conditionals** — only the static command graph
+- **L3:** Klipper config syntax errors, unknown sections, pin clashes, unsupported sensor types (the LPC1769 `temperature_mcu` trap), jinja2 template parse errors. Does NOT execute any gcode — runtime behavior is L6's job.
 - **L4:** regressions in the testing infrastructure itself
 - **L5:** structural invariants Klipper's own loader misses
 - **L6:** runtime behavior on the actual machine (conditional branches, MCU-specific quirks)

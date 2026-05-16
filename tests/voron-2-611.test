@@ -1,32 +1,28 @@
-# Voron 2.611 — parse + macro-graph smoke under simulated MCUs.
+# Voron 2.611 — parse + MCU-load smoke under simulated MCUs.
 # Run via: cd vendor/klipper && python scripts/test_klippy.py \
 #           -d ../../tests/dict ../../tests/voron-2-611.test
 #
-# This requires Linux (Klipper's chelper uses Linux-only kernel headers).
+# Requires Linux (Klipper's chelper uses Linux-only kernel headers).
 # CI runs it on ubuntu-22.04 via .github/workflows/ci.yml.
+#
+# What this catches: config syntax errors, unknown sections, pin clashes
+# across MCUs, unsupported sensor types (the LPC1769 temperature_mcu trap
+# from PR #17), and jinja2 *parse* errors in macro bodies — i.e. everything
+# that happens between `python klippy.py printer.cfg` and "Klipper ready".
+#
+# What this DOES NOT catch: gcode-execution behavior. We deliberately
+# omit a smoke gcode sequence because test_klippy.py *does* execute
+# commands (despite a previous comment here that claimed otherwise),
+# and most of our macros touch probe state (G28 → safe_z_home → Eddy
+# probe → freq→Z calibration polynomial) that doesn't exist in CI.
+# Seeding the full SAVE_CONFIG block in CI would maintain a 100-line
+# calibration fixture that drifts whenever the Pi is re-calibrated.
+# Macro→macro reference rot is already covered by L2 (macro_refcheck);
+# runtime gcode behavior is L6 (post-deploy smoke on real hardware).
 
 CONFIG ../config/printer.cfg
+# `mmu=easy-brd.dict` is kept in case the MMU includes ever get loaded —
+# locally without the CI strip step, or once the HH upstream bug is fixed
+# and we revert the strip. With the strip in place, Klipper has no [mcu mmu]
+# section so the dict entry is unused but harmless.
 DICTIONARY mcu.dict z=mcu.dict EBB=ebb-usb.dict eddy=eddy.dict mmu=easy-brd.dict
-
-# --- Boot + leveling smoke ---
-G28
-QUAD_GANTRY_LEVEL
-BED_MESH_CALIBRATE METHOD=rapid_scan
-
-# --- Macro graph smoke: walks every command in PRINT_START → sub-macros.
-# test_klippy.py verifies each command resolves; it does NOT execute the
-# jinja2 bodies at runtime, so conditional branches are not exercised. ---
-PRINT_WARMUP BED=60 EXTRUDER=200
-HEATSOAK T=60 C=30 MOVE=1 WAIT=0
-PRINT_START BED=60 EXTRUDER=200 CHAMBER=0
-PRINT_END
-OFF
-
-# --- MMU surface ---
-MMU_STATUS
-
-# --- Parking macros (one of each) ---
-PARKCENTER
-PARKFRONT
-PARKREAR
-PARKBED

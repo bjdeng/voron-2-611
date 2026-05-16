@@ -23,25 +23,24 @@ on:
       - '.claude/**'
 
 jobs:
-  # DISABLED until the eddy migration removes [probe_eddy_ng] from eddy.cfg.
+  # Re-enabled 2026-05-15 after the eddy-ng → native [probe_eddy_current]
+  # migration (PR #17). Scope is parse + MCU load only: we deliberately do
+  # NOT execute gcode (see tests/voron-2-611.test for why). What this job
+  # actually catches:
+  #   • config syntax errors, unknown sections
+  #   • pin clashes across MCUs
+  #   • unsupported sensor types (the LPC1769 `temperature_mcu` trap)
+  #   • jinja2 *parse* errors in macro bodies
   #
-  # The committed tests/dict/eddy.dict was built on the Pi without eddy-ng's
-  # sensor_ldc1612_ng.c firmware patch applied, so the MCU command table is
-  # missing `ldc1612_ng_*` commands that vendor/eddy-ng/ldc1612_ng.py
-  # hardcodes calls to. Pipefail (added in d9f53f4 per Codex P1) unmasked
-  # this — previous "green" CI runs were hiding the failure via the `tee`
-  # pipe swallowing test_klippy's exit code.
+  # Failure modes worth knowing:
+  #   • "Unknown command: trigger_analog_*" / "ldc1612_*" → tests/dict/eddy.dict
+  #     is stale relative to the firmware on the Pi. Regenerate via
+  #     `scp pi@mainsailos.local:~/klipper/out/klipper.dict tests/dict/eddy.dict`
+  #     after a clean firmware build (see config/firmware/eddy.config).
   #
-  # The eddy migration (docs/superpowers/plans/2026-05-13-eddy-ng-to-native-migration.md)
-  # replaces [probe_eddy_ng] with the native [probe_eddy_current], which uses
-  # vanilla `ldc1612_*` MCU commands that ARE present in eddy.dict. When that
-  # PR lands, re-enable this job by removing the `if: false` line below.
-  #
-  # See memory/troubleshooting-log.md 2026-05-14 for the full history of this
-  # job's "now you see it, now you don't" failures.
+  # See memory/troubleshooting-log.md 2026-05-14 for the prior gating history.
   klippy-smoke:
-    if: false
-    name: Klippy parse + smoke gcode (disabled until eddy-ng → native migration)
+    name: Klippy parse + MCU load
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
@@ -53,41 +52,36 @@ jobs:
           cache: pip
       - name: Install Klipper's runtime deps (greenlet, cffi, jinja2, …)
         run: pip install -r vendor/klipper/scripts/klippy-requirements.txt -r vendor/klipper/scripts/tests-requirements.txt
-      - name: Pre-create paths referenced by config (Happy-Hare save_variables, etc.)
-        # printer.cfg references files at ~/printer_data/config/mmu/mmu_vars.cfg
-        # (via Happy-Hare's [save_variables] in mmu/base/mmu_macro_vars.cfg).
-        # save_variables.py does open(path, 'w') which won't create parents.
-        # On a real Pi those paths exist; on a fresh runner they don't.
-        run: mkdir -p ~/printer_data/config/mmu
-      - name: Symlink third-party Klipper extensions
-        # printer.cfg uses [probe_eddy_ng] (provided by vvuk/eddy-ng) and
-        # [mmu] / [mmu_machine] etc. (provided by moggieuk/Happy-Hare). On
-        # the printer these are symlinked into ~/klipper/klippy/extras/ by
-        # each project's install.sh. In CI vendor/klipper is vanilla, so
-        # we replicate the symlink layer here. Source of truth for what
-        # gets linked:
-        #   eddy-ng: install.py FILES_TO_COPY (Python files only — the .c
-        #     file is firmware-only and test_klippy.py doesn't compile MCUs)
-        #   Happy-Hare: install.sh link_mmu_plugins (extras + extras/mmu)
-        # Bumping vendor/eddy-ng or vendor/happy-hare may require updating
-        # this list — check their install scripts for the file set.
+      # No third-party Klipper extensions need to be linked in:
+      #   • eddy-ng: PR #17 migrated to the native [probe_eddy_current] which
+      #     lives in vanilla vendor/klipper/klippy/extras/. No symlink needed.
+      #   • Happy-Hare: its includes are stripped in the next step, so
+      #     Klipper never instantiates [mmu]/[mmu_machine]. No symlink needed.
+      # If a future change re-introduces a third-party Klipper section that
+      # isn't in vanilla Klipper, the install.sh / install.py from that
+      # project documents the file set to symlink — add a step here.
+      - name: Strip MMU includes from printer.cfg (Happy-Hare incompat)
+        # Happy-Hare's mmu.py:_setup_logging is invoked at handle_connect
+        # (load time, before any gcode) and crashes under test_klippy.py in
+        # two independent ways:
+        #   • bare-bracket `start_args['log_file']` lookup → KeyError when
+        #     klippy.py runs without `-l` (mmu.py:733)
+        #   • `if dirname is None:` check after os.path.dirname(), which
+        #     returns '' (never None) → mmu_log = '' + '/mmu.log' = '/mmu.log'
+        #     → PermissionError on filesystem root (mmu.py:735-738)
+        # Both patterns have lived in HH `main` since 2023-10-02 with zero
+        # upstream reports — HH has never been tested under test_klippy.
+        # Tracked upstream at moggieuk/Happy-Hare#TBD. Until that lands,
+        # strip the four `[include mmu/...]` lines from printer.cfg so the
+        # rest of the config (pin clashes across the 4 non-MMU MCUs, sensor
+        # validity, jinja parse, the LPC1769 temperature_mcu trap) is still
+        # validated. MMU load + runtime is L6's job (post-deploy smoke).
         shell: bash
         run: |
           set -euo pipefail
-          KLIPPER_EXTRAS=vendor/klipper/klippy/extras
-          # eddy-ng — two Python files
-          ln -sf "$PWD/vendor/eddy-ng/probe_eddy_ng.py" "$KLIPPER_EXTRAS/probe_eddy_ng.py"
-          ln -sf "$PWD/vendor/eddy-ng/ldc1612_ng.py"   "$KLIPPER_EXTRAS/ldc1612_ng.py"
-          # Happy-Hare — extras/*.py + extras/mmu/*.py
-          mkdir -p "$KLIPPER_EXTRAS/mmu"
-          for f in vendor/happy-hare/extras/*.py; do
-            ln -sf "$PWD/$f" "$KLIPPER_EXTRAS/$(basename "$f")"
-          done
-          for f in vendor/happy-hare/extras/mmu/*.py; do
-            ln -sf "$PWD/$f" "$KLIPPER_EXTRAS/mmu/$(basename "$f")"
-          done
-          echo "Symlinked extras:"
-          ls -la "$KLIPPER_EXTRAS/probe_eddy_ng.py" "$KLIPPER_EXTRAS/ldc1612_ng.py" "$KLIPPER_EXTRAS/mmu_machine.py" "$KLIPPER_EXTRAS/mmu/mmu.py"
+          sed -i '/^\[include mmu\//d' config/printer.cfg
+          echo "Post-strip [include] lines in printer.cfg:"
+          grep -n '^\[include' config/printer.cfg || true
       - name: Run test_klippy.py against tests/voron-2-611.test
         # `shell: bash` enables `-eo pipefail` by default. Without it,
         # GitHub Actions runs `bash -e {0}` (no pipefail), so `tee`'s
@@ -96,7 +90,7 @@ jobs:
         shell: bash
         working-directory: vendor/klipper
         run: |
-          python scripts/test_klippy.py -v -d ../../tests/dict ../../tests/voron-2-611.test 2>&1 | tee klippy-test.log
+          python scripts/test_klippy.py -d ../../tests/dict ../../tests/voron-2-611.test 2>&1 | tee klippy-test.log
       - name: Upload klippy log on failure
         if: failure()
         uses: actions/upload-artifact@v4
