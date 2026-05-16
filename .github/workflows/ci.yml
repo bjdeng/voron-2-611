@@ -81,6 +81,21 @@ jobs:
           done
           echo "Symlinked extras:"
           ls -la "$KLIPPER_EXTRAS/probe_eddy_ng.py" "$KLIPPER_EXTRAS/ldc1612_ng.py" "$KLIPPER_EXTRAS/mmu_machine.py" "$KLIPPER_EXTRAS/mmu/mmu.py"
+      - name: Seed tap_threshold in SAVE_CONFIG (no calibration in CI)
+        # PRINT_START guards against running without a calibrated tap_threshold
+        # (config/macros/print_start.cfg:30-31). CI has no calibration so the
+        # guard fires when test_klippy walks the macro graph. Append a synthetic
+        # SAVE_CONFIG entry — Klipper merges this into the live config at parse
+        # time and the guard sees a positive value. Any value > 0 works for
+        # the smoke test; we use the actual on-printer calibration (2419.384)
+        # so future debugging of CI vs. real-machine state diffs is easier.
+        shell: bash
+        run: |
+          set -euo pipefail
+          # printf avoids YAML-indentation leakage into the heredoc body —
+          # Klipper requires SAVE_CONFIG lines to start with `#*#` at col 0.
+          printf '#*# [probe_eddy_current btt_eddy]\n#*# tap_threshold = 2419.384\n' >> config/printer.cfg
+          tail -3 config/printer.cfg
       - name: Strip MMU surface area from test config (Happy-Hare incompat)
         # Happy-Hare's mmu.py:_setup_logging assumes printer.start_args['log_file']
         # is (a) always present and (b) absolute. Under test_klippy.py both
