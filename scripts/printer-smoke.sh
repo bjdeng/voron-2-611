@@ -29,8 +29,11 @@ PI_API="${PI_API:-http://mainsailos.local:7125}"
 # exercises a different surface:
 #   G28           — full home; runs safe_z_home → Eddy probe at runtime.
 #                   Catches probe-state regressions, missing tap_threshold
-#                   guards, kinematics misconfig.
-#   QUERY_PROBE   — sanity-checks the probe object is defined and queryable.
+#                   guards, kinematics misconfig. G28 alone exercises the
+#                   probe end-to-end (descend, measure, return), so a
+#                   separate QUERY_PROBE check is redundant — and native
+#                   [probe_eddy_current] doesn't implement QUERY_PROBE
+#                   anyway ("Probe does not support QUERY_PROBE" at runtime).
 #   PARKCENTER    — exercises one of our custom park macros end-to-end.
 #                   Catches macro→macro reference rot at render time.
 #   OFF           — exercises the all-off shutdown sequence (heaters off,
@@ -41,7 +44,6 @@ PI_API="${PI_API:-http://mainsailos.local:7125}"
 # Joined with \n; Moonraker /printer/gcode/script runs the whole batch
 # atomically and only returns once every line completes (or one errors).
 SMOKE_GCODE='G28
-QUERY_PROBE
 PARKCENTER
 OFF
 _RESETSPEEDS'
