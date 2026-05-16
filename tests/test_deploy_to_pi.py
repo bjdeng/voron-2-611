@@ -235,7 +235,7 @@ def test_drift_gate_passes_when_pi_matches_last_deploy_even_if_repo_ahead():
     Pi vs `git show <last-deploy-sha>:config/printer.cfg` — match — pass.
     """
     marker = "#*# <---------------------- SAVE_CONFIG ---------------------->"
-    old_deployed_body = "[printer]\n" "max_velocity: 450\n" "# previous content\n"
+    old_deployed_body = "[printer]\nmax_velocity: 450\n# previous content\n"
     # Pi matches the OLD deployed body (it was deployed but no Mainsail edits since).
     fake_pi_cfg = old_deployed_body + marker + "\n#*# [heater_bed]\n"
     r = _run(
@@ -258,10 +258,10 @@ def test_drift_gate_fires_when_pi_diverges_from_last_deploy():
     moved on (we don't know if Pi's edits are captured upstream).
     """
     marker = "#*# <---------------------- SAVE_CONFIG ---------------------->"
-    old_deployed_body = "[printer]\n" "max_velocity: 450\n"
+    old_deployed_body = "[printer]\nmax_velocity: 450\n"
     # Pi has UNSYNCED edits (max_velocity changed via Mainsail).
     fake_pi_cfg = (
-        ("[printer]\n" "max_velocity: 999   # someone-edited-on-pi\n")
+        ("[printer]\nmax_velocity: 999   # someone-edited-on-pi\n")
         + marker
         + "\n#*# [heater_bed]\n"
     )
@@ -692,10 +692,12 @@ def test_smoke_gcode_sequence_does_not_include_unsupported_commands():
     smoke_value_block = smoke_script.split("SMOKE_GCODE=(", 1)[1].split(")", 1)[0]
     # Strip wrapping quotes so the equality check below operates on bare
     # gcode tokens regardless of how the array entries are quoted.
-    smoke_tokens = [tok.strip().strip("'").strip('"') for tok in smoke_value_block.split()]
+    smoke_tokens = [
+        tok.strip().strip("'").strip('"') for tok in smoke_value_block.split()
+    ]
     # Forbid commands known not to work on this build.
     forbidden = ["QUERY_PROBE"]  # add others here if we discover more
     for cmd in forbidden:
-        assert (
-            cmd not in smoke_tokens
-        ), f"{cmd} re-introduced into SMOKE_GCODE — see PR #46 for why this fails on hardware"
+        assert cmd not in smoke_tokens, (
+            f"{cmd} re-introduced into SMOKE_GCODE — see PR #46 for why this fails on hardware"
+        )
