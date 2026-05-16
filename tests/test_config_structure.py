@@ -13,6 +13,7 @@ This file is created in Phase 1 of the refactor with one initial assertion
 
 from __future__ import annotations
 
+import glob
 import re
 from pathlib import Path
 
@@ -77,19 +78,12 @@ def test_no_deprecated_klipper_config_keys() -> None:
     )
 
 
-# ---------------------------------------------------------------------------
-# Phase 4 PR-A: macro description coverage, duplicate section, single-extruder
-# ---------------------------------------------------------------------------
-
-import glob  # noqa: E402  (kept local to PR-A block for clarity)
-
 OWNED_MACRO_FILES = sorted(glob.glob(str(REPO_ROOT / "config/macros/*.cfg"))) + [
     str(REPO_ROOT / "config/eddy.cfg"),
 ]
 
 
 def _parse_macros(cfg_path):
-    """Yield (macro_name, body_lines, description_present_bool) tuples."""
     text = Path(cfg_path).read_text()
     section_re = re.compile(r"^\[gcode_macro\s+(\S+)\]\s*$", re.MULTILINE)
     matches = list(section_re.finditer(text))
@@ -111,8 +105,8 @@ def test_every_owned_macro_has_description():
         for name, _body, has_desc in _parse_macros(cfg):
             if not has_desc:
                 missing.append(f"{Path(cfg).relative_to(REPO_ROOT)}::{name}")
-    assert not missing, (
-        f"{len(missing)} macros without description: " + ", ".join(missing)
+    assert not missing, f"{len(missing)} macros without description: " + ", ".join(
+        missing
     )
 
 
