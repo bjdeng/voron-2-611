@@ -18,7 +18,7 @@
 
 - [ ] **Step 0.1: Confirm operator availability**
 
-Operator must be at the printer for: servo inspection (Task 2), toolhead measurement (Task 7), gear gate-0 calibration (Task 9). Estimated total operator time at the printer: ~45 minutes. Other tasks can be Claude-only over SSH.
+Operator must be at the printer for: servo inspection (Task 2), gear gate-0 calibration (Task 8), toolhead cal standby (Task 11). Estimated total operator time at the printer: ~30 minutes. Other tasks can be Claude-only over SSH.
 
 - [ ] **Step 0.2: Confirm printer is idle**
 
@@ -58,7 +58,7 @@ nothing to commit, working tree clean
 
 ## Task 2: Servo inspection (OPERATOR)
 
-**Files:** (none yet; observations logged in Task 7's troubleshooting-log update)
+**Files:** (none)
 
 - [ ] **Step 1: Open the MMU enclosure**
 
@@ -120,7 +120,7 @@ Expected: file listed with non-zero size.
 
 - [ ] **Step 4: Pull current `mmu_vars.cfg` into the repo as a snapshot baseline**
 
-In Claude session: invoke `/sync-from-pi`. Inspect the diff; if Pi-side stats reset propagated, accept. Do NOT commit yet — Task 17 commits the post-cal version.
+In Claude session: invoke `/sync-from-pi`. Inspect the diff; if Pi-side stats reset propagated, accept. Do NOT commit yet — Task 16 commits the post-cal version.
 
 ---
 
@@ -237,7 +237,7 @@ Restart impact: RESTART only.
 - [x] `pr-review-toolkit:review-pr` — no blocking findings
 - [ ] CI green
 - [ ] Post-merge: `/deploy-to-pi` (without `--smoke` — printer is mid-procedure)
-- [ ] Post-deploy: `MMU_CALIBRATE_GEAR` is no longer rejected with "skip_cal_rotation_distance is set" (verified in Task 9)
+- [ ] Post-deploy: `MMU_CALIBRATE_GEAR` is no longer rejected with "skip_cal_rotation_distance is set" (verified in Task 8)
 
 Refs: #15
 
@@ -273,7 +273,7 @@ curl -X POST 'http://mainsailos.local:7125/printer/gcode/script' \
   -d '{"script":"MMU_TEST_CONFIG AUTOCAL_BOWDEN_LENGTH=0"}'
 ```
 
-Expected: `{"result":"ok"}`. Klipper's runtime config now has the flag off; the saved value in `mmu_parameters.cfg` is unchanged (will be re-enabled by `MMU_TEST_CONFIG AUTOCAL_BOWDEN_LENGTH=1` in Task 13).
+Expected: `{"result":"ok"}`. Klipper's runtime config now has the flag off; the saved value in `mmu_parameters.cfg` is unchanged (will be re-enabled by `MMU_TEST_CONFIG AUTOCAL_BOWDEN_LENGTH=1` in Task 12).
 
 ---
 
@@ -305,58 +305,7 @@ Expected output in `mmu.log`: clean status display, no pauses, no errors, all 6 
 
 ---
 
-## Task 7: Manual toolhead-triplet measurement (OPERATOR)
-
-**Files:**
-- Append: `memory/troubleshooting-log.md`
-
-- [ ] **Step 1: Measure with calipers**
-
-With the toolhead accessible (printer powered off if you need to remove panels), measure:
-
-1. **`toolhead_extruder_to_nozzle`** — distance from the extruder drive-gear meshing point (where the gears grip the filament) to the nozzle tip. Saved: `102.1`.
-2. **`toolhead_sensor_to_nozzle`** — distance from the toolhead filament-sensor trigger point (the optical/microswitch flag that goes high when filament is present) to the nozzle tip. Saved: `79.1`.
-3. **`toolhead_entry_to_extruder`** — distance from the entry sensor trigger point to where the extruder gears grip. Saved: `9.9`.
-
-Record numbers as measured (don't round in your head).
-
-- [ ] **Step 2: Compare measured vs saved**
-
-If any measured value differs from saved by **>1 mm**, that constant must be updated. Note which.
-
-- [ ] **Step 3: Append measurements to `memory/troubleshooting-log.md`**
-
-Use the Edit tool to append a new entry at the end of the file:
-
-```markdown
-
-## 2026-05-17 — MMU recalibration session (issue #15)
-
-### Toolhead-triplet measurement (Task 7)
-
-| Constant | Saved | Measured | Δ |
-|---|---|---|---|
-| toolhead_extruder_to_nozzle | 102.1 | <measured> | <delta> |
-| toolhead_sensor_to_nozzle | 79.1 | <measured> | <delta> |
-| toolhead_entry_to_extruder | 9.9 | <measured> | <delta> |
-
-Action: <"all within 1mm — proceed without 4.6" | "deviation on <constant> — run MMU_CALIBRATE_TOOLHEAD CLEAN=1 in Task 12">
-```
-
-Fill in actual measured numbers + the action decision.
-
-- [ ] **Step 4: Commit the log entry**
-
-```bash
-git add memory/troubleshooting-log.md
-git commit -m "docs(memory): record toolhead measurements for issue #15 recal session"
-```
-
-(This commit can land on the worktree branch and follow-up to main after the calibration session closes.)
-
----
-
-## Task 8: Encoder resolution verification (Claude)
+## Task 7: Encoder resolution verification (Claude)
 
 **Files:** (none; runtime cal command, mmu_vars.cfg potentially rewritten)
 
@@ -391,11 +340,11 @@ curl -X POST 'http://mainsailos.local:7125/printer/gcode/script' \
   -d '{"script":"MMU_CALIBRATE_ENCODER LENGTH=500 REPEATS=5 SAVE=1"}'
 ```
 
-Klipper will trigger `SAVE_CONFIG` and restart automatically. Wait for `/printer/info` to report `state=ready` before proceeding to Task 9.
+Klipper will trigger `SAVE_CONFIG` and restart automatically. Wait for `/printer/info` to report `state=ready` before proceeding to Task 8.
 
 ---
 
-## Task 9: Gear rotation distance, gate 0 (OPERATOR)
+## Task 8: Gear rotation distance, gate 0 (OPERATOR)
 
 **Files:** (none; cal command rewrites mmu_vars.cfg)
 
@@ -447,7 +396,7 @@ Expected: the first entry in the list has changed from `23.6262` to a new value 
 
 ---
 
-## Task 10: Per-gate RDs (Claude)
+## Task 9: Per-gate RDs (Claude)
 
 **Files:** (none; cal command rewrites mmu_vars.cfg)
 
@@ -471,13 +420,13 @@ Expected: all 6 entries reflect fresh measurements. Compute the spread: `(max - 
 
 - [ ] **Step 3: Decision — proceed or branch**
 
-- **Spread <1%:** proceed to Task 11.
+- **Spread <1%:** proceed to Task 10.
 - **Spread ≥1% with one specific gate as the outlier:** that gate has a mechanical issue (see spec section 6). Stop and inspect that gate physically (drive gear teeth, grub screw, lint).
-- **Spread ≥1% uniformly:** encoder is unreliable. Return to Task 8 with `REPEATS=10`, or inspect the encoder wheel.
+- **Spread ≥1% uniformly:** encoder is unreliable. Return to Task 7 with `REPEATS=10`, or inspect the encoder wheel.
 
 ---
 
-## Task 11: Bowden length (Claude)
+## Task 10: Bowden length (Claude)
 
 **Files:** (none; cal command rewrites mmu_vars.cfg)
 
@@ -497,22 +446,17 @@ curl -X POST 'http://mainsailos.local:7125/printer/gcode/script' \
 ssh pi@mainsailos.local "grep mmu_calibration_bowden_lengths ~/printer_data/config/mmu_vars.cfg"
 ```
 
-Expected: a list of 6 values close to each other (HH typically writes the same value to all gates). If they differ wildly, the encoder is unreliable — return to Task 8.
+Expected: a list of 6 values close to each other (HH typically writes the same value to all gates). If they differ wildly, the encoder is unreliable — return to Task 7.
 
 ---
 
-## Task 12: Toolhead constants via HH (conditional, OPERATOR + Claude)
+## Task 11: Toolhead constants via HH (OPERATOR + Claude)
 
 **Files:** (none; cal command rewrites mmu_vars.cfg)
 
-- [ ] **Step 1: Decision — run or skip**
+Always run. HH's auto-derived values replace the current CAD-based saved triplet (`102.1` / `79.1` / `9.9`). Per spec section 4: if HH's result diverges sharply (>5mm) from CAD, the cal failed — re-run.
 
-Read the action decision recorded in Task 7 Step 3.
-
-- **Action was "all within 1mm — proceed without 4.6":** skip this task; go to Task 13.
-- **Action was "deviation on <constant> — run MMU_CALIBRATE_TOOLHEAD":** continue to Step 2.
-
-- [ ] **Step 2: Preheat hotend (toolhead cal needs filament in extruder)**
+- [ ] **Step 1: Preheat hotend (toolhead cal needs filament in extruder)**
 
 ```bash
 curl -X POST 'http://mainsailos.local:7125/printer/gcode/script' \
@@ -522,7 +466,7 @@ curl -X POST 'http://mainsailos.local:7125/printer/gcode/script' \
 
 Wait ~3 minutes for hotend to reach 210 °C.
 
-- [ ] **Step 3: Run the CLEAN phase**
+- [ ] **Step 2: Run the CLEAN phase**
 
 ```bash
 curl -X POST 'http://mainsailos.local:7125/printer/gcode/script' \
@@ -532,6 +476,17 @@ curl -X POST 'http://mainsailos.local:7125/printer/gcode/script' \
 
 Operator stands by; this fires `G28` and moves filament. Measures `toolhead_extruder_to_nozzle` + `toolhead_sensor_to_nozzle`.
 
+- [ ] **Step 3: Sanity-check the CLEAN result**
+
+```bash
+ssh pi@mainsailos.local "grep -E 'toolhead_extruder_to_nozzle|toolhead_sensor_to_nozzle' ~/printer_data/config/printer.cfg ~/printer_data/config/mmu_parameters.cfg | tail -10"
+```
+
+Compare HH's new values to CAD (`extruder_to_nozzle: 102.1`, `sensor_to_nozzle: 79.1`).
+
+- **Within 5mm of CAD:** accept HH's values; proceed to Step 4.
+- **Diverged >5mm from CAD:** HH's cal probably failed. Re-run Step 2 once more. If second run also diverges, stop and inspect the toolhead sensor wiring before continuing.
+
 - [ ] **Step 4: Run the DIRTY phase**
 
 ```bash
@@ -540,7 +495,7 @@ curl -X POST 'http://mainsailos.local:7125/printer/gcode/script' \
   -d '{"script":"MMU_CALIBRATE_TOOLHEAD DIRTY=1"}'
 ```
 
-Measures `toolhead_residual_filament`. Compare result to current `23` — this is one of the suspect values from the spec drift-audit. Note the new value.
+Measures `toolhead_residual_filament`. Compare result to current `23` — this was flagged as suspect in the spec drift-audit (HH upstream default 0). Note the new value.
 
 - [ ] **Step 5 (optional): Run the CUT phase**
 
@@ -562,7 +517,7 @@ curl -X POST 'http://mainsailos.local:7125/printer/gcode/script' \
 
 ---
 
-## Task 13: Re-enable `autocal_bowden_length` (Claude)
+## Task 12: Re-enable `autocal_bowden_length` (Claude)
 
 **Files:** (none; runtime change)
 
@@ -578,7 +533,7 @@ Expected: `{"result":"ok"}`. Klipper runtime config back in sync with `mmu_param
 
 ---
 
-## Task 14: Reset failure stats (Claude)
+## Task 13: Reset failure stats (Claude)
 
 **Files:** (none; runtime change)
 
@@ -590,11 +545,11 @@ curl -X POST 'http://mainsailos.local:7125/printer/gcode/script' \
   -d '{"script":"MMU_STATS RESET=1"}'
 ```
 
-Per-gate failure counts are now zero. Fresh stats starting from the validation soak in Task 15.
+Per-gate failure counts are now zero. Fresh stats starting from the validation soak in Task 14.
 
 ---
 
-## Task 15: Validation soak — Pass 1, MMU-only (Claude)
+## Task 14: Validation soak — Pass 1, MMU-only (Claude)
 
 **Files:** (none; runtime command)
 
@@ -626,14 +581,14 @@ Compute: total load failures across 18 sequences (3 loops × 6 gates).
 
 - [ ] **Step 4: Decision**
 
-- **0 failures:** proceed to Task 16.
-- **1–2 failures (≤2% of 18):** proceed to Task 16. Pass 1 met criterion.
+- **0 failures:** proceed to Task 15.
+- **1–2 failures (≤2% of 18):** proceed to Task 15. Pass 1 met criterion.
 - **≥3 failures, one specific gate dominates:** see spec section 6 branch "Pass 1 fails uniformly across gates" → false alarm; the branch for one-gate-dominant is "that gate is mechanically different (selector misalignment, gate endstop drift)" — run `MMU_CHECK_GATE GATE=N`.
-- **≥3 failures, uniform across gates:** toolhead constants are still wrong. Re-run Task 7 (manual measurement, more carefully) or Task 12 with all three phases.
+- **≥3 failures, uniform across gates:** toolhead constants from Task 11 are wrong or HH's cal failed. Re-run Task 11 with all three phases (`CLEAN`, `DIRTY`, `CUT`); compare HH's output against CAD (102.1/79.1/9.9).
 
 ---
 
-## Task 16: Validation soak — Pass 2, full hot extruder-engaged (Claude + OPERATOR)
+## Task 15: Validation soak — Pass 2, full hot extruder-engaged (Claude + OPERATOR)
 
 **Files:** (none; runtime command)
 
@@ -677,12 +632,12 @@ ssh pi@mainsailos.local "grep -E 'mmu_statistics_gate_[0-5]' ~/printer_data/conf
 
 - [ ] **Step 5: Decision**
 
-- **≤1 failure across 12 sequences:** Pass 2 met criterion. Proceed to Task 17.
+- **≤1 failure across 12 sequences:** Pass 2 met criterion. Proceed to Task 16.
 - **>1 failure:** branch per spec section 6.
 
 ---
 
-## Task 17: Commit post-cal `mmu_vars.cfg` to main (Claude)
+## Task 16: Commit post-cal `mmu_vars.cfg` to main (Claude)
 
 **Files:**
 - Modify (will be rewritten by sync): `config/mmu/mmu_vars.cfg`
@@ -710,7 +665,7 @@ In Claude session: invoke `/sync-from-pi`. The skill will diff Pi vs repo; expec
 
 ```markdown
 
-### Post-cal stats (Task 15 + 16)
+### Post-cal stats (Task 14 + 15)
 
 - Pass 1 (LOOP=3 FULL=0): <N> failures across 18 sequences (<rate>%)
 - Pass 2 (LOOP=2 FULL=1 RANDOM=1): <N> failures across 12 sequences (<rate>%)
@@ -755,7 +710,7 @@ gh issue close 15 --comment "Closed by <commit-sha>. Two-pass validation soak gr
 
 ---
 
-## Task 18 (optional, deferrable): Drift cleanup (Claude)
+## Task 17 (optional, deferrable): Drift cleanup (Claude)
 
 Defer this until at least one successful multi-color print has shipped post-cal. Treat as a separate PR.
 
@@ -764,7 +719,7 @@ Defer this until at least one successful multi-color print has shipped post-cal.
 
 - [ ] **Step 1: Read the post-cal `toolhead_residual_filament` value**
 
-If Task 12 was run (`DIRTY=1`), HH derived a fresh value. Compare to the original `23`:
+Task 11's `DIRTY=1` step derives a fresh value for `toolhead_residual_filament`. Compare HH's saved value to the original `23`:
 
 ```bash
 grep "^toolhead_residual_filament:" config/mmu/base/mmu_parameters.cfg
@@ -772,7 +727,7 @@ grep "^toolhead_residual_filament:" config/mmu/base/mmu_parameters.cfg
 
 If the cal-derived value differs from `23`, update `mmu_parameters.cfg` to match.
 
-- [ ] **Step 2 (skip if Task 12 didn't run): Update `toolhead_residual_filament`**
+- [ ] **Step 2: Update `toolhead_residual_filament`**
 
 Use the Edit tool to set the new value with a comment noting the cal date.
 
@@ -794,8 +749,8 @@ gh pr create --title "chore(mmu): align toolhead_residual_filament with post-cal
 
 17 tasks. Of those:
 
-- **3 are normal repo changes:** Task 4 (flag flips PR), Task 17 (post-cal mmu_vars.cfg + memory log commit direct-to-main), Task 18 (optional drift cleanup PR).
-- **3 are operator-physical:** Task 2 (servo inspection), Task 7 (caliper measurements), Task 9 (gear gate-0 cal mark + measure).
+- **3 are normal repo changes:** Task 4 (flag flips PR), Task 16 (post-cal mmu_vars.cfg + memory log commit direct-to-main), Task 17 (optional drift cleanup PR).
+- **3 are operator-physical / standby:** Task 2 (servo inspection), Task 8 (gear gate-0 cal mark + measure), Task 11 (toolhead cal — operator standby while HH runs).
 - **The rest are Claude-orchestrated Moonraker + SSH + sync-from-pi steps.**
 
 Estimated wall-clock time: ~75 minutes if everything passes first try (45 minutes operator-at-printer, 30 minutes monitoring).

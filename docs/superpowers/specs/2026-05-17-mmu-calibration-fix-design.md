@@ -108,17 +108,9 @@ Confirm clean ready state before any cal command. Bail if anything's red.
 
 Run in this order — each step's correctness depends on the prior step's saved values.
 
-### 4.1 Manual toolhead-triplet measurement (cheap; no MMU operations)
+The current toolhead distance triplet (`toolhead_extruder_to_nozzle: 102.1`, `toolhead_sensor_to_nozzle: 79.1`, `toolhead_entry_to_extruder: 9.9`) was measured in CAD from the current hardware. Rather than re-measure with calipers (which adds operator burden and is unlikely to be more accurate than CAD), we accept HH's auto-derived values in 4.5 as the field truth. If HH's result diverges sharply from CAD (>5mm), that's a signal that HH's cal failed, not that CAD was wrong — re-run with `REPEATS` bumped or inspect.
 
-With the toolhead accessible, measure with calipers:
-
-- **`toolhead_extruder_to_nozzle`** — extruder drive-gear meshing point → nozzle tip. Current saved: `102.1`.
-- **`toolhead_sensor_to_nozzle`** — toolhead filament-sensor trigger point → nozzle tip. Current saved: `79.1`.
-- **`toolhead_entry_to_extruder`** — entry sensor trigger point → extruder gears. Current saved: `9.9`.
-
-Record measurements in `memory/troubleshooting-log.md`. If any value deviates **>1mm**, that constant is suspect and 4.6 must update it (manually patch the value or let HH derive it).
-
-### 4.2 Encoder resolution
+### 4.1 Encoder resolution
 
 ```
 MMU_CALIBRATE_ENCODER LENGTH=500 REPEATS=5 SAVE=0
@@ -126,7 +118,7 @@ MMU_CALIBRATE_ENCODER LENGTH=500 REPEATS=5 SAVE=0
 
 Compare the measured resolution to the saved `0.998752`. If drift is **<1%**, leave as-is. If **≥1%**, re-run with `SAVE=1`. Drift here means either wheel slip or stepper-RD baseline is off.
 
-### 4.3 Gear rotation distance, gate 0 only
+### 4.2 Gear rotation distance, gate 0 only
 
 ```
 MMU_CALIBRATE_GEAR LENGTH=100 MEASURED=<measured_actual_mm>
@@ -134,7 +126,7 @@ MMU_CALIBRATE_GEAR LENGTH=100 MEASURED=<measured_actual_mm>
 
 Push 100mm of commanded filament, measure with calipers what actually came out, feed back. Gate 0 becomes the reference for all per-gate calibrations.
 
-### 4.4 Per-gate RDs
+### 4.3 Per-gate RDs
 
 ```
 MMU_CALIBRATE_GATES GATE=ALL
@@ -142,7 +134,7 @@ MMU_CALIBRATE_GATES GATE=ALL
 
 Uses the freshly-calibrated gate 0 RD + encoder resolution as the reference; sweeps each gate (1–5) and computes its RD against that reference. **Expected outcome:** the current 3.6% spread should narrow to <1%. If a particular gate still shows >1% RD deviation from gate 0 after this, that gate has a mechanical issue (drive gear lint, slipped grub screw, worn teeth) — see Section 6.
 
-### 4.5 Bowden length
+### 4.4 Bowden length
 
 ```
 MMU_CALIBRATE_BOWDEN GATE=0 BOWDEN_LENGTH=1019.4 REPEATS=3
@@ -150,9 +142,9 @@ MMU_CALIBRATE_BOWDEN GATE=0 BOWDEN_LENGTH=1019.4 REPEATS=3
 
 Current `1019.4` is a fine starting estimate; HH iterates until it converges. Saved per-gate, typically identical (bowden tube is physical and shared across gates).
 
-### 4.6 Toolhead constants via HH
+### 4.5 Toolhead constants via HH
 
-Only if 4.1 showed disagreement, or you want a numeric HH-derived value:
+Always run — replaces the CAD values with HH's field-measured values:
 
 ```
 MMU_CALIBRATE_TOOLHEAD CLEAN=1   # toolhead_extruder_to_nozzle + toolhead_sensor_to_nozzle
@@ -211,9 +203,9 @@ If both passes are green, close issue #15 with a comment linking the recal commi
 
 ## 6. What if it doesn't work (failure-class branches)
 
-- **4.4 per-gate cal can't converge for one specific gate** → mechanical issue at that gate. Inspect drive gear (lint, slipped grub screw, worn teeth). Don't paper over with a hand-set RD.
-- **4.5 bowden cal oscillates / "Bowden move outside tolerance"** → encoder is unreliable. Re-run 4.2 with more REPEATS, or inspect the encoder wheel.
-- **Pass 1 fails uniformly across gates** → toolhead constants are still wrong. Re-do 4.1 with sharper measurement or run 4.6 with all three phases (`CLEAN`, `DIRTY`, `CUT`).
+- **4.3 per-gate cal can't converge for one specific gate** → mechanical issue at that gate. Inspect drive gear (lint, slipped grub screw, worn teeth). Don't paper over with a hand-set RD.
+- **4.4 bowden cal oscillates / "Bowden move outside tolerance"** → encoder is unreliable. Re-run 4.1 with more REPEATS, or inspect the encoder wheel.
+- **Pass 1 fails uniformly across gates** → toolhead constants from 4.5 are wrong or HH's cal failed. Compare HH's saved triplet to the CAD values (102.1 / 79.1 / 9.9); if HH's values are sharply different (>5mm), HH cal failed — re-run 4.5 with all three phases (`CLEAN`, `DIRTY`, `CUT`) and inspect the toolhead sensor wiring. Otherwise the saved value is correct and the failure cause is elsewhere.
 - **Pass 2 fails on one specific gate only** → that gate is mechanically different (selector misalignment, gate endstop drift). Run `MMU_CHECK_GATE GATE=N` to surface the discrepancy.
 - **Servo failures recur after fresh inspection** → replace the servo. ERCF v2 servo arms are a known consumable.
 
@@ -223,7 +215,7 @@ If none of those fit, capture both `klippy.log` and `mmu.log` from a failed sequ
 
 Once 5.4 is green, the following config oddballs in `mmu_parameters.cfg` are worth a closer look — each in a separate small commit, **not bundled** with the calibration PR:
 
-- **`toolhead_residual_filament: 23`** — HH upstream default is 0. 23mm of residual is a lot for a cut-tip workflow. If 4.6's `DIRTY=1` derives a different number, take HH's. Otherwise measure post-tip-cut.
+- **`toolhead_residual_filament: 23`** — HH upstream default is 0. 23mm of residual is a lot for a cut-tip workflow. 4.5's `DIRTY=1` derives this value, so post-cal it should be whatever HH wrote.
 - **`gear_from_buffer_accel: 100`** — upstream default 400; ours is unusually low. If reliability holds after recal, try bumping to 200 and measure. Out of scope for the cal fix itself.
 - **`bowden_apply_correction: 1`** — enables encoder-based bowden correction. With a freshly-calibrated encoder this is fine; if the encoder bias from Diagnosis D persists post-recal, consider turning it off temporarily to see if reliability improves.
 
