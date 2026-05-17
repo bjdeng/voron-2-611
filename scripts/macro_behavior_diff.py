@@ -72,6 +72,8 @@ def _strip_mmu_includes(src: Path, dst: Path) -> None:
     Matches the CI klippy-smoke job (.github/workflows/ci.yml). Happy-Hare's
     mmu.py crashes at handle_connect under test_klippy.py.
     """
+    if not src.exists():
+        raise FileNotFoundError(f"Expected printer config at {src} (REPO root: {REPO})")
     lines = src.read_text().splitlines(keepends=True)
     filtered = [ln for ln in lines if not ln.startswith("[include mmu/")]
     dst.write_text("".join(filtered))
@@ -108,9 +110,13 @@ def main() -> int:
 
     # test_klippy.py leaves _test_.log / _test_output* behind on failure,
     # and Klipper's logger appends rather than truncates — without cleanup
-    # the snapshot grows with each run. Clear stale artifacts.
+    # the snapshot grows with each run. Clear stale artifacts. missing_ok
+    # tolerates the race where a concurrent `before`/`after` run unlinks
+    # the same path between glob and unlink (concurrent invocations are
+    # still not safe overall — they share the cwd — but at least the
+    # cleanup doesn't crash).
     for stale in KLIPPER_DIR.glob("_test_*"):
-        stale.unlink()
+        stale.unlink(missing_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="layer7-") as tmp:
         staging = Path(tmp)
@@ -152,11 +158,18 @@ def main() -> int:
     )
     out.write_text(snapshot)
     print(f"Wrote {out} (test_klippy exit={proc.returncode})")
-    # Return 0 on successful capture regardless of test_klippy.py's exit
-    # code — gcode execution will fail under test_klippy.py without
-    # calibration data (probe_eddy_current, kinematic home), but the
-    # captured stdout/stderr is still the artifact we diff. Both
-    # before/after runs fail the same way; the diff is the signal.
+    # Distinguish "gcode failed mid-execution" (expected — no calibration
+    # data in CI) from "klippy never started" (test_klippy.py / docker /
+    # vendor/klipper unhealthy). A successful start always emits "Start
+    # printer at " on stdout; if that marker is missing, the snapshot is
+    # near-empty and would falsely diff clean against another bad run.
+    if "Start printer at" not in proc.stdout:
+        print(
+            "ERROR: klippy did not reach start — snapshot is unusable. "
+            "Check test_klippy.py output above.",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
