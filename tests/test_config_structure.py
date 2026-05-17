@@ -161,14 +161,22 @@ def _user_variable_definitions():
 
 
 def _user_variable_refs():
-    """Return set of `variable_X` names referenced anywhere in our owned macros."""
+    """Return set of `variable_X` names referenced anywhere in our owned macros.
+
+    Skips Klipper `#` config-style comments line-by-line so docstring
+    examples in cfg files (e.g. "consumers read via _USER_VARIABLE.X")
+    don't false-trigger the tripwire. Jinja-side references inside macro
+    bodies still resolve normally — they live before any `#`.
+    """
     refs = set()
     files = list(OWNED_MACRO_FILES) + [str(USER_VAR_FILE)]
     for cfg in files:
         if not Path(cfg).exists():
             continue
-        for m in USER_VAR_REF_RE.finditer(Path(cfg).read_text()):
-            refs.add(m.group(1))
+        for raw in Path(cfg).read_text().splitlines():
+            non_comment = raw.split("#", 1)[0]
+            for m in USER_VAR_REF_RE.finditer(non_comment):
+                refs.add(m.group(1))
     return refs
 
 
