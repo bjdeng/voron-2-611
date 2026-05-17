@@ -28,6 +28,17 @@ Symptoms encountered, root cause when found, and the fix that worked. Newest at 
 
 ## Resolved
 
+### 2026-05-17 — MMU load/unload failures (issue #15) — calibration drift
+- **Symptoms:** load failure rates 3.9%–19.7% across gates. Gates 0–1 at ~5%; gates 2–5 at 14–20%. Pattern tracked a 3.6% spread in `mmu_gear_rotation_distances` (gates 0–1 clustered at ~23.7, gates 2–5 at 22.9–23.4) — too clean to be random.
+- **Diagnosis:** per-gate gear RDs had drifted (or were never accurately set for gates 2–5) and HH's auto-correction was structurally inactive: `autotune_rotation_distance: 1` was set but the upstream branch is `False and …`-guarded at `mmu_calibration_manager.py:499`. Re-cal was also blocked: `skip_cal_rotation_distance: 1` was rejecting `MMU_CALIBRATE_GEAR`.
+- **Fix:** PR #57 flipped both flags to 0, then ran the full HH-canonical recalibration sequence: encoder (cal'd against gate 0's caliper-measured RD as the anchor), per-gate gear RDs, bowden length. Encoder resolution corrected from 0.998752 → 0.9699 (-2.9%). Per-gate RDs converged with cal ratios all in 0.9699–0.9724 (very tight).
+- **Validation soak (post-recal stats reset → fresh):**
+  - Pass 1 (`MMU_SOAKTEST_LOAD_SEQUENCE LOOP=3 RANDOM=0 FULL=0`): 0 failures / 18 sequences, quality 98.4%–101.4%, slippage within ±2.3%.
+  - Pass 2 (`LOOP=2 RANDOM=1 FULL=1`, full toolchange w/ cut-tip): 0 failures / 12 sequences, quality 99.2%–100.7%, slippage within ±1.7%.
+  - Combined: 0 failures across 30 sequences (target was ≤2 + ≤1 = ≤3).
+- **Toolhead cal sidebar:** `MMU_CALIBRATE_TOOLHEAD CLEAN=1` ran but the cold-push procedure measured ~21.9–27.7mm for `toolhead_sensor_to_nozzle` regardless of priming attempts — systematic bias unrelated to nozzle position (likely measures to the Filametrix blade rest position, or to wherever cold filament physically stops at 70°C). CAD-derived values (102.1 / 79.1 / 9.9 / 23) kept; HH's cal procedure isn't trustworthy for this toolhead geometry without proper cold-pull conditioning. Revisit only if a real print exposes a load/unload distance symptom.
+- **Open follow-up:** drift cleanup PR (Task 17 of plan, deferred) — only `toolhead_residual_filament: 23` is a candidate, but the DIRTY cal gave a clearly biased 51.4mm so we kept 23 until natural print residue gives us a better measurement.
+
 ### 2026-05-13 — Moonraker missing `[update_manager klipper]` block (non-issue)
 - **Concern:** Initial repo-init review flagged the absence of `[update_manager klipper]` from `config/moonraker.conf` as a potential quirk.
 - **Resolution:** Verified against Moonraker docs (`vendor/moonraker/docs/configuration.md:2017-2026`). Moonraker auto-detects Klipper; the explicit block is only for overriding update channel, pinned commit, or refresh interval. Current behavior is correct.
