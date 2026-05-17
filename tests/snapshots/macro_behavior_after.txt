@@ -1,0 +1,2055 @@
+# Layer 7 macro behavior snapshot — after
+# gcode: ['PARKCENTER', 'BEDFANSSLOW', 'BEDFANSFAST', 'BEDFANSOFF', 'M140 S110', 'M190 S110', 'M109 S240', 'TURN_OFF_HEATERS', 'HEATSOAK T=110 C=30 MOVE=0 WAIT=0', 'PRINT_END', 'OFF']
+# exit=255
+-- STDOUT --
+Starting Klippy...
+Exception on run: Traceback (most recent call last):
+  File "/work/vendor/klipper/klippy/util.py", line 211, in get_git_version
+    process = subprocess.Popen(prog_desc, stdout=subprocess.PIPE,
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/usr/local/lib/python3.11/subprocess.py", line 1955, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: 'git'
+
+Exception on read /work/vendor/klipper/klippy/.version: Traceback (most recent call last):
+  File "/work/vendor/klipper/klippy/util.py", line 56, in _try_read_file
+    with open(filename, 'r') as f:
+         ^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/work/vendor/klipper/klippy/.version'
+
+Exception on read /proc/device-tree/model: Traceback (most recent call last):
+  File "/work/vendor/klipper/klippy/util.py", line 56, in _try_read_file
+    with open(filename, 'r') as f:
+         ^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/proc/device-tree/model'
+
+Exception on read /sys/class/dmi/id/product_name: Traceback (most recent call last):
+  File "/work/vendor/klipper/klippy/util.py", line 56, in _try_read_file
+    with open(filename, 'r') as f:
+         ^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/sys/class/dmi/id/product_name'
+
+Args: ['./klippy/klippy.py', '/tmp/layer7-NORMALIZED/printer.cfg', '-i', './_test_.gcode', '-o', '_test_output', '-v', '-d', '/work/tests/dict/mcu.dict', '-d', 'z=/work/tests/dict/mcu.dict', '-d', 'EBB=/work/tests/dict/ebb-usb.dict', '-d', 'eddy=/work/tests/dict/eddy.dict', '-d', 'mmu=/work/tests/dict/easy-brd.dict', '-l', '_test_.log']
+Git version: '?'
+Branch: ?
+Remote: ?
+Tracked URL: ?
+CPU: 8 core ?
+Device: ?
+Linux: Linux version 6.12.76-linuxkit (root@buildkitsandbox) (gcc (Alpine 15.2.0) 15.2.0, GNU ld (GNU Binutils) 2.45.1) #1 SMP Fri Mar  6 10:10:19 UTC 2026
+Python: '3.11.15 (main, May  8 2026, 20:12:06) [GCC 14.2.0]'
+Start printer at NORMALIZED
+===== Config file =====
+[mcu]
+serial = /dev/serial/by-id/usb-Klipper_lpc1769_05E0FF1627903CAF12CA6D5CC62000F5-if00
+
+[mcu z]
+serial = /dev/serial/by-id/usb-Klipper_lpc1769_1560011845084AAF45F07F5DC52000F5-if00
+
+[printer]
+kinematics = corexy
+max_velocity = 450
+max_accel = 10000
+minimum_cruise_ratio = 0.5
+max_z_velocity = 100
+max_z_accel = 350
+square_corner_velocity = 5.0
+
+[stepper_x]
+step_pin = P2.2
+dir_pin = !P2.6
+enable_pin = !P2.1
+rotation_distance = 40
+microsteps = 128
+full_steps_per_rotation = 200
+endstop_pin = ^EBB:gpio13
+position_min = 0
+position_endstop = 350
+position_max = 350
+homing_speed = 80
+second_homing_speed = 15
+homing_retract_dist = 5
+homing_positive_dir = true
+
+[tmc2209 stepper_x]
+uart_pin = P1.10
+interpolate = False
+run_current = 0.8
+sense_resistor = 0.110
+stealthchop_threshold = 0
+
+[stepper_y]
+step_pin = P0.19
+dir_pin = !P0.20
+enable_pin = !P2.8
+rotation_distance = 40
+microsteps = 128
+full_steps_per_rotation = 200
+endstop_pin = P1.29
+position_min = 0
+position_endstop = 355
+position_max = 355
+homing_speed = 80
+second_homing_speed = 15
+homing_retract_dist = 5
+homing_positive_dir = true
+
+[tmc2209 stepper_y]
+uart_pin = P1.9
+interpolate = False
+run_current = 0.8
+sense_resistor = 0.110
+stealthchop_threshold = 0
+
+[stepper_z]
+step_pin = z:P2.2
+dir_pin = !z:P2.6
+enable_pin = !z:P2.1
+rotation_distance = 40
+gear_ratio = 80:16
+microsteps = 128
+endstop_pin = probe:z_virtual_endstop
+position_max = 330
+position_min = -5
+homing_speed = 15.0
+second_homing_speed = 3.0
+homing_retract_dist = 2.0
+
+[tmc2209 stepper_z]
+uart_pin = z:P1.10
+interpolate = False
+run_current = 0.6
+sense_resistor = 0.110
+stealthchop_threshold = 0
+
+[stepper_z1]
+step_pin = z:P0.19
+dir_pin = z:P0.20
+enable_pin = !z:P2.8
+rotation_distance = 40
+gear_ratio = 80:16
+microsteps = 128
+
+[tmc2209 stepper_z1]
+uart_pin = z:P1.9
+interpolate = False
+run_current = 0.6
+sense_resistor = 0.110
+stealthchop_threshold = 0
+
+[stepper_z2]
+step_pin = z:P0.22
+dir_pin = !z:P2.11
+enable_pin = !z:P0.21
+rotation_distance = 40
+gear_ratio = 80:16
+microsteps = 128
+
+[tmc2209 stepper_z2]
+uart_pin = z:P1.8
+interpolate = False
+run_current = 0.6
+sense_resistor = 0.110
+stealthchop_threshold = 0
+
+[stepper_z3]
+step_pin = z:P2.13
+dir_pin = z:P0.11
+enable_pin = !z:P2.12
+rotation_distance = 40
+gear_ratio = 80:16
+microsteps = 128
+
+[tmc2209 stepper_z3]
+uart_pin = z:P1.4
+interpolate = False
+run_current = 0.6
+sense_resistor = 0.110
+stealthchop_threshold = 0
+
+[input_shaper]
+shaper_type = mzv
+shaper_type_x = mzv
+shaper_freq_x = 51.4
+shaper_type_y = zv
+shaper_freq_y = 37.4
+
+[heater_bed]
+heater_pin = z:P2.3
+sensor_type = NTC 100K MGB18-104F39050L32
+sensor_pin = z:P0.25
+max_power = 0.8
+min_temp = 0
+max_temp = 120
+control = pid
+pid_kp = 44.470
+pid_ki = 1.246
+pid_kd = 396.896
+
+[thermistor 10k_thermistor]
+temperature1 = 25
+resistance1 = 10000
+temperature2 = 45
+resistance2 = 4367
+temperature3 = 75
+resistance3 = 1480
+
+[temperature_fan chamber]
+pin = z:P2.7
+max_power = 0.6
+shutdown_speed = 0
+kick_start_time = 0.5
+cycle_time = 0.03
+sensor_type = 10k_thermistor
+sensor_pin = z:P0.24
+min_temp = 0
+max_temp = 70
+target_temp = 0
+max_speed = 1.0
+min_speed = 0
+control = pid
+hardware_pwm = false
+pid_kp = 40
+pid_ki = 0.2
+pid_kd = 0.1
+pid_deriv_time = 2.0
+gcode_id = C
+
+[heater_fan controller_fan]
+pin = z:P2.4
+max_power = 1.0
+cycle_time = 0.025
+kick_start_time = 0.5
+heater = heater_bed
+heater_temp = 45.0
+fan_speed = 0.25
+shutdown_speed = 1
+
+[temperature_sensor raspberry_pi]
+sensor_type = temperature_host
+min_temp = 0
+max_temp = 100
+
+[output_pin caselight]
+pin = P2.5
+pwm = True
+shutdown_value = 0
+value = 0
+cycle_time = 0.001
+
+[idle_timeout]
+gcode =
+	{% if "xyz" in printer.toolhead.homed_axes %}
+	G91
+	G1 Z5 F18000.0
+	G90
+	G1 X{printer.toolhead.axis_maximum.x} Y{printer.toolhead.axis_maximum.y} F18000.0
+	{% endif %}
+	OFF
+timeout = 7200
+
+[quad_gantry_level]
+gantry_corners =
+	-60, 5
+	410, 425
+points =
+	50, 25
+	50, 275
+	300, 275
+	300, 25
+speed = 450
+horizontal_move_z = 10
+retries = 5
+retry_tolerance = 0.05
+max_adjust = 10
+
+[board_pins]
+aliases =
+
+	EXP1_1=P1.30, EXP1_3=P1.18, EXP1_5=P1.20, EXP1_7=P1.22, EXP1_9=<GND>,
+	EXP1_2=P0.28, EXP1_4=P1.19, EXP1_6=P1.21, EXP1_8=P1.23, EXP1_10=<5V>,
+
+	EXP2_1=P0.17, EXP2_3=P3.26, EXP2_5=P3.25, EXP2_7=P1.31, EXP2_9=<GND>,
+	EXP2_2=P0.15, EXP2_4=P0.16, EXP2_6=P0.18, EXP2_8=<RST>, EXP2_10=<NC>
+
+[display]
+lcd_type = uc1701
+cs_pin = EXP1_3
+a0_pin = EXP1_4
+rst_pin = EXP1_5
+contrast = 63
+encoder_pins = ^EXP2_5, ^EXP2_3
+click_pin = ^!EXP1_2
+display_group = __voron_display
+menu_timeout = 60
+
+[output_pin beeper]
+pin = EXP1_1
+
+[neopixel lcd]
+pin = EXP1_6
+chain_count = 3
+color_order = RGB
+initial_red = 0.4
+initial_green = 0.4
+initial_blue = 0.4
+
+[mcu EBB]
+serial = /dev/serial/by-id/usb-Klipper_rp2040_5044340310C4D61C-if00
+
+[temperature_sensor EBB_NTC]
+sensor_type = Generic 3950
+sensor_pin = EBB:gpio27
+
+[lis2dw]
+cs_pin = EBB:gpio1
+spi_bus = spi0a
+axes_map = z,x,y
+
+[resonance_tester]
+probe_points = 175, 175, 20
+accel_chip = lis2dw
+
+[extruder]
+step_pin = EBB:gpio18
+dir_pin = EBB:gpio19
+enable_pin = !EBB:gpio17
+microsteps = 16
+rotation_distance = 48.033
+full_steps_per_rotation = 200
+gear_ratio = 9:1
+nozzle_diameter = 0.400
+filament_diameter = 1.750
+heater_pin = EBB:gpio7
+sensor_type = Generic 3950
+sensor_pin = EBB:gpio26
+pullup_resistor = 2200
+min_temp = 0
+max_temp = 270
+max_power = 1.0
+min_extrude_temp = 170
+max_extrude_only_distance = 500
+pressure_advance = 0.05
+pressure_advance_smooth_time = 0.040
+control = pid
+pid_kp = 23.507
+pid_ki = 1.059
+pid_kd = 130.460
+
+[tmc2209 extruder]
+uart_pin = EBB:gpio20
+run_current = 0.650
+stealthchop_threshold = 999999
+
+[fan]
+pin = EBB:gpio4
+
+[heater_fan hotend_fan]
+pin = EBB:gpio14
+heater = extruder
+heater_temp = 50.0
+max_power = 1.0
+fan_speed = 1.0
+
+[mcu eddy]
+serial = /dev/serial/by-id/usb-Klipper_rp2040_5044340310B85E1C-if00
+restart_method = command
+
+[probe_eddy_current btt_eddy]
+sensor_type = ldc1612
+i2c_mcu = eddy
+i2c_bus = i2c0f
+x_offset = 0
+y_offset = 21.42
+descend_z = 0.5
+reg_drive_current = 15
+
+[temperature_sensor btt_eddy_mcu]
+sensor_type = temperature_mcu
+sensor_mcu = eddy
+min_temp = 10
+max_temp = 100
+
+[temperature_probe btt_eddy]
+sensor_type = Generic 3950
+sensor_pin = eddy:gpio26
+min_temp = 10
+max_temp = 100
+calibration_position = 175, 175, 3
+calibration_bed_temp = 110
+calibration_extruder_temp = 200
+extruder_heating_z = 30
+max_validation_temp = 110
+
+[bed_mesh]
+horizontal_move_z = 2
+speed = 200
+mesh_min = 15, 21.42
+mesh_max = 335, 330
+probe_count = 9, 9
+algorithm = bicubic
+fade_start = 0.26
+fade_end = 5
+fade_target = 0
+zero_reference_position = 175, 175
+adaptive_margin = 5
+scan_overshoot = 8
+
+[force_move]
+enable_force_move = True
+
+[gcode_macro _RELOAD_Z_OFFSET_FROM_PROBE]
+description = Apply the most recent probe result as the Z reference.
+gcode =
+	{% set Z = printer.toolhead.position.z %}
+	SET_KINEMATIC_POSITION Z={Z - printer.probe.last_probe_position.z}
+
+[gcode_macro SET_Z_FROM_PROBE]
+description = Tap-probe Z and apply the result as the Z reference (use after G28 Z).
+gcode =
+	PROBE METHOD=tap
+	_RELOAD_Z_OFFSET_FROM_PROBE
+
+[homing_override]
+axes = z
+gcode =
+
+
+
+	{% if "z" in printer.toolhead.homed_axes %}
+	G90
+	G1 Z10 F1500
+	{% endif %}
+
+
+
+	{% if "x" not in printer.toolhead.homed_axes %}
+	G28 X
+	{% endif %}
+	{% if "y" not in printer.toolhead.homed_axes %}
+	G28 Y
+	{% endif %}
+
+
+
+	G90
+	G1 X175 Y175 F12000
+
+
+	G28 Z
+
+
+	SET_Z_FROM_PROBE
+
+[gcode_macro QUAD_GANTRY_LEVEL]
+description = Two-pass QGL override (coarse METHOD=default then tight METHOD=scan); saggy-rear-V2 quirk requires both passes.
+rename_existing = _QUAD_GANTRY_LEVEL
+gcode =
+	SAVE_GCODE_STATE NAME=STATE_QGL
+	BED_MESH_CLEAR
+	{% if not printer.quad_gantry_level.applied %}
+	_QUAD_GANTRY_LEVEL horizontal_move_z=8 retry_tolerance=1
+	{% endif %}
+	_QUAD_GANTRY_LEVEL horizontal_move_z=2 METHOD=scan
+	RESTORE_GCODE_STATE NAME=STATE_QGL
+
+[gcode_macro BED_MESH_CALIBRATE]
+description = Wrap stock BED_MESH_CALIBRATE to force ADAPTIVE=1 METHOD=rapid_scan.
+rename_existing = BTT_BED_MESH_CALIBRATE
+gcode =
+	BTT_BED_MESH_CALIBRATE ADAPTIVE=1 METHOD=rapid_scan
+
+[virtual_sdcard]
+path = ~/printer_data/gcodes
+on_error_gcode = CANCEL_PRINT
+
+[gcode_macro _TOOLHEAD_PARK_PAUSE_CANCEL]
+description = Helper: park toolhead used in PAUSE and CANCEL_PRINT
+gcode =
+
+	{% set client = printer['gcode_macro _CLIENT_VARIABLE']|default({}) %}
+	{% set velocity = printer.configfile.settings.pause_resume.recover_velocity %}
+	{% set use_custom     = client.use_custom_pos|default(false)|lower == 'true' %}
+	{% set custom_park_x  = client.custom_park_x|default(0.0) %}
+	{% set custom_park_y  = client.custom_park_y|default(0.0) %}
+	{% set park_dz        = client.custom_park_dz|default(2.0)|abs %}
+	{% set sp_hop         = client.speed_hop|default(15) * 60 %}
+	{% set sp_move        = client.speed_move|default(velocity) * 60 %}
+
+	{% set origin    = printer.gcode_move.homing_origin %}
+	{% set act       = printer.gcode_move.gcode_position %}
+	{% set max       = printer.toolhead.axis_maximum %}
+	{% set cone      = printer.toolhead.cone_start_z|default(max.z) %}
+	{% set round_bed = True if printer.configfile.settings.printer.kinematics is in ['delta','polar','rotary_delta','winch']
+	else False %}
+
+	{% set z_min = params.Z_MIN|default(0)|float %}
+	{% set z_park = [[(act.z + park_dz), z_min]|max, (max.z - origin.z)]|min %}
+	{% set x_park = params.X       if params.X is defined
+	else custom_park_x  if use_custom
+	else 0.0            if round_bed
+	else (max.x - 5.0) %}
+	{% set y_park = params.Y       if params.Y is defined
+	else custom_park_y  if use_custom
+	else (max.y - 5.0)  if round_bed and z_park < cone
+	else 0.0            if round_bed
+	else (max.y - 5.0) %}
+
+	_CLIENT_RETRACT
+	{% if "xyz" in printer.toolhead.homed_axes %}
+	G90
+	G1 Z{z_park} F{sp_hop}
+	G1 X{x_park} Y{y_park} F{sp_move}
+	{% if not printer.gcode_move.absolute_coordinates %} G91 {% endif %}
+	{% else %}
+	RESPOND TYPE=echo MSG='Printer not homed'
+	{% endif %}
+
+[gcode_macro _CLIENT_EXTRUDE]
+description = Extrudes, if the extruder is hot enough
+gcode =
+
+	{% set client = printer['gcode_macro _CLIENT_VARIABLE']|default({}) %}
+	{% set use_fw_retract = (client.use_fw_retract|default(false)|lower == 'true') and (printer.firmware_retraction is defined) %}
+	{% set length = params.LENGTH|default(client.unretract)|default(1.0)|float %}
+	{% set speed = params.SPEED|default(client.speed_unretract)|default(35) %}
+	{% set absolute_extrude = printer.gcode_move.absolute_extrude %}
+
+	{% if printer.toolhead.extruder != '' %}
+	{% if printer[printer.toolhead.extruder].can_extrude %}
+	{% if use_fw_retract %}
+	{% if length < 0 %}
+	G10
+	{% else %}
+	G11
+	{% endif %}
+	{% else %}
+	M83
+	G1 E{length} F{(speed|float|abs) * 60}
+	{% if absolute_extrude %}
+	M82
+	{% endif %}
+	{% endif %}
+	{% else %}
+	RESPOND TYPE=echo MSG='{"\"%s\" not hot enough" % printer.toolhead.extruder}'
+	{% endif %}
+	{% endif %}
+
+[gcode_macro _CLIENT_RETRACT]
+description = Retracts, if the extruder is hot enough
+gcode =
+	{% set client = printer['gcode_macro _CLIENT_VARIABLE']|default({}) %}
+	{% set length = params.LENGTH|default(client.retract)|default(1.0)|float %}
+	{% set speed = params.SPEED|default(client.speed_retract)|default(35) %}
+
+	_CLIENT_EXTRUDE LENGTH=-{length|float|abs} SPEED={speed|float|abs}
+
+[gcode_macro _CLIENT_LINEAR_MOVE]
+description = Linear move with save and restore of the gcode state
+gcode =
+	{% set x_move = "X" ~ params.X if params.X is defined else "" %}
+	{% set y_move = "Y" ~ params.Y if params.Y is defined else "" %}
+	{% set z_move = "Z" ~ params.Z if params.Z is defined else "" %}
+	{% set e_move = "E" ~ params.E if params.E is defined else "" %}
+	{% set rate = "F" ~ params.F if params.F is defined else "" %}
+	{% set ABSOLUTE = params.ABSOLUTE | default(0) | int != 0 %}
+	{% set ABSOLUTE_E = params.ABSOLUTE_E | default(0) | int != 0 %}
+	SAVE_GCODE_STATE NAME=_client_movement
+	{% if x_move or y_move or z_move %}
+	G9{ 0 if ABSOLUTE else 1 }
+	{% endif %}
+	{% if e_move %}
+	M8{ 2 if ABSOLUTE_E else 3 }
+	{% endif %}
+	G1 { x_move } { y_move } { z_move } { e_move } { rate }
+	RESTORE_GCODE_STATE NAME=_client_movement
+
+[gcode_macro GET_TIMELAPSE_SETUP]
+description = Print the Timelapse setup
+gcode =
+	{% set tl = printer['gcode_macro TIMELAPSE_TAKE_FRAME'] %}
+	{% set output_txt = ["Timelapse Setup:"] %}
+	{% set _dummy = output_txt.append("enable: %s" % tl.enable) %}
+	{% set _dummy = output_txt.append("park: %s" % tl.park.enable) %}
+	{% if tl.park.enable %}
+	{% set _dummy = output_txt.append("park position: %s time: %s s" % (tl.park.pos, tl.park.time)) %}
+	{% set _dummy = output_txt.append("park cord x:%s y:%s dz:%s" % (tl.park.coord.x, tl.park.coord.y, tl.park.coord.dz)) %}
+	{% set _dummy = output_txt.append("travel speed: %s mm/s" % tl.speed.travel) %}
+	{% endif %}
+	{% set _dummy = output_txt.append("fw_retract: %s" % tl.extruder.fw_retract) %}
+	{% if not tl.extruder.fw_retract %}
+	{% set _dummy = output_txt.append("retract: %s mm speed: %s mm/s" % (tl.extruder.retract, tl.speed.retract)) %}
+	{% set _dummy = output_txt.append("extrude: %s mm speed: %s mm/s" % (tl.extruder.extrude, tl.speed.extrude)) %}
+	{% endif %}
+	{% set _dummy = output_txt.append("verbose: %s" % tl.verbose) %}
+	{action_respond_info(output_txt|join("\n"))}
+
+[gcode_macro _SET_TIMELAPSE_SETUP]
+description = Set user parameters for timelapse
+gcode =
+	{% set tl = printer['gcode_macro TIMELAPSE_TAKE_FRAME'] %}
+
+	{% set min = printer.toolhead.axis_minimum %}
+	{% set max = printer.toolhead.axis_maximum %}
+	{% set round_bed = True if printer.configfile.settings.printer.kinematics is in ['delta','polar','rotary_delta','winch']
+	else False %}
+	{% set park = {'min'   : {'x': (min.x / 1.42)|round(3) if round_bed else min.x|round(3),
+	'y': (min.y / 1.42)|round(3) if round_bed else min.y|round(3)},
+	'max'   : {'x': (max.x / 1.42)|round(3) if round_bed else max.x|round(3),
+	'y': (max.y / 1.42)|round(3) if round_bed else max.y|round(3)},
+	'center': {'x': (max.x-(max.x-min.x)/2)|round(3),
+	'y': (max.y-(max.y-min.y)/2)|round(3)}} %}
+
+	{% if params.ENABLE %}
+	{% if params.ENABLE|lower is in ['true', 'false'] %}
+	SET_GCODE_VARIABLE MACRO=TIMELAPSE_TAKE_FRAME VARIABLE=enable VALUE={True if params.ENABLE|lower == 'true' else False}
+	{% else %}
+	{action_raise_error("ENABLE=%s not supported. Allowed values are [True, False]" % params.ENABLE|capitalize)}
+	{% endif %}
+	{% endif %}
+	{% if params.VERBOSE %}
+	{% if params.VERBOSE|lower is in ['true', 'false'] %}
+	SET_GCODE_VARIABLE MACRO=TIMELAPSE_TAKE_FRAME VARIABLE=verbose VALUE={True if params.VERBOSE|lower == 'true' else False}
+	{% else %}
+	{action_raise_error("VERBOSE=%s not supported. Allowed values are [True, False]" % params.VERBOSE|capitalize)}
+	{% endif %}
+	{% endif %}
+	{% if params.CUSTOM_POS_X %}
+	{% if params.CUSTOM_POS_X|float >= min.x and params.CUSTOM_POS_X|float <= max.x %}
+	{% set _dummy = tl.park.custom.update({'x':params.CUSTOM_POS_X|float|round(3)}) %}
+	{% else %}
+	{action_raise_error("CUSTOM_POS_X=%s must be within [%s - %s]" % (params.CUSTOM_POS_X, min.x, max.x))}
+	{% endif %}
+	{% endif %}
+	{% if params.CUSTOM_POS_Y %}
+	{% if params.CUSTOM_POS_Y|float >= min.y and params.CUSTOM_POS_Y|float <= max.y %}
+	{% set _dummy = tl.park.custom.update({'y':params.CUSTOM_POS_Y|float|round(3)}) %}
+	{% else %}
+	{action_raise_error("CUSTOM_POS_Y=%s must be within [%s - %s]" % (params.CUSTOM_POS_Y, min.y, max.y))}
+	{% endif %}
+	{% endif %}
+	{% if params.CUSTOM_POS_DZ %}
+	{% if params.CUSTOM_POS_DZ|float >= min.z and params.CUSTOM_POS_DZ|float <= max.z %}
+	{% set _dummy = tl.park.custom.update({'dz':params.CUSTOM_POS_DZ|float|round(3)}) %}
+	{% else %}
+	{action_raise_error("CUSTOM_POS_DZ=%s must be within [%s - %s]" % (params.CUSTOM_POS_DZ, min.z, max.z))}
+	{% endif %}
+	{% endif %}
+	{% if params.PARK_ENABLE %}
+	{% if params.PARK_ENABLE|lower is in ['true', 'false'] %}
+	{% set _dummy = tl.park.update({'enable':True if params.PARK_ENABLE|lower == 'true' else False}) %}
+	{% else %}
+	{action_raise_error("PARK_ENABLE=%s not supported. Allowed values are [True, False]" % params.PARK_ENABLE|capitalize)}
+	{% endif %}
+	{% endif %}
+	{% if params.PARK_POS %}
+	{% if params.PARK_POS|lower is in ['center','front_left','front_right','back_left','back_right','custom','x_only','y_only'] %}
+	{% set dic = {'center'      : {'x': park.center.x   , 'y': park.center.y   , 'dz': 1                },
+	'front_left'  : {'x': park.min.x      , 'y': park.min.y      , 'dz': 0                },
+	'front_right' : {'x': park.max.x      , 'y': park.min.y      , 'dz': 0                },
+	'back_left'   : {'x': park.min.x      , 'y': park.max.y      , 'dz': 0                },
+	'back_right'  : {'x': park.max.x      , 'y': park.max.y      , 'dz': 0                },
+	'custom'      : {'x': tl.park.custom.x, 'y': tl.park.custom.y, 'dz': tl.park.custom.dz},
+	'x_only'      : {'x': tl.park.custom.x, 'y': 'none'          , 'dz': tl.park.custom.dz},
+	'y_only'      : {'x': 'none'          , 'y': tl.park.custom.y, 'dz': tl.park.custom.dz}} %}
+	{% set _dummy = tl.park.update({'pos':params.PARK_POS|lower}) %}
+	{% set _dummy = tl.park.update({'coord':dic[tl.park.pos]}) %}
+	{% else %}
+	{action_raise_error("PARK_POS=%s not supported. Allowed values are [CENTER, FRONT_LEFT, FRONT_RIGHT, BACK_LEFT, BACK_RIGHT, CUSTOM, X_ONLY, Y_ONLY]"
+	% params.PARK_POS|upper)}
+	{% endif %}
+	{% endif %}
+	{% if params.PARK_TIME %}
+	{% if params.PARK_TIME|float >= 0.0 %}
+	{% set _dummy = tl.park.update({'time':params.PARK_TIME|float|round(3)}) %}
+	{% else %}
+	{action_raise_error("PARK_TIME=%s must be a positive number" % params.PARK_TIME)}
+	{% endif %}
+	{% endif %}
+	SET_GCODE_VARIABLE MACRO=TIMELAPSE_TAKE_FRAME VARIABLE=park VALUE="{tl.park}"
+	{% if params.TRAVEL_SPEED %}
+	{% if params.TRAVEL_SPEED|float > 0.0 %}
+	{% set _dummy = tl.speed.update({'travel':params.TRAVEL_SPEED|float|round(3)}) %}
+	{% else %}
+	{action_raise_error("TRAVEL_SPEED=%s must be larger than 0" % params.TRAVEL_SPEED)}
+	{% endif %}
+	{% endif %}
+	{% if params.RETRACT_SPEED %}
+	{% if params.RETRACT_SPEED|float > 0.0 %}
+	{% set _dummy = tl.speed.update({'retract':params.RETRACT_SPEED|float|round(3)}) %}
+	{% else %}
+	{action_raise_error("RETRACT_SPEED=%s must be larger than 0" % params.RETRACT_SPEED)}
+	{% endif %}
+	{% endif %}
+	{% if params.EXTRUDE_SPEED %}
+	{% if params.EXTRUDE_SPEED|float > 0.0 %}
+	{% set _dummy = tl.speed.update({'extrude':params.EXTRUDE_SPEED|float|round(3)}) %}
+	{% else %}
+	{action_raise_error("EXTRUDE_SPEED=%s must be larger than 0" % params.EXTRUDE_SPEED)}
+	{% endif %}
+	{% endif %}
+	SET_GCODE_VARIABLE MACRO=TIMELAPSE_TAKE_FRAME VARIABLE=speed VALUE="{tl.speed}"
+	{% if params.EXTRUDE_DISTANCE %}
+	{% if params.EXTRUDE_DISTANCE|float >= 0.0 %}
+	{% set _dummy = tl.extruder.update({'extrude':params.EXTRUDE_DISTANCE|float|round(3)}) %}
+	{% else %}
+	{action_raise_error("EXTRUDE_DISTANCE=%s must be specified as positiv number" % params.EXTRUDE_DISTANCE)}
+	{% endif %}
+	{% endif %}
+	{% if params.RETRACT_DISTANCE %}
+	{% if params.RETRACT_DISTANCE|float >= 0.0 %}
+	{% set _dummy = tl.extruder.update({'retract':params.RETRACT_DISTANCE|float|round(3)}) %}
+	{% else %}
+	{action_raise_error("RETRACT_DISTANCE=%s must be specified as positiv number" % params.RETRACT_DISTANCE)}
+	{% endif %}
+	{% endif %}
+	{% if params.FW_RETRACT %}
+	{% if params.FW_RETRACT|lower is in ['true', 'false'] %}
+	{% if 'firmware_retraction' in printer.configfile.settings %}
+	{% set _dummy = tl.extruder.update({'fw_retract': True if params.FW_RETRACT|lower == 'true' else False}) %}
+	{% else %}
+	{% set _dummy = tl.extruder.update({'fw_retract':False}) %}
+	{% if params.FW_RETRACT|capitalize == 'True' %}
+	{action_raise_error("[firmware_retraction] not defined in printer.cfg. Can not enable fw_retract")}
+	{% endif %}
+	{% endif %}
+	{% else %}
+	{action_raise_error("FW_RETRACT=%s not supported. Allowed values are [True, False]" % params.FW_RETRACT|capitalize)}
+	{% endif %}
+	{% endif %}
+	SET_GCODE_VARIABLE MACRO=TIMELAPSE_TAKE_FRAME VARIABLE=extruder VALUE="{tl.extruder}"
+	{% if printer.configfile.settings['gcode_macro pause'] is defined %}
+	{% set _dummy = tl.macro.update({'pause': printer.configfile.settings['gcode_macro pause'].rename_existing}) %}
+	{% endif %}
+	{% if printer.configfile.settings['gcode_macro resume'] is defined %}
+	{% set _dummy = tl.macro.update({'resume': printer.configfile.settings['gcode_macro resume'].rename_existing}) %}
+	{% endif %}
+	SET_GCODE_VARIABLE MACRO=TIMELAPSE_TAKE_FRAME VARIABLE=macro VALUE="{tl.macro}"
+
+[gcode_macro TIMELAPSE_TAKE_FRAME]
+description = Take Timelapse shoot
+variable_enable = False
+variable_takingframe = False
+variable_park = {'enable': False,
+	'pos'   : 'center',
+	'time'  : 0.1,
+	'custom': {'x': 0, 'y': 0, 'dz': 0},
+	'coord' : {'x': 0, 'y': 0, 'dz': 0}}
+variable_extruder = {'fw_retract': False,
+	'retract': 1.0,
+	'extrude': 1.0}
+variable_speed = {'travel': 100,
+	'retract': 15,
+	'extrude': 15}
+variable_verbose = True
+variable_check_time = 0.5
+variable_restore = {'absolute': {'coordinates': True, 'extrude': True}, 'speed': 1500, 'e':0, 'factor': {'speed': 1.0, 'extrude': 1.0}}
+variable_macro = {'pause': 'PAUSE', 'resume': 'RESUME'}
+variable_is_paused = False
+gcode =
+	{% set hyperlapse = True if params.HYPERLAPSE and params.HYPERLAPSE|lower =='true' else False %}
+	{% if enable %}
+	{% if (hyperlapse and printer['gcode_macro HYPERLAPSE'].run) or
+	(not hyperlapse and not printer['gcode_macro HYPERLAPSE'].run) %}
+	{% if park.enable %}
+	{% set pos = {'x': 'X' + park.coord.x|string if park.pos != 'y_only' else '',
+	'y': 'Y' + park.coord.y|string if park.pos != 'x_only' else '',
+	'z': 'Z'+ [printer.gcode_move.gcode_position.z + park.coord.dz, printer.toolhead.axis_maximum.z]|min|string} %}
+	{% set restore = {'absolute': {'coordinates': printer.gcode_move.absolute_coordinates,
+	'extrude'    : printer.gcode_move.absolute_extrude},
+	'speed'   : printer.gcode_move.speed,
+	'e'       : printer.gcode_move.gcode_position.e,
+	'factor'  : {'speed'  : printer.gcode_move.speed_factor,
+	'extrude': printer.gcode_move.extrude_factor}} %}
+	SET_GCODE_VARIABLE MACRO=TIMELAPSE_TAKE_FRAME VARIABLE=restore VALUE="{restore}"
+	{% if not printer[printer.toolhead.extruder].can_extrude %}
+	{% if verbose %}{action_respond_info("Timelapse: Warning, minimum extruder temperature not reached!")}{% endif %}
+	{% else %}
+	{% if extruder.fw_retract %}
+	G10
+	{% else %}
+	M83
+	G0 E-{extruder.retract} F{speed.retract * 60}
+	{% endif %}
+	{% endif %}
+	SET_GCODE_VARIABLE MACRO=TIMELAPSE_TAKE_FRAME VARIABLE=is_paused VALUE=True
+	{macro.pause}
+	SET_GCODE_OFFSET X=0 Y=0
+	G90
+	{% if "xyz" not in printer.toolhead.homed_axes %}
+	{% if verbose %}{action_respond_info("Timelapse: Warning, axis not homed yet!")}{% endif %}
+	{% else %}
+	G0 {pos.x} {pos.y} {pos.z} F{speed.travel * 60}
+	{% endif %}
+	SET_GCODE_VARIABLE MACRO=TIMELAPSE_TAKE_FRAME VARIABLE=takingframe VALUE=True
+	UPDATE_DELAYED_GCODE ID=_WAIT_TIMELAPSE_TAKE_FRAME DURATION={check_time}
+	M400
+	{% endif %}
+	_TIMELAPSE_NEW_FRAME HYPERLAPSE={hyperlapse}
+	{% endif %}
+	{% else %}
+	{% if verbose %}{action_respond_info("Timelapse: disabled, take frame ignored")}{% endif %}
+	{% endif %}
+
+[gcode_macro _TIMELAPSE_NEW_FRAME]
+description = action call for timelapse shoot. must be a seperate macro
+gcode =
+	{action_call_remote_method("timelapse_newframe",
+	macropark=printer['gcode_macro TIMELAPSE_TAKE_FRAME'].park,
+	hyperlapse=params.HYPERLAPSE)}
+
+[delayed_gcode _WAIT_TIMELAPSE_TAKE_FRAME]
+gcode =
+	{% set tl = printer['gcode_macro TIMELAPSE_TAKE_FRAME'] %}
+	{% set factor = {'speed': printer.gcode_move.speed_factor, 'extrude': printer.gcode_move.extrude_factor} %}
+	{% if tl.takingframe %}
+	UPDATE_DELAYED_GCODE ID=_WAIT_TIMELAPSE_TAKE_FRAME DURATION={tl.check_time}
+	{% else %}
+	{tl.macro.resume} VELOCITY={tl.speed.travel}
+	SET_GCODE_VARIABLE MACRO=TIMELAPSE_TAKE_FRAME VARIABLE=is_paused VALUE=False
+	{% if not printer[printer.toolhead.extruder].can_extrude %}
+	{action_respond_info("Timelapse: Warning minimum extruder temperature not reached!")}
+	{% else %}
+	{% if tl.extruder.fw_retract %}
+	G11
+	{% else %}
+	G0 E{tl.extruder.extrude} F{tl.speed.extrude * 60}
+	G0 F{tl.restore.speed}
+	{% if tl.restore.absolute.extrude %}
+	M82
+	G92 E{tl.restore.e}
+	{% endif %}
+	{% endif %}
+	{% endif %}
+	{% if tl.restore.factor.speed   != factor.speed   %} M220 S{(factor.speed*100)|round(0)}   {% endif %}
+	{% if tl.restore.factor.extrude != factor.extrude %} M221 S{(factor.extrude*100)|round(0)} {% endif %}
+	{% if not tl.restore.absolute.coordinates %} G91 {% endif %}
+	{% endif %}
+
+[gcode_macro HYPERLAPSE]
+description = Start/Stop a hyperlapse recording
+variable_cycle = 0
+variable_run = False
+gcode =
+	{% set cycle = params.CYCLE|default(30)|int %}
+	{% if params.ACTION and params.ACTION|lower == 'start' %}
+	{action_respond_info("Hyperlapse: frames started (Cycle %d sec)" % cycle)}
+	SET_GCODE_VARIABLE MACRO=HYPERLAPSE VARIABLE=run VALUE=True
+	SET_GCODE_VARIABLE MACRO=HYPERLAPSE VARIABLE=cycle VALUE={cycle}
+	UPDATE_DELAYED_GCODE ID=_HYPERLAPSE_LOOP DURATION={cycle}
+	TIMELAPSE_TAKE_FRAME HYPERLAPSE=True
+	{% elif params.ACTION and params.ACTION|lower == 'stop' %}
+	{% if run %}{action_respond_info("Hyperlapse: frames stopped")}{% endif %}
+	SET_GCODE_VARIABLE MACRO=HYPERLAPSE VARIABLE=run VALUE=False
+	UPDATE_DELAYED_GCODE ID=_HYPERLAPSE_LOOP DURATION=0
+	{% else %}
+	{action_raise_error("Hyperlapse: No valid input parameter
+	Use:
+	- HYPERLAPSE ACTION=START [CYCLE=time]
+	- HYPERLAPSE ACTION=STOP")}
+	{% endif %}
+
+[delayed_gcode _HYPERLAPSE_LOOP]
+gcode =
+	UPDATE_DELAYED_GCODE ID=_HYPERLAPSE_LOOP DURATION={printer["gcode_macro HYPERLAPSE"].cycle}
+	TIMELAPSE_TAKE_FRAME HYPERLAPSE=True
+
+[gcode_macro TIMELAPSE_RENDER]
+description = Render Timelapse video and wait for the result
+variable_render = False
+variable_run_identifier = 0
+gcode =
+	{action_respond_info("Timelapse: Rendering started")}
+	{action_call_remote_method("timelapse_render", byrendermacro="True")}
+	SET_GCODE_VARIABLE MACRO=TIMELAPSE_RENDER VARIABLE=render VALUE=True
+	{printer.configfile.settings['gcode_macro pause'].rename_existing}
+	UPDATE_DELAYED_GCODE ID=_WAIT_TIMELAPSE_RENDER DURATION=0.5
+
+[delayed_gcode _WAIT_TIMELAPSE_RENDER]
+gcode =
+	{% set ri = printer['gcode_macro TIMELAPSE_RENDER'].run_identifier % 4 %}
+	SET_GCODE_VARIABLE MACRO=TIMELAPSE_RENDER VARIABLE=run_identifier VALUE={ri + 1}
+	{% if printer['gcode_macro TIMELAPSE_RENDER'].render %}
+	M117 Rendering {['-','\\','|','/'][ri]}
+	UPDATE_DELAYED_GCODE ID=_WAIT_TIMELAPSE_RENDER DURATION=0.5
+	{% else %}
+	{action_respond_info("Timelapse: Rendering finished")}
+	M117
+	{printer.configfile.settings['gcode_macro resume'].rename_existing}
+	{% endif %}
+
+[gcode_macro TEST_STREAM_DELAY]
+description = Helper macro to find stream and park delay
+gcode =
+	{% set min = printer.toolhead.axis_minimum %}
+	{% set max = printer.toolhead.axis_maximum %}
+	{% set act = printer.toolhead.position %}
+	{% set tl = printer['gcode_macro TIMELAPSE_TAKE_FRAME'] %}
+	{% if act.z > 5.0 %}
+	G0 X{min.x + 5.0} F{tl.speed.travel|int * 60}
+	G0 X{(max.x-min.x)/2}
+	G4 P{tl.park.time|float * 1000}
+	_TIMELAPSE_NEW_FRAME HYPERLAPSE=FALSE
+	G0 X{max.x - 5.0}
+	{% else %}
+	{action_raise_error("Toolhead z %.3f to low. Please place head above z = 5.0" % act.z)}
+	{% endif %}
+
+[gcode_macro _USER_VARIABLE]
+description = Single source of truth for printer-level tunables.
+variable_bedfans_threshold = 100
+variable_bedfans_fast = 0.6
+variable_bedfans_slow = 0.2
+variable_heatsoak_default_bed_target = 110
+variable_heatsoak_default_chamber_target = 30
+variable_m109_tolerance_celsius = 1
+variable_chamber_wait_bed_threshold = 90
+variable_print_end_cooldown_seconds = 60
+gcode =
+
+[gcode_macro _CG28]
+description = Internal helper: G28 only if not already homed.
+gcode =
+	{% if "xyz" not in printer.toolhead.homed_axes %}
+	G28
+	{% endif %}
+
+[gcode_macro _CQGL]
+description = Internal helper: QUAD_GANTRY_LEVEL only if not already applied.
+gcode =
+	{% if printer.quad_gantry_level.applied == False %}
+	{% if "xyz" not in printer.toolhead.homed_axes %}
+	G28
+	{% endif %}
+	QUAD_GANTRY_LEVEL
+	G28 Z
+	{% endif %}
+
+[gcode_macro OFF]
+description = Shut everything off (steppers, heaters, part fan, chamber fan, bed fans, case light).
+gcode =
+	M84
+	TURN_OFF_HEATERS
+	M107
+	set_temperature_fan_target temperature_fan=chamber target=0
+	SET_FAN_SPEED FAN=BedFans SPEED=0
+	SET_PIN PIN=caselight VALUE=0
+
+[gcode_macro SHUTDOWN]
+description = OFF + tell Moonraker to power off the host.
+gcode =
+	OFF
+	{action_call_remote_method("shutdown_machine")}
+
+[gcode_macro PARKFRONT]
+description = Park toolhead at front center, mid-height.
+gcode =
+	{% if "xyz" not in printer.toolhead.homed_axes %}
+	G28
+	{% endif %}
+	SAVE_GCODE_STATE NAME=PARKFRONT
+	G90
+	G0 X{printer.toolhead.axis_maximum.x/2} Y{printer.toolhead.axis_minimum.y+5} Z{printer.toolhead.axis_maximum.z/2} F6000
+	RESTORE_GCODE_STATE NAME=PARKFRONT
+
+[gcode_macro PARKFRONTLOW]
+description = Park toolhead at front center, low Z.
+gcode =
+	{% if "xyz" not in printer.toolhead.homed_axes %}
+	G28
+	{% endif %}
+	SAVE_GCODE_STATE NAME=PARKFRONT
+	G90
+	G0 X{printer.toolhead.axis_maximum.x/2} Y{printer.toolhead.axis_minimum.y+5} Z20 F6000
+	RESTORE_GCODE_STATE NAME=PARKFRONT
+
+[gcode_macro PARKREAR]
+description = Park toolhead at rear left, near top.
+gcode =
+	{% if "xyz" not in printer.toolhead.homed_axes %}
+	G28
+	{% endif %}
+	SAVE_GCODE_STATE NAME=PARKREAR
+	G90
+	G0 X{printer.toolhead.axis_minimum.x+10} Y{printer.toolhead.axis_maximum.y-10} Z{printer.toolhead.axis_maximum.z-50} F6000
+	RESTORE_GCODE_STATE NAME=PARKREAR
+
+[gcode_macro _RESETSPEEDS]
+description = Internal helper: revert velocity/accel/SCV to configured maxima.
+gcode =
+	SET_VELOCITY_LIMIT VELOCITY={printer.configfile.settings.printer.max_velocity}
+	SET_VELOCITY_LIMIT ACCEL={printer.configfile.settings.printer.max_accel}
+	SET_VELOCITY_LIMIT SQUARE_CORNER_VELOCITY={printer.configfile.settings.printer.square_corner_velocity}
+
+[gcode_macro PARKCENTER]
+description = Park toolhead at center of build volume.
+gcode =
+	{% if "xyz" not in printer.toolhead.homed_axes %}
+	G28
+	{% endif %}
+	SAVE_GCODE_STATE NAME=PARKCENTER
+	G90
+	G0 X{printer.toolhead.axis_maximum.x/2} Y{printer.toolhead.axis_maximum.y/2} Z{printer.toolhead.axis_maximum.z/2} F6000
+	RESTORE_GCODE_STATE NAME=PARKCENTER
+
+[gcode_macro PARKBED]
+description = Park toolhead 15mm above center of bed.
+gcode =
+	{% if "xyz" not in printer.toolhead.homed_axes %}
+	G28
+	{% endif %}
+	SAVE_GCODE_STATE NAME=PARKBED
+	G90
+	G0 X{printer.toolhead.axis_maximum.x/2} Y{printer.toolhead.axis_maximum.y/2} Z15 F6000
+	RESTORE_GCODE_STATE NAME=PARKBED
+
+[gcode_macro M109]
+description = Wait for hotend within ±tolerance of target (renames stock to M99109).
+rename_existing = M99109
+gcode =
+
+	{% set s = params.S|float %}
+
+	M104 {% for p in params %}{'%s%s' % (p, params[p])}{% endfor %}
+	{% if s != 0 %}
+	{% set tol = printer["gcode_macro _USER_VARIABLE"].m109_tolerance_celsius|int %}
+	TEMPERATURE_WAIT SENSOR=extruder MINIMUM={s} MAXIMUM={s + tol}
+	{% endif %}
+
+[delayed_gcode DELAYED_OFF]
+gcode =
+	OFF
+
+[gcode_macro HEATSOAK]
+description = Heat bed (+ optional chamber wait) and park center for soak.
+gcode =
+
+	{% set t = params.T|default(printer["gcode_macro _USER_VARIABLE"].heatsoak_default_bed_target)|int %}
+	{% set c = params.C|default(printer["gcode_macro _USER_VARIABLE"].heatsoak_default_chamber_target)|int %}
+	{% set move = params.MOVE|default(1)|int %}
+	{% set wait = params.WAIT|default(0)|int %}
+
+	SAVE_GCODE_STATE NAME=HEATSOAK
+	UPDATE_DELAYED_GCODE ID=DELAYED_OFF DURATION=0
+	M140 S{t}
+	{% if move == 1 %}
+	_CG28
+	G90
+	G0 Z{printer.toolhead.axis_maximum.z/2} F19500
+	G0 X{printer.toolhead.axis_maximum.x/2} Y{printer.toolhead.axis_maximum.y/2} F19500
+	{% endif %}
+	{% if c > 30 and wait == 1 %}
+	TEMPERATURE_WAIT SENSOR="temperature_fan chamber" MINIMUM={c}
+	{% endif %}
+	RESTORE_GCODE_STATE NAME=HEATSOAK
+
+[gcode_macro TEST_SPEED]
+description = Test for max speed and acceleration parameters for the printer. Procedure: Home -> ReadPositionFromMCU -> MovesToolhead@Vel&Accel -> Home -> ReadPositionfromMCU
+gcode =
+
+	{% set speed  = params.SPEED|default(printer.configfile.settings.printer.max_velocity)|int %}
+
+	{% set iterations = params.ITERATIONS|default(5)|int %}
+
+	{% set accel  = params.ACCEL|default(printer.configfile.settings.printer.max_accel)|int %}
+
+	{% set min_cruise_ratio = params.MIN_CRUISE_RATIO|default(0.5)|float %}
+
+	{% set bound = params.BOUND|default(20)|int %}
+
+	{% set smallpatternsize = SMALLPATTERNSIZE|default(20)|int %}
+
+
+
+	{% set x_min = printer.toolhead.axis_minimum.x %}
+	{% if x_min < 0 %}
+	{% set x_min = 0 %}
+	{% endif %}
+
+	{% set y_min = printer.toolhead.axis_minimum.y %}
+	{% if y_min < 0 %}
+	{% set y_min = 0 %}
+	{% endif %}
+
+	{% set x_min = x_min + bound %}
+	{% set x_max = printer.toolhead.axis_maximum.x - bound %}
+	{% set y_min = y_min + bound %}
+	{% set y_max = printer.toolhead.axis_maximum.y - bound %}
+
+
+
+	{% set x_center = (printer.toolhead.axis_minimum.x|float + printer.toolhead.axis_maximum.x|float ) / 2 %}
+	{% set y_center = (printer.toolhead.axis_minimum.y|float + printer.toolhead.axis_maximum.y|float ) / 2 %}
+
+
+	{% set x_center_min = x_center - (smallpatternsize/2) %}
+	{% set x_center_max = x_center + (smallpatternsize/2) %}
+	{% set y_center_min = y_center - (smallpatternsize/2) %}
+	{% set y_center_max = y_center + (smallpatternsize/2) %}
+
+
+	SAVE_GCODE_STATE NAME=TEST_SPEED
+
+
+	{ action_respond_info("TEST_SPEED: starting %d iterations at speed %d, accel %d" % (iterations, speed, accel)) }
+
+
+	M400
+	G28
+
+	{% if printer.configfile.settings.quad_gantry_level %}
+	{% if printer.quad_gantry_level.applied == False %}
+	QUAD_GANTRY_LEVEL
+	G28 Z
+	{% endif %}
+	{% endif %}
+
+	G90
+	G1 X{printer.toolhead.axis_maximum.x-50} Y{printer.toolhead.axis_maximum.y-50} F{30*60}
+	M400
+	G28 X Y
+	G0 X{printer.toolhead.axis_maximum.x-1} Y{printer.toolhead.axis_maximum.y-1} F{30*60}
+	G4 P1000
+	GET_POSITION
+
+
+	G0 X{x_min} Y{y_min} Z{bound + 10} F{speed*60}
+
+
+	{% if printer.configfile.settings.printer.minimum_cruise_ratio is defined %}
+	SET_VELOCITY_LIMIT VELOCITY={speed} ACCEL={accel} MINIMUM_CRUISE_RATIO={min_cruise_ratio}
+	{% else %}
+	SET_VELOCITY_LIMIT VELOCITY={speed} ACCEL={accel} ACCEL_TO_DECEL={accel / 2}
+	{% endif %}
+
+	{% for i in range(iterations) %}
+
+	G0 X{x_min} Y{y_min} F{speed*60}
+	G0 X{x_max} Y{y_max} F{speed*60}
+	G0 X{x_min} Y{y_min} F{speed*60}
+	G0 X{x_max} Y{y_min} F{speed*60}
+	G0 X{x_min} Y{y_max} F{speed*60}
+	G0 X{x_max} Y{y_min} F{speed*60}
+
+
+	G0 X{x_min} Y{y_min} F{speed*60}
+	G0 X{x_min} Y{y_max} F{speed*60}
+	G0 X{x_max} Y{y_max} F{speed*60}
+	G0 X{x_max} Y{y_min} F{speed*60}
+
+
+	G0 X{x_center_min} Y{y_center_min} F{speed*60}
+	G0 X{x_center_max} Y{y_center_max} F{speed*60}
+	G0 X{x_center_min} Y{y_center_min} F{speed*60}
+	G0 X{x_center_max} Y{y_center_min} F{speed*60}
+	G0 X{x_center_min} Y{y_center_max} F{speed*60}
+	G0 X{x_center_max} Y{y_center_min} F{speed*60}
+
+
+	G0 X{x_center_min} Y{y_center_min} F{speed*60}
+	G0 X{x_center_min} Y{y_center_max} F{speed*60}
+	G0 X{x_center_max} Y{y_center_max} F{speed*60}
+	G0 X{x_center_max} Y{y_center_min} F{speed*60}
+	{% endfor %}
+
+
+	{% if printer.configfile.settings.printer.minimum_cruise_ratio is defined %}
+	SET_VELOCITY_LIMIT VELOCITY={printer.configfile.settings.printer.max_velocity} ACCEL={printer.configfile.settings.printer.max_accel} MINIMUM_CRUISE_RATIO={printer.configfile.settings.printer.minimum_cruise_ratio}
+	{% else %}
+	SET_VELOCITY_LIMIT VELOCITY={printer.configfile.settings.printer.max_velocity} ACCEL={printer.configfile.settings.printer.max_accel} ACCEL_TO_DECEL={printer.configfile.settings.printer.max_accel_to_decel}
+	{% endif %}
+
+
+	M400
+	G28
+
+	G90
+	G0 X{printer.toolhead.axis_maximum.x-1} Y{printer.toolhead.axis_maximum.y-1} F{30*60}
+	G4 P1000
+	GET_POSITION
+
+
+	RESTORE_GCODE_STATE NAME=TEST_SPEED
+
+[display_glyph chamber]
+data =
+	................
+	****************
+	*....*....*....*
+	*....*....*....*
+	*....******....*
+	*..............*
+	*..............*
+	*.....****.....*
+	*.***.*..*.***.*
+	*.....****.....*
+	*......**......*
+	*..............*
+	*.************.*
+	*...*......*...*
+	****************
+	................
+
+[display_glyph voron]
+data =
+	......***.......
+	....*******.....
+	...*********....
+	.*************..
+	*****..***..***.
+	****..***..****.
+	***..***..*****.
+	**..***..******.
+	******..***..**.
+	*****..***..***.
+	****..***..****.
+	***..***..*****.
+	.*************..
+	...*********....
+	....*******.....
+	......***.......
+
+[display_template _vheater_temperature]
+param_heater_name = "extruder"
+text =
+	{% if param_heater_name in printer %}
+	{% set heater = printer[param_heater_name] %}
+
+	{% if param_heater_name == "heater_bed" %}
+	{% if heater.target %}
+	{% set frame = (printer.toolhead.estimated_print_time|int % 2) + 1 %}
+	~bed_heat{frame}~
+	{% else %}
+	~bed~
+	{% endif %}
+	{% else %}
+	~extruder~
+	{% endif %}
+
+	{ "%3.0f" % (heater.temperature,) }
+
+	{% if heater.target and (heater.temperature - heater.target)|abs > 2 %}
+	~right_arrow~
+	{ "%0.0f" % (heater.target,) }
+	{% endif %}
+	~degrees~
+	{% endif %}
+
+[display_data __voron_display extruder]
+position = 0, 0
+text = { render("_vheater_temperature", param_heater_name="extruder") }
+
+[display_data __voron_display fan]
+position = 0, 10
+text =
+	{% if 'fan' in printer %}
+	{% set speed = printer.fan.speed %}
+	{% if speed %}
+	{% set frame = (printer.toolhead.estimated_print_time|int % 2) + 1 %}
+	~fan{frame}~
+	{% else %}
+	~fan1~
+	{% endif %}
+	{ "{:>4.0%}".format(speed) }
+	{% endif %}
+
+[display_data __voron_display bed]
+position = 1, 0
+text = { render("_vheater_temperature", param_heater_name="heater_bed") }
+
+[display_data __voron_display progress_text]
+position = 1, 10
+text =
+	{% set progress = printer.display_status.progress %}
+	{ "{:^6.0%}".format(progress) }
+
+[display_data __voron_display progress_text2]
+position = 1, 10
+text =
+	{% set progress = printer.display_status.progress %}
+	{ draw_progress_bar(1, 10, 6, progress) }
+
+[display_data __voron_display printing_time]
+position = 2, 10
+text =
+	{% set ptime = printer.idle_timeout.printing_time %}
+	{ "%02d:%02d" % (ptime // (60 * 60), (ptime // 60) % 60) }
+
+[display_data __voron_display chamber]
+position = 2, 0
+text =
+	{% set chamber = printer['temperature_fan chamber'] %}
+	~chamber~
+	{ "%3.0f" % (chamber.temperature,) }
+	~degrees~
+
+[display_data __voron_display print_status]
+position = 3, 0
+text =
+	{% if printer.display_status.message %}
+	{ printer.display_status.message }
+	{% elif printer.idle_timeout.printing_time %}
+	{% set pos = printer.toolhead.position %}
+	{ "X%-4.0fY%-4.0fZ%-5.2f" % (pos.x, pos.y, pos.z) }
+	{% else %}
+	{ "V2.611 " }
+	~voron~
+	{% endif %}
+
+[menu __main __octoprint]
+type = disabled
+
+[fan_generic BedFans]
+pin = z:P2.5
+kick_start_time = 0.5
+
+[gcode_macro BEDFANSSLOW]
+description = Set bed fans to "slow" speed (while heater is ramping).
+gcode =
+
+	{% set SLOW = printer["gcode_macro _USER_VARIABLE"].bedfans_slow|float %}
+
+	SET_FAN_SPEED FAN=BedFans SPEED={SLOW}
+
+[gcode_macro BEDFANSFAST]
+description = Set bed fans to "fast" speed (after target reached).
+gcode =
+
+	{% set FAST = printer["gcode_macro _USER_VARIABLE"].bedfans_fast|float %}
+
+	SET_FAN_SPEED FAN=BedFans SPEED={FAST}
+
+[gcode_macro BEDFANSOFF]
+description = Turn bed fans off.
+gcode =
+	SET_FAN_SPEED FAN=BedFans SPEED=0
+
+[gcode_macro SET_HEATER_TEMPERATURE]
+description = Override of stock SET_HEATER_TEMPERATURE — integrates bed-fan logic.
+rename_existing = _SET_HEATER_TEMPERATURE
+gcode =
+
+	{% set HEATER = params.HEATER|default("None") %}
+	{% set TARGET = params.TARGET|default(0)|int %}
+
+	{% set THRESHOLD = printer["gcode_macro _USER_VARIABLE"].bedfans_threshold|int %}
+
+	{% if HEATER|lower == "extruder" %}
+	M104 S{TARGET}
+	{% elif HEATER|lower == "heater_bed" %}
+	M99140 S{TARGET}
+	{% else %}
+	{action_respond_info("Heater %s not supported" % HEATER)}
+	{% endif %}
+
+
+	{% if HEATER|lower == "heater_bed" %}
+	{% if TARGET >= THRESHOLD %}
+	BEDFANSSLOW
+	UPDATE_DELAYED_GCODE ID=bedfanloop DURATION=1
+	{% else %}
+	BEDFANSOFF
+	UPDATE_DELAYED_GCODE ID=bedfanloop DURATION=0
+	{% endif %}
+	{% endif %}
+
+[gcode_macro M190]
+description = Override of stock M190 — uses TEMPERATURE_WAIT and triggers bed fans.
+rename_existing = M99190
+gcode =
+
+	{% set S = params.S|int %}
+
+	{% set THRESHOLD = printer["gcode_macro _USER_VARIABLE"].bedfans_threshold|int %}
+
+	{% if S >= THRESHOLD %}
+	BEDFANSSLOW
+	{% else %}
+	BEDFANSOFF
+	{% endif %}
+
+	M140 {% for p in params
+	%}{'%s%s' % (p, params[p])}{%
+	endfor %}
+
+	{% if S != 0 %}
+	TEMPERATURE_WAIT SENSOR=heater_bed MINIMUM={S|int} MAXIMUM={S|int + 5}
+	{% endif %}
+
+
+	{% if S >= THRESHOLD %}
+	BEDFANSFAST
+	{% endif %}
+
+[gcode_macro M140]
+description = Alias to SET_HEATER_TEMPERATURE so bed-fan logic fires on M140 too.
+rename_existing = M99140
+gcode =
+
+	{% set S = params.S|float %}
+
+	SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET={S}
+
+[gcode_macro TURN_OFF_HEATERS]
+description = Override of stock TURN_OFF_HEATERS — also turns bed fans off.
+rename_existing = _TURN_OFF_HEATERS
+gcode =
+	BEDFANSOFF
+	_TURN_OFF_HEATERS
+
+[delayed_gcode bedfanloop]
+gcode =
+
+	{% set THRESHOLD = printer["gcode_macro _USER_VARIABLE"].bedfans_threshold|int %}
+
+	{% if printer.heater_bed.target >= THRESHOLD %}
+	{% if printer.heater_bed.temperature|int >= (printer.heater_bed.target|int - 1) %}
+	BEDFANSFAST
+	{% else %}
+	UPDATE_DELAYED_GCODE ID=bedfanloop DURATION=5
+	{% endif %}
+	{% endif %}
+
+[gcode_macro PRINT_WARMUP]
+description = Pre-heat without printing (caselight on, BED_MESH_CLEAR, home, QGL, start bed+ext heating).
+gcode =
+	{% set bed = params.BED|int %}
+	{% set extruder = params.EXTRUDER|int %}
+
+	SET_PIN PIN=caselight VALUE=0.3
+	_RESETSPEEDS
+	BED_MESH_CLEAR
+	_CG28
+	_CQGL
+	M140 S{bed}
+	M104 S{extruder}
+
+[gcode_macro PRINT_START]
+description = Full print start: tap-threshold guard → home → QGL → bed heat + chamber wait → BLOBIFIER_CLEAN → re-home Z → adaptive bed mesh → heat hotend.
+gcode =
+
+
+
+
+	{% set probe_cfg = printer.configfile.settings['probe_eddy_current btt_eddy'] %}
+	{% if probe_cfg.tap_threshold|default(0)|float <= 0 %}
+	{ action_raise_error("PRINT_START aborted: tap_threshold not calibrated. Run PROBE_EDDY_CURRENT_TAP_CALIBRATE TAP=guess, then TAP=refine, then TAP=verify, with SAVE_CONFIG after each.") }
+	{% endif %}
+
+
+	{% set bed = params.BED|int %}
+	{% set extruder = params.EXTRUDER|int %}
+	{% set chamber = params.CHAMBER|default(0)|int %}
+	{% set x_wait = printer.toolhead.axis_maximum.x|float / 2 %}
+	{% set y_wait = printer.toolhead.axis_maximum.y|float / 2 %}
+	{% set chamber_wait_threshold = printer["gcode_macro _USER_VARIABLE"].chamber_wait_bed_threshold|int %}
+
+
+	_CG28
+	_CQGL
+	G90
+
+
+	{% if bed > chamber_wait_threshold %}
+	M106 S255
+	PARKCENTER
+	M190 S{bed}
+	TEMPERATURE_WAIT SENSOR="temperature_fan chamber" MINIMUM={(chamber/2)}
+	{% else %}
+	M190 S{bed}
+	{% endif %}
+
+	BLOBIFIER_CLEAN
+	G28 Z
+	BED_MESH_CALIBRATE ADAPTIVE=1
+
+
+	G1 X{x_wait} Y{y_wait} Z15 F9000
+	M107
+	M109 S{extruder}
+
+[gcode_macro PRINT_END]
+description = Cool, clear mesh, wait (configurable cooldown), OFF, _RESETSPEEDS.
+gcode =
+	{% set cooldown_ms = printer["gcode_macro _USER_VARIABLE"].print_end_cooldown_seconds|int * 1000 %}
+
+	M400
+	G92 E0
+	M104 S0
+	M140 S0
+	M107
+	G91
+	G1 Z5 F3000
+	G90
+	BED_MESH_CLEAR
+	G4 P{cooldown_ms}
+	OFF
+	_RESETSPEEDS
+
+[gcode_macro _FLOW_CALIB_VARIABLES]
+description = Internal state holder for FLOW_MULTIPLIER_CALIBRATION / COMPUTE_FLOW_MULTIPLIER.
+variable_last_shell_thickness = 0.0
+variable_last_evalue = 0.0
+gcode =
+
+[gcode_arcs]
+resolution = 0.1
+
+[gcode_macro FLOW_MULTIPLIER_CALIBRATION]
+description = Print a small tower to calibrate the extrusion flow multiplier by measuring the shell
+gcode =
+
+
+
+	{% set do_raft = params.DO_RAFT|default(1)|int %}
+	{% set do_retract = params.DO_RECTRACT|default(0)|int %}
+	{% set print_size = params.PRINT_SIZE|default(40)|int %}
+	{% set print_height = params.HEIGHT|default(15)|int %}
+	{% set corner_radius = params.CORNER_RADIUS|default(8)|int %}
+	{% set number_of_perimeters = params.PERIMETERS|default(2)|int %}
+	{% set fan_speed = params.FAN_SPEED|default(20)|int %}
+
+	{% set e_multiplier = params.EXTRUSION_MULTIPLIER|default(1.00)|float %}
+	{% set filament_diameter = params.FILAMENT_DIAMETER|default(1.75)|float %}
+	{% set extrusion_width = params.EXTRUSION_WIDTH|default(0.4)|float %}
+	{% set layer_height = params.LAYER_HEIGHT|default(0.2)|float %}
+
+	{% set retract_length = params.RETRACT_LENGTH|default(0.5)|float %}
+	{% set initial_purge = params.PURGE_MM|default(1)|int %}
+	{% set z_hop_height  = 2 * layer_height %}
+
+	{% set feedrate_print = params.CONTROL_SPEED|default(100)|int * 60 %}
+	{% set feedrate_travel = params.TRAVEL_SPEED|default(200)|int * 60 %}
+	{% set feedrate_raft = params.RAFT_SPEED|default(60)|int * 60 %}
+	{% set feedrate_z = params.Z_LIFT_SPEED|default(20)|int * 60 %}
+	{% set feedrate_retract = params.RETRACT_SPEED|default(50)|int * 60 %}
+
+
+
+
+	{% set e_per_mm = ((extrusion_width - layer_height) * layer_height + 3.14159 * (layer_height / 2)**2) / (3.14159 * (filament_diameter / 2)**2) %}
+	{% set spacing = extrusion_width - layer_height * (1 - 3.14159 / 4) %}
+	{% set shell_thickness = extrusion_width + (number_of_perimeters|float - 1) * spacing %}
+
+	{% set max_x = printer.toolhead.axis_maximum.x|float %}
+	{% set max_y = printer.toolhead.axis_maximum.y|float %}
+	{% set x_start = max_x / 2 - print_size / 2 %}
+	{% set y_start = max_y / 2 - print_size / 2 %}
+	{% set x_end = x_start + print_size %}
+	{% set y_end = y_start + print_size %}
+
+	{% set num_raft_lines = ([print_size, max_x]|min / spacing)|round(0, 'floor')|int %}
+	{% set raft_size = num_raft_lines * spacing %}
+
+
+
+
+	{action_respond_info("")}
+	{action_respond_info("Starting extrusion flow calibration print")}
+	{action_respond_info("This operation can not be interrupted by normal means. Hit the \"emergency stop\" button to stop it if needed")}
+	{action_respond_info("")}
+	{action_respond_info("Exrusion multiplier used: %.4f" % e_multiplier)}
+	{action_respond_info("Number of perimeters to print: %d" % number_of_perimeters)}
+	{action_respond_info("THEORIC SHELL THICKNESS: %.4f" % shell_thickness)}
+	{action_respond_info("")}
+	{action_respond_info("Measure the shell thickness using a caliper or micrometer. Then call the computation macro with the measured value:")}
+	{action_respond_info("COMPUTE_FLOW_MULTIPLIER MEASURED_THICKNESS=xxx.xxx")}
+	{action_respond_info("")}
+
+	SAVE_GCODE_STATE NAME=STATE_FLOW_MULTIPLIER_CALIBRATION
+
+
+
+
+	SET_GCODE_VARIABLE MACRO=_FLOW_CALIB_VARIABLES VARIABLE=last_shell_thickness VALUE={shell_thickness}
+	SET_GCODE_VARIABLE MACRO=_FLOW_CALIB_VARIABLES VARIABLE=last_evalue VALUE={e_multiplier}
+
+
+
+
+	G90
+	M83
+	G92 E0.0
+	G0 X{x_start} Y{y_start - 5} Z{layer_height} F{feedrate_travel}
+
+	G91
+	G1 E{initial_purge} F{5 * 60}
+	G1 X{raft_size} E{raft_size * e_per_mm * 1.5} F{feedrate_raft / 2}
+	G1 Y-{extrusion_width} E{extrusion_width * e_per_mm} F{feedrate_raft / 2}
+	G1 X-{raft_size} E{raft_size * e_per_mm} F{feedrate_raft / 2}
+
+	G1 E-{retract_length} F{feedrate_retract}
+	G0 Z{z_hop_height} F{feedrate_z}
+
+	G90
+	G0 X{x_start} Y{y_start} F{feedrate_travel}
+	G1 Z{layer_height} F{feedrate_z}
+	G1 E{retract_length} F{feedrate_retract}
+
+
+	M221 S{e_multiplier * 100}
+
+
+
+
+	{% if do_raft == 1 %}
+	G91
+	{% for curr_raft_line in range(1, num_raft_lines + 2) %}
+
+	G1 Y{loop.cycle(1.0, -1.0) * raft_size} E{raft_size * e_per_mm} F{feedrate_raft}
+
+
+	{% if not loop.last %}
+	G1 X{spacing} E{spacing * e_per_mm} F{feedrate_raft}
+	{% endif %}
+	{% endfor %}
+
+	G1 E-{retract_length} F{feedrate_retract}
+	G0 Z{z_hop_height} F{feedrate_z}
+	G90
+	{% endif %}
+
+
+
+
+	G90
+	M106 S{fan_speed * 255 / 100}
+
+
+	{% for curr_layer in range(1, (print_height / layer_height)|round|int) %}
+	G0 X{x_start + corner_radius} Y{y_start} F{feedrate_travel}
+	G1 Z{(curr_layer * layer_height) + (layer_height if do_raft == 1 else 0)} F{feedrate_z}
+
+
+	{% for perim_num in range(number_of_perimeters) %}
+
+	{% set perim_offset = perim_num * spacing %}
+	{% set perim_radius = corner_radius - (perim_num * spacing) %}
+
+
+	G1 X{x_start + corner_radius} Y{y_start + perim_offset} F{feedrate_travel}
+	{% if do_retract == 1 %}
+	G1 E{retract_length} F{feedrate_retract}
+	{% endif %}
+
+
+	G1 X{x_end - corner_radius} Y{y_start + perim_offset} E{(print_size - (2 * corner_radius)) * e_per_mm} F{feedrate_print}
+	G3 X{x_end - perim_offset} Y{y_start + corner_radius} J{perim_radius} E{(3.14159 / 2) * perim_radius * e_per_mm} F{feedrate_print}
+	G1 X{x_end - perim_offset} Y{y_end - corner_radius} E{(print_size - (2 * corner_radius)) * e_per_mm} F{feedrate_print}
+	G3 X{x_end - corner_radius} Y{y_end - perim_offset} I-{perim_radius} E{(3.14159 / 2) * perim_radius * e_per_mm} F{feedrate_print}
+	G1 X{x_start + corner_radius} Y{y_end - perim_offset} E{(print_size - (2 * corner_radius)) * e_per_mm} F{feedrate_print}
+	G3 X{x_start + perim_offset} Y{y_end - corner_radius} J-{perim_radius} E{(3.14159 / 2) * perim_radius * e_per_mm} F{feedrate_print}
+	G1 X{x_start + perim_offset} Y{y_start + corner_radius} E{(print_size - (2 * corner_radius)) * e_per_mm} F{feedrate_print}
+	G3 X{x_start + corner_radius} Y{y_start + perim_offset} I{perim_radius} E{(3.14159 / 2) * perim_radius * e_per_mm} F{feedrate_print}
+
+	{% if do_retract == 1 %}
+	G1 E-{retract_length} F{feedrate_retract}
+	{% endif %}
+	{% endfor %}
+
+	{% if do_retract == 1 %}
+	G91
+	G0 Z{z_hop_height} F{feedrate_z}
+	G90
+	{% endif %}
+	{% endfor %}
+
+
+
+
+	G1 E-{retract_length} F{feedrate_retract}
+	G91
+	G0 Z20 F{feedrate_travel}
+
+	RESTORE_GCODE_STATE NAME=STATE_FLOW_MULTIPLIER_CALIBRATION
+
+[gcode_macro COMPUTE_FLOW_MULTIPLIER]
+description = Compute a new flow multiplier by using the measured shell thickness on the calibration print
+gcode =
+	{% set evalue = params.OLD_EXTRUSION_MULTIPLIER|default(0.0)|float %}
+	{% set theorical_thickness = params.THEORICAL_THICKNESS|default(0.0)|float %}
+	{% set measured_thickness = params.MEASURED_THICKNESS|default(0.0)|float %}
+
+
+	{% if evalue == 0.0 %}
+	{% set last_evalue = printer["gcode_macro _FLOW_CALIB_VARIABLES"].last_evalue %}
+
+
+	{% if last_evalue == 0.0 %}
+	{action_respond_info("It seems that no calibration print was run prior to this (or a restart of Klipper occured).")}
+	{action_respond_info("You can still manually use it by calling again this macro like that:")}
+	{action_respond_info("COMPUTE_FLOW_MULTIPLIER OLD_EXTRUSION_MULTIPLIER=xxx.xxx THEORICAL_THICKNESS=xxx.xxx MEASURED_THICKNESS=xxx.xxx")}
+	{action_raise_error("not enough data to perform the computation of the new flow !")}
+	{% else %}
+	{% set final_evalue = last_evalue %}
+	{action_respond_info("Using OLD_EXTRUSION_MULTIPLIER: %.3f" % final_evalue)}
+	{% endif %}
+	{% else %}
+	{% set final_evalue = evalue %}
+	{action_respond_info("Using OLD_EXTRUSION_MULTIPLIER: %.3f" % final_evalue)}
+	{% endif %}
+
+
+	{% if theorical_thickness == 0.0 %}
+	{% set last_shell_thickness = printer["gcode_macro _FLOW_CALIB_VARIABLES"].last_shell_thickness %}
+
+
+	{% if last_shell_thickness == 0.0 %}
+	{action_respond_info("It seems that no calibration print was run prior to this (or a restart of Klipper occured).")}
+	{action_respond_info("You can still manually use it by calling again this macro like that:")}
+	{action_respond_info("COMPUTE_FLOW_MULTIPLIER OLD_EXTRUSION_MULTIPLIER=xxx.xxx THEORICAL_THICKNESS=xxx.xxx MEASURED_THICKNESS=xxx.xxx")}
+	{action_raise_error("not enough data to perform the computation of the new flow !")}
+	{% else %}
+	{% set final_theorical_thickness = last_shell_thickness %}
+	{action_respond_info("Using THEORICAL_THICKNESS: %.3f" % final_theorical_thickness)}
+	{% endif %}
+	{% else %}
+	{% set final_theorical_thickness = theorical_thickness %}
+	{action_respond_info("Using THEORICAL_THICKNESS: %.3f" % final_theorical_thickness)}
+	{% endif %}
+
+
+	{% if measured_thickness == 0.0 %}
+	{action_respond_info("You must use a caliper or micrometer to measure the calibration print shell thickness and call this macro with the measured value !!!")}
+	{action_respond_info("COMPUTE_FLOW_MULTIPLIER MEASURED_THICKNESS=xxx.xxx")}
+	{action_raise_error("not enough data to perform the computation of the new flow !")}
+	{% else %}
+	{% set new_evalue = final_theorical_thickness * final_evalue / measured_thickness %}
+	{action_respond_info("NEW COMPUTED FLOW VALUE: %.3f" % new_evalue)}
+	{action_respond_info("Use this new value as extrusion multiplier in your slicer of choice")}
+	{action_respond_info("")}
+	{% endif %}
+
+[gcode_macro PRESSURE_ADVANCE_CALIBRATION]
+description = Calibrate the pressure advance by printing a grid pattern
+gcode =
+
+
+
+	{% set pa_start     = params.START|default(0.02)|float %}
+	{% set pa_increment = params.INCREMENT|default(0.005)|float %}
+
+	{% set do_raft = params.DO_RAFT|default(1)|int %}
+
+	{% set print_size      = params.PRINT_SIZE|default(120)|int %}
+	{% set num_bands       = params.BANDS_LIMIT|default(999)|int %}
+	{% set lines_per_band  = params.LINES_PER_BAND|default(6)|int %}
+	{% set e_multiplier    = params.EXTRUSION_MULTIPLIER|default(1.25 if do_raft == 1 else 1.5)|float %},
+	{% set retract_length  = params.RETRACT_LENGTH|default(0.6)|float %}
+	{% set initial_purge   = params.PURGE_MM|default(8)|int %}
+
+	{% set feedrate_control = params.CONTROL_SPEED|default(30)|int * 60 %}
+	{% set feedrate_outer   = params.OUTER_SPEED|default(40)|int * 60 %}
+	{% set feedrate_inner   = params.INNER_SPEED|default(120)|int * 60 %}
+	{% set feedrate_travel  = params.TRAVEL_SPEED|default(200)|int * 60 %}
+	{% set feedrate_raft    = params.RAFT_SPEED|default(120)|int * 60 %}
+	{% set feedrate_z       = 5 * 60 %}
+	{% set feedrate_retract = 50 * 60 %}
+
+	{% set spacing_line  = params.LINE_SPACING|default(0.4)|float %}
+	{% set spacing_band  = 2 %}
+	{% set spacing_raft  = 2 %}
+
+	{% set fast_line_ratio_percent = 50 %}
+
+	{% set lines_per_band    = [2, lines_per_band]|max %}
+	{% set e_multiplier      = [1, e_multiplier]|max %}
+	{% set num_lines_control = (lines_per_band / 2)|round(0, 'floor')|int %}
+	{% set num_lines_test    = (lines_per_band / 2)|round(0, 'ceil')|int %}
+	{% set spacing_line      = spacing_line * (1 + e_multiplier - 1.25) %}
+
+	{% set max_x = printer.toolhead.axis_maximum.x|float %}
+	{% set max_y = printer.toolhead.axis_maximum.y|float %}
+	{% set nozzle_diameter = printer.configfile.config['extruder'].nozzle_diameter|float %}
+	{% set line_width    = nozzle_diameter * 1.25 %}
+	{% set line_height   = nozzle_diameter / 2 %}
+	{% set z_hop_height  = 2 * line_height %}
+	{% set e_per_mm      = (line_width * line_height) / (3.1415 * (1.75/2)**2) %}
+	{% set spacing_purge = line_height * 0.8 %}
+
+	{% set spacing_raft   = (spacing_raft / line_width)|round * line_width %}
+	{% set num_raft_lines = ([print_size, max_x]|min / spacing_raft)|round(0, 'floor')|int %}
+	{% set print_width    = num_raft_lines * spacing_raft %}
+
+	{% set band_height      = lines_per_band * line_width + (lines_per_band - 1) * spacing_line + spacing_band %}
+	{% set bands_per_height = (([print_size, max_y]|min  - spacing_purge - 2 * line_width + spacing_band) / band_height)|round(0, 'floor')|int %}
+	{% set num_bands        = [num_bands, bands_per_height]|min %}
+	{% set print_height     = num_bands * band_height - spacing_band + spacing_purge +  2 * line_width %}
+
+	{% set slow_line_length = ((print_width * (1 - fast_line_ratio_percent / 100) / 2) / spacing_raft)|round * spacing_raft + spacing_raft / 2 %}
+	{% set fast_line_length = print_width - slow_line_length * 2 %}
+	{% set thick_raft_num1 = (slow_line_length / spacing_raft)|round|int %}
+	{% set thick_raft_num2  = num_raft_lines - thick_raft_num1 + 1 %}
+
+	{% set x_start = max_x / 2 - print_width  / 2 %}
+	{% set y_start = max_y / 2 - print_height / 2 %}
+
+	{action_respond_info("")}
+	{action_respond_info("Starting Pressure Advance calibration print.")}
+	{action_respond_info("")}
+	{action_respond_info("This operation can not be interrupted by normal means. Hit the \"emergency stop\" button once the print starts exhibiting PA values that are obviously too high.")}
+	{action_respond_info("")}
+	{action_respond_info("PA of first band: %.4f" % pa_start)}
+	{action_respond_info("PA of last band: %.4f" % (pa_start + ((num_bands - 1) * pa_increment)))}
+	{action_respond_info("PA increment per band: %.4f" % pa_increment)}
+	{action_respond_info("Number of bands: %d" % num_bands)}
+	{action_respond_info("")}
+	{action_respond_info("Inspect the printed model. "
+	"Look at the top and bottom lines in each band, on the right side of the two vertical raft bars (where the print speeds change). "
+	"Find the highest band from the bottom where the lines at its top still resemble the lines at its bottom, with no visible extrusion width irregularities. "
+	"Your final Pressure Advance value would then be:"
+	)}
+	{action_respond_info("")}
+	{action_respond_info("Assuming that first band_number is 0")}
+	{action_respond_info("PA = %.4f + (%.4f * band_number)" % (pa_start, pa_increment))}
+	{action_respond_info("")}
+	{action_respond_info("Update your [extruder] config section and set \"pressure_advance\" to the value you calculated.")}
+	{action_respond_info("")}
+
+
+
+
+
+
+
+
+
+	SAVE_GCODE_STATE NAME=STATE_PRESSURE_ADVANCE_CALIBRATION
+	{% set pa_saved = printer.configfile.settings['extruder'].pressure_advance %}
+	SET_PRESSURE_ADVANCE ADVANCE={pa_start}
+
+
+
+
+	M221 S100
+
+
+
+
+	M117 Priming
+	G90
+	G0 X{x_start} Y{y_start} Z{line_height} F{feedrate_travel}
+	G91
+	G1 E{initial_purge} F{5 * 60}
+	G1 X{print_width}  E{print_width * e_per_mm} F{feedrate_raft / 2}
+	G1 Y{line_width}   E{line_width * e_per_mm}  F{feedrate_raft / 2}
+	G1 X-{print_width} E{print_width * e_per_mm} F{feedrate_raft / 2}
+
+
+
+
+	{% if do_raft == 1 %}
+	G0 F{feedrate_raft}
+
+	{% for curr_raft_line in range(1, num_raft_lines + 2) %}
+
+	{% if curr_raft_line == thick_raft_num1 or curr_raft_line == thick_raft_num2 %}
+	G1 Y{loop.cycle(1.0, -1.0) * print_height} E{print_height * e_per_mm}
+	G1 X{line_width} E{line_width * e_per_mm}
+	G1 Y{loop.cycle(-1.0, 1.0) * print_height} E{print_height * e_per_mm}
+	G1 X{line_width} E{line_width * e_per_mm}
+	{% endif %}
+
+	G1 Y{loop.cycle(1.0, -1.0) * print_height} E{print_height * e_per_mm}
+
+
+	{% if not loop.last %}
+	{% set horizontal_move = spacing_raft - (2 * line_width if curr_raft_line == thick_raft_num1 - 1 or curr_raft_line == thick_raft_num2 - 1 else 0) %}
+	G1 X{horizontal_move} E{horizontal_move * e_per_mm}
+	{% endif %}
+	{% endfor %}
+
+	G1 E-{retract_length} F{feedrate_retract}
+	G0 Z{z_hop_height} F{feedrate_z}
+	{% endif %}
+
+
+
+
+	M117 Printing bands
+	G90
+	G0 X{x_start} Y{y_start + 2 * line_width + spacing_purge} F{feedrate_travel}
+	G0 Z{line_height + (line_height if do_raft == 1 else 0)} F{feedrate_z}
+	G91
+	G1 E{retract_length} F{feedrate_retract}
+
+
+	{% for curr_band_num in range(0, num_bands ) %}
+	{% set outer_loop = loop %}
+
+	{% set curr_pa_value = pa_start + curr_band_num * pa_increment %}
+	SET_PRESSURE_ADVANCE ADVANCE={curr_pa_value}
+	M117 Band {curr_band_num} PA {curr_pa_value|round(4)}
+
+
+	{% for _ in range(num_lines_control) %}
+	G1 X{print_width} E{print_width * e_per_mm * e_multiplier} F{feedrate_control}
+
+	G1 E-{retract_length} F{feedrate_retract}
+	G0 Z{z_hop_height} F{feedrate_z}
+
+	G0 X-{print_width} Y{spacing_line + line_width} F{feedrate_travel}
+
+	G0 Z-{z_hop_height} F{feedrate_z}
+	G1 E{retract_length} F{feedrate_retract}
+	{% endfor %}
+
+
+	{% for _ in range(num_lines_test) %}
+	{% for data in [{'mm': slow_line_length, 'f': feedrate_outer}, {'mm': fast_line_length, 'f': feedrate_inner}, {'mm': slow_line_length, 'f': feedrate_outer}] %}
+	G1 X{data.mm} E{data.mm * e_per_mm * e_multiplier} F{data.f}
+	{% endfor %}
+
+	G1 E-{retract_length} F{feedrate_retract}
+	G0 Z{z_hop_height} F{feedrate_z}
+
+	{% if not (outer_loop.last and loop.last) %}
+	G0 X-{print_width} Y{(spacing_line if not loop.last else spacing_band) + line_width} F{feedrate_travel}
+	G0 Z-{z_hop_height} F{feedrate_z}
+	G1 E{retract_length} F{feedrate_retract}
+	{% endif %}
+	{% endfor %}
+	{% endfor %}
+
+
+
+
+	G1 E-{retract_length} F{feedrate_retract}
+	G0 Z20 F{feedrate_z}
+	G0 X-{print_width / 2} Y{[50, max_y - (y_start + print_height)]|min} F{feedrate_travel}
+
+	M117
+	SET_PRESSURE_ADVANCE ADVANCE={pa_saved}
+	RESTORE_GCODE_STATE NAME=STATE_PRESSURE_ADVANCE_CALIBRATION
+
+[bed_mesh Default2]
+version = 1
+points =
+	-0.032500, -0.000313, 0.003437, 0.002187, -0.034375
+	-0.013125, 0.012187, 0.025312, 0.047500, -0.030313
+	-0.035313, 0.000312, 0.000000, 0.002500, -0.028437
+	-0.039062, 0.000938, 0.001875, 0.016250, -0.052500
+	0.053125, 0.038750, 0.050938, 0.038750, -0.035000
+x_count = 5
+y_count = 5
+mesh_x_pps = 2
+mesh_y_pps = 2
+algo = bicubic
+tension = 0.2
+min_x = 30.0
+max_x = 320.0
+min_y = 30.0
+max_y = 320.0
+
+[bed_mesh default]
+version = 1
+points =
+	0.011923, 0.014487, 0.027654, 0.027243, 0.025145, 0.028933, 0.029721, 0.012092, -0.039038
+	0.018876, 0.010372, 0.020389, 0.033821, 0.040018, 0.047132, 0.046374, 0.029070, -0.010880
+	0.023007, 0.013923, 0.025831, 0.040756, 0.040550, 0.055692, 0.054502, 0.035135, -0.018296
+	0.002345, -0.008747, 0.015091, 0.021907, 0.031178, 0.051540, 0.046140, 0.045661, 0.003862
+	0.000610, -0.006510, 0.013206, 0.020780, 0.030838, 0.047685, 0.043839, 0.035169, -0.010181
+	0.001852, -0.001868, 0.008949, 0.023034, 0.035257, 0.047887, 0.047719, 0.044309, 0.002739
+	-0.004278, -0.008180, -0.002564, 0.010602, 0.031733, 0.043444, 0.044616, 0.037431, -0.013351
+	0.035106, 0.017701, 0.021726, 0.030587, 0.051116, 0.056604, 0.058148, 0.049818, -0.003412
+	0.078545, 0.048402, 0.047907, 0.054149, 0.065154, 0.064318, 0.064453, 0.034619, -0.026997
+x_count = 9
+y_count = 9
+mesh_x_pps = 2
+mesh_y_pps = 2
+algo = bicubic
+tension = 0.2
+min_x = 15.0
+max_x = 335.0
+min_y = 21.42
+max_y = 334.94
+=======================
+Declaration of '__main __octoprint' hides previous menuitem declaration
+temperature_probe btt_eddy: No drift calibration configured, disabling temperature drift compensation
+temperature_probe btt_eddy: registered drift compensation with probe [probe_eddy_current btt_eddy]
+Extruder max_extrude_ratio=0.266081
+Loaded MCU 'mcu' 135 commands (v0.13.0-649-g4767a8ed / gcc: (15:8-2019-q3-1+b1) 8.3.1 20190703 (release) [gcc-8-branch revision 273027] binutils: (2.35.2-2+14+b2) 2.35.2)
+MCU 'mcu' config: ADC_MAX=4095 BUS_PINS_i2c0=P0.28,P0.27 BUS_PINS_i2c1=P0.1,P0.0 BUS_PINS_i2c1a=P0.20,P0.19 BUS_PINS_i2c2=P0.11,P0.10 BUS_PINS_ssp0=P0.17,P0.18,P0.15 BUS_PINS_ssp1=P0.8,P0.9,P0.7 CLOCK_FREQ=120000000 MCU=lpc1769 PWM_MAX=255 RESERVE_PINS_USB=P0.30,P0.29,P2.9 STATS_SUMSQ_BASE=256 STEPPER_OPTIMIZED_EDGE=15 STEPPER_STEP_BOTH_EDGE=1
+Loaded MCU 'z' 135 commands (v0.13.0-649-g4767a8ed / gcc: (15:8-2019-q3-1+b1) 8.3.1 20190703 (release) [gcc-8-branch revision 273027] binutils: (2.35.2-2+14+b2) 2.35.2)
+MCU 'z' config: ADC_MAX=4095 BUS_PINS_i2c0=P0.28,P0.27 BUS_PINS_i2c1=P0.1,P0.0 BUS_PINS_i2c1a=P0.20,P0.19 BUS_PINS_i2c2=P0.11,P0.10 BUS_PINS_ssp0=P0.17,P0.18,P0.15 BUS_PINS_ssp1=P0.8,P0.9,P0.7 CLOCK_FREQ=120000000 MCU=lpc1769 PWM_MAX=255 RESERVE_PINS_USB=P0.30,P0.29,P2.9 STATS_SUMSQ_BASE=256 STEPPER_OPTIMIZED_EDGE=15 STEPPER_STEP_BOTH_EDGE=1
+Loaded MCU 'EBB' 135 commands (v0.13.0-649-g4767a8ed / gcc: (15:8-2019-q3-1+b1) 8.3.1 20190703 (release) [gcc-8-branch revision 273027] binutils: (2.35.2-2+14+b2) 2.35.2)
+MCU 'EBB' config: ADC_MAX=4095 BUS_PINS_i2c0a=gpio0,gpio1 BUS_PINS_i2c0b=gpio4,gpio5 BUS_PINS_i2c0c=gpio8,gpio9 BUS_PINS_i2c0d=gpio12,gpio13 BUS_PINS_i2c0e=gpio16,gpio17 BUS_PINS_i2c0f=gpio20,gpio21 BUS_PINS_i2c0g=gpio24,gpio25 BUS_PINS_i2c0h=gpio28,gpio29 BUS_PINS_i2c1a=gpio2,gpio3 BUS_PINS_i2c1b=gpio6,gpio7 BUS_PINS_i2c1c=gpio10,gpio11 BUS_PINS_i2c1d=gpio14,gpio15 BUS_PINS_i2c1e=gpio18,gpio19 BUS_PINS_i2c1f=gpio22,gpio23 BUS_PINS_i2c1g=gpio26,gpio27 BUS_PINS_spi0_gpio0_gpio3_gpio2=gpio0,gpio3,gpio2 BUS_PINS_spi0_gpio16_gpio19_gpio18=gpio16,gpio19,gpio18 BUS_PINS_spi0_gpio20_gpio23_gpio22=gpio20,gpio23,gpio22 BUS_PINS_spi0_gpio4_gpio3_gpio2=gpio4,gpio3,gpio2 BUS_PINS_spi0_gpio4_gpio7_gpio6=gpio4,gpio7,gpio6 BUS_PINS_spi0a=gpio0,gpio3,gpio2 BUS_PINS_spi0b=gpio4,gpio7,gpio6 BUS_PINS_spi0c=gpio16,gpio19,gpio18 BUS_PINS_spi0d=gpio20,gpio23,gpio22 BUS_PINS_spi1_gpio12_gpio11_gpio10=gpio12,gpio11,gpio10 BUS_PINS_spi1_gpio12_gpio15_gpio14=gpio12,gpio15,gpio14 BUS_PINS_spi1_gpio24_gpio27_gpio26=gpio24,gpio27,gpio26 BUS_PINS_spi1_gpio8_gpio11_gpio10=gpio8,gpio11,gpio10 BUS_PINS_spi1a=gpio8,gpio11,gpio10 BUS_PINS_spi1b=gpio12,gpio15,gpio14 BUS_PINS_spi1c=gpio24,gpio27,gpio26 CLOCK_FREQ=12000000 MCU=rp2040 PWM_MAX=32768 STATS_SUMSQ_BASE=256 STEPPER_OPTIMIZED_EDGE=2 STEPPER_STEP_BOTH_EDGE=1
+Loaded MCU 'eddy' 135 commands (v0.13.0-649-g4767a8ed / gcc: (15:8-2019-q3-1+b1) 8.3.1 20190703 (release) [gcc-8-branch revision 273027] binutils: (2.35.2-2+14+b2) 2.35.2)
+MCU 'eddy' config: ADC_MAX=4095 BUS_PINS_i2c0a=gpio0,gpio1 BUS_PINS_i2c0b=gpio4,gpio5 BUS_PINS_i2c0c=gpio8,gpio9 BUS_PINS_i2c0d=gpio12,gpio13 BUS_PINS_i2c0e=gpio16,gpio17 BUS_PINS_i2c0f=gpio20,gpio21 BUS_PINS_i2c0g=gpio24,gpio25 BUS_PINS_i2c0h=gpio28,gpio29 BUS_PINS_i2c1a=gpio2,gpio3 BUS_PINS_i2c1b=gpio6,gpio7 BUS_PINS_i2c1c=gpio10,gpio11 BUS_PINS_i2c1d=gpio14,gpio15 BUS_PINS_i2c1e=gpio18,gpio19 BUS_PINS_i2c1f=gpio22,gpio23 BUS_PINS_i2c1g=gpio26,gpio27 BUS_PINS_spi0_gpio0_gpio3_gpio2=gpio0,gpio3,gpio2 BUS_PINS_spi0_gpio16_gpio19_gpio18=gpio16,gpio19,gpio18 BUS_PINS_spi0_gpio20_gpio23_gpio22=gpio20,gpio23,gpio22 BUS_PINS_spi0_gpio4_gpio3_gpio2=gpio4,gpio3,gpio2 BUS_PINS_spi0_gpio4_gpio7_gpio6=gpio4,gpio7,gpio6 BUS_PINS_spi0a=gpio0,gpio3,gpio2 BUS_PINS_spi0b=gpio4,gpio7,gpio6 BUS_PINS_spi0c=gpio16,gpio19,gpio18 BUS_PINS_spi0d=gpio20,gpio23,gpio22 BUS_PINS_spi1_gpio12_gpio11_gpio10=gpio12,gpio11,gpio10 BUS_PINS_spi1_gpio12_gpio15_gpio14=gpio12,gpio15,gpio14 BUS_PINS_spi1_gpio24_gpio27_gpio26=gpio24,gpio27,gpio26 BUS_PINS_spi1_gpio8_gpio11_gpio10=gpio8,gpio11,gpio10 BUS_PINS_spi1a=gpio8,gpio11,gpio10 BUS_PINS_spi1b=gpio12,gpio15,gpio14 BUS_PINS_spi1c=gpio24,gpio27,gpio26 CLOCK_FREQ=12000000 MCU=rp2040 PWM_MAX=32768 STATS_SUMSQ_BASE=256 STEPPER_OPTIMIZED_EDGE=2 STEPPER_STEP_BOTH_EDGE=1
+Sending MCU 'mcu' printer configuration...
+Configured MCU 'mcu' (500 moves)
+Sending MCU 'z' printer configuration...
+Configured MCU 'z' (500 moves)
+Sending MCU 'EBB' printer configuration...
+Configured MCU 'EBB' (500 moves)
+Sending MCU 'eddy' printer configuration...
+Configured MCU 'eddy' (500 moves)
+bed_mesh: generated points
+Index |  Tool Adjusted  |   Probe
+  0   | (15.0, 0.0)     | (15.0, 21.4)
+  1   | (55.0, 0.0)     | (55.0, 21.4)
+  2   | (95.0, 0.0)     | (95.0, 21.4)
+  3   | (135.0, 0.0)    | (135.0, 21.4)
+  4   | (175.0, 0.0)    | (175.0, 21.4)
+  5   | (215.0, 0.0)    | (215.0, 21.4)
+  6   | (255.0, 0.0)    | (255.0, 21.4)
+  7   | (295.0, 0.0)    | (295.0, 21.4)
+  8   | (335.0, 0.0)    | (335.0, 21.4)
+  9   | (335.0, 38.6)   | (335.0, 60.0)
+  10  | (295.0, 38.6)   | (295.0, 60.0)
+  11  | (255.0, 38.6)   | (255.0, 60.0)
+  12  | (215.0, 38.6)   | (215.0, 60.0)
+  13  | (175.0, 38.6)   | (175.0, 60.0)
+  14  | (135.0, 38.6)   | (135.0, 60.0)
+  15  | (95.0, 38.6)    | (95.0, 60.0)
+  16  | (55.0, 38.6)    | (55.0, 60.0)
+  17  | (15.0, 38.6)    | (15.0, 60.0)
+  18  | (15.0, 77.1)    | (15.0, 98.6)
+  19  | (55.0, 77.1)    | (55.0, 98.6)
+  20  | (95.0, 77.1)    | (95.0, 98.6)
+  21  | (135.0, 77.1)   | (135.0, 98.6)
+  22  | (175.0, 77.1)   | (175.0, 98.6)
+  23  | (215.0, 77.1)   | (215.0, 98.6)
+  24  | (255.0, 77.1)   | (255.0, 98.6)
+  25  | (295.0, 77.1)   | (295.0, 98.6)
+  26  | (335.0, 77.1)   | (335.0, 98.6)
+  27  | (335.0, 115.7)  | (335.0, 137.1)
+  28  | (295.0, 115.7)  | (295.0, 137.1)
+  29  | (255.0, 115.7)  | (255.0, 137.1)
+  30  | (215.0, 115.7)  | (215.0, 137.1)
+  31  | (175.0, 115.7)  | (175.0, 137.1)
+  32  | (135.0, 115.7)  | (135.0, 137.1)
+  33  | (95.0, 115.7)   | (95.0, 137.1)
+  34  | (55.0, 115.7)   | (55.0, 137.1)
+  35  | (15.0, 115.7)   | (15.0, 137.1)
+  36  | (15.0, 154.3)   | (15.0, 175.7)
+  37  | (55.0, 154.3)   | (55.0, 175.7)
+  38  | (95.0, 154.3)   | (95.0, 175.7)
+  39  | (135.0, 154.3)  | (135.0, 175.7)
+  40  | (175.0, 154.3)  | (175.0, 175.7)
+  41  | (215.0, 154.3)  | (215.0, 175.7)
+  42  | (255.0, 154.3)  | (255.0, 175.7)
+  43  | (295.0, 154.3)  | (295.0, 175.7)
+  44  | (335.0, 154.3)  | (335.0, 175.7)
+  45  | (335.0, 192.8)  | (335.0, 214.3)
+  46  | (295.0, 192.8)  | (295.0, 214.3)
+  47  | (255.0, 192.8)  | (255.0, 214.3)
+  48  | (215.0, 192.8)  | (215.0, 214.3)
+  49  | (175.0, 192.8)  | (175.0, 214.3)
+...points 50 through 80 truncated
+bed_mesh: zero_reference_position is (175.00, 175.00)
+Running full garbage collection and freezing
+Must calibrate probe_eddy_current first
+Must calibrate probe_eddy_current first
+Must calibrate probe_eddy_current first
+Must home axis first: 175.000 175.000 5.000 [0.000]
+Must home axis first: 175.000 175.000 5.000 [0.000]
+Unfreezing garbage collection
+
+-- STDERR --
+    Starting /tmp/layer7-NORMALIZED/_layer7.test (printer.cfg)
+
+
+Test case /tmp/layer7-NORMALIZED/_layer7.test FAILED (Error during test)!
