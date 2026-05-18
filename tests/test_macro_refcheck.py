@@ -108,8 +108,8 @@ def test_real_repo_passes():
         + sorted(glob.glob("config/mmu/addons/*.cfg"))
         + sorted(glob.glob("config/mmu/optional/*.cfg"))
     )
-    assert any(c.endswith("printer.cfg") for c in cfgs), (
-        "config/*.cfg glob did not match printer.cfg — directory renamed?"
-    )
+    assert any(
+        c.endswith("printer.cfg") for c in cfgs
+    ), "config/*.cfg glob did not match printer.cfg — directory renamed?"
     r = run(*cfgs)
     assert r.returncode == 0, f"stdout={r.stdout!r}"

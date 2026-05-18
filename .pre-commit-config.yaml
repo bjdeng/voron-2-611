@@ -6,13 +6,16 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
+      # tests/snapshots/ contains L7 macro-behavior dumps with significant
+      # trailing whitespace (gcode dispatcher output) — stripping breaks
+      # byte-identity vs the captured baseline.
       - id: trailing-whitespace
-        exclude: ^vendor/|^tests/dict/|^firmware/
+        exclude: ^vendor/|^tests/dict/|^tests/snapshots/|^firmware/
       - id: end-of-file-fixer
-        exclude: ^vendor/|^tests/dict/|^firmware/|^tests/builtins\.txt$
+        exclude: ^vendor/|^tests/dict/|^tests/snapshots/|^firmware/|^tests/builtins\.txt$
       - id: mixed-line-ending
         args: ['--fix=lf']
-        exclude: ^vendor/|^tests/dict/|^firmware/
+        exclude: ^vendor/|^tests/dict/|^tests/snapshots/|^firmware/
       - id: check-yaml
         files: \.(yaml|yml)$
         exclude: ^vendor/
