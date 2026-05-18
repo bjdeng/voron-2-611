@@ -79,7 +79,7 @@ Beyond `[heater_bed]` + `[extruder]` + `[temperature_fan chamber]`, these sensor
 **`sensor_type: temperature_mcu` is NOT supported on LPC1769** (per `vendor/klipper/klippy/extras/temperature_mcu.py` supported list: rp2/sam3/sam4/samd21/samd51/stm32f1-4/stm32g0/stm32g4/stm32l4/stm32h7). Cannot add die-temp sensors for the two SKR 1.4 boards; the Eddy MCU temp sensor works because it's an RP2040.
 
 ### Installed but **not** in active use (per Ben, 2026-05-13)
-- **moonraker-timelapse** — never used. Included via `[include timelapse.cfg]` and `[update_manager timelapse]` is in `config/moonraker.conf`, but it's effectively dead code. Candidate for removal.
+- **moonraker-timelapse** — installed 2026-05-18 (closed #26; missed install step had left the Moonraker component dormant since initial setup). Active but **opt-in per print**: Ben does not have `TIMELAPSE_TAKE_FRAME` wired into OrcaSlicer's layer-change gcode by default. Two ways to invoke: (a) add `TIMELAPSE_TAKE_FRAME` to a specific print's slicer custom gcode, or (b) `HYPERLAPSE ACTION=START [CYCLE=30]` in the Mainsail console before starting a print, `HYPERLAPSE ACTION=STOP` after. Both require a webcam (currently unplugged — see below + #27).
 - **Webcam** — physically unplugged because of timing/streaming issues. Crowsnest + Sonar daemons still run. Plan: re-enable after Eddy NG → native Klipper Eddy migration.
 - **Spoolman** — Moonraker is configured against an external Spoolman at [`spoolman-server`](../.claude/projects/-Users-ben-code-voron-2-611/memory/spoolman-server.md) (http://192.168.0.89:7912 on Ben's LAN), but Ben isn't fully using it.
 
@@ -211,7 +211,7 @@ Ben's note: *"on the machine some updates to klipper, happy hare and others occa
 | `~/Happy-Hare` | `v3.4.2-22-ga880ac0a` | moggieuk/Happy-Hare | Has `install.sh`. Owns `~/printer_data/config/mmu/base/*` (those files in this repo are dereferenced copies of symlinks). |
 | `~/eddy-ng` | `v0.1-73-gc7ca62e` | vvuk/eddy-ng | Has `install.sh`. **Migrated off to native `[probe_eddy_current]` in PR #17, 2026-05-15.** Install dir retained for rollback; eventual cleanup TBD. |
 | `~/moonraker` | `v0.10.0-19-g1ed102e` | Arksine/moonraker | Standard. |
-| `~/moonraker-timelapse` | `v0.0.1-143-gc7fff11` | mainsail-crew/moonraker-timelapse | Configured but unused. |
+| `~/moonraker-timelapse` | `v0.0.1-143-gc7fff11` | mainsail-crew/moonraker-timelapse | Installed via `make install` 2026-05-18 (closes #26). Opt-in per print; needs webcam (#27). |
 | `~/mainsail` | (web release) | mainsail-crew/mainsail | Static UI files served by nginx. |
 | `~/mainsail-config` | `v1.2.1-1-gff3869a` | mainsail-crew/mainsail-config | Owns `mainsail.cfg` (the actual symlink target — `client.cfg` in the same dir is an identical copy, unused by us). |
 | `~/kiauh` | `v6.0.6` | dw-0/kiauh | Klipper installer/manager (interactive helper). |
@@ -238,7 +238,7 @@ There's no `[update_manager klipper]` block in `config/moonraker.conf`, **and th
 |---|---|---|
 | `mainsail` | Mainsail web UI | Active |
 | `mainsail-config` | Upstream mainsail-config (`~/mainsail-config/`) | Active. Note: our `config/mainsail.cfg` is symlinked to it on the Pi; if we ever slim that file locally (per refactor spec Phase 2), the symlink would need to be replaced with a real file and upstream changes would no longer auto-apply |
-| `timelapse` | moonraker-timelapse | Active but unused — see [#26](https://github.com/bjdeng/voron-2-611/issues/26) |
+| `timelapse` | moonraker-timelapse | Active. Component installed 2026-05-18; usage is opt-in per print (`TIMELAPSE_TAKE_FRAME` in slicer custom gcode, or `HYPERLAPSE ACTION=START` in console) and gated on webcam (#27). |
 | `crowsnest` | Webcam stack | Active even though webcam unplugged — see [#27](https://github.com/bjdeng/voron-2-611/issues/27) |
 | `sonar` | Network keepalive daemon | Active |
 | `happy-hare` | HH Klipper extension (`~/Happy-Hare/`) | Active |
@@ -277,7 +277,7 @@ There's no `[update_manager klipper]` block in `config/moonraker.conf`, **and th
    - Bring it up with Ben before silently changing it
    - Examples of "looks weird but is intentional": the 9:1 extruder gear ratio (Galileo), the chamber heater PID on a `[temperature_fan]`, dual SKR 1.4s on USB instead of CAN, microsteps 128 on X/Y/Z.
 
-5. **Don't auto-delete things even if unused.** `config/archive/klicky/`, `moonraker-timelapse`, the chamber thermistor cal table — leave alone unless Ben asks. Tag them as candidates in `memory/decisions.md` instead.
+5. **Don't auto-delete things even if unused.** `config/archive/klicky/`, the chamber thermistor cal table, abandoned-looking macros — leave alone unless Ben asks. Tag them as candidates in `memory/decisions.md` instead. (Cautionary tale: moonraker-timelapse looked unused for years but the real issue was a missed install step — see #26.)
 
 ### About this repo as canonical source
 6. **This repo is the canonical config; the Pi is the working copy.** Eventually changes flow `local edit → PR → main → sync to Pi`. Until that CI/CD is built, manual sync is fine, but **never overwrite the Pi's files without confirming** — Mainsail can also edit configs directly and the Pi may be ahead.
@@ -350,7 +350,7 @@ These have already tripped someone up — flag them when relevant.
 
 - **MMU `config/mmu/base/*.cfg` are symlinks on the Pi** to `~/Happy-Hare/config/base/*`. In this repo they're files (dereferenced by `tar -h` on pull). If you push this repo back to the Pi without preserving symlinks, you'll break Happy-Hare's update model.
 - **`config/mainsail.cfg` is a symlink** to `~/mainsail-config/mainsail.cfg`. Same caveat. (The upstream repo ships both `client.cfg` and `mainsail.cfg` as identical copies; the symlink target is the latter — verify with `ls -l` on the Pi.)
-- **`config/timelapse.cfg` is a symlink** to `~/moonraker-timelapse/klipper_macro/timelapse.cfg`. Same caveat — but Ben says he never used moonraker-timelapse; removal pending decision ([#26](https://github.com/bjdeng/voron-2-611/issues/26)).
+- **`config/timelapse.cfg` is a symlink** to `~/moonraker-timelapse/klipper_macro/timelapse.cfg`. Same caveat. Component installed 2026-05-18 (closes [#26](https://github.com/bjdeng/voron-2-611/issues/26)); usage is opt-in per print.
 - **`mmu/addons/mmu_erec_cutter*.cfg` and `mmu_eject_buttons*.cfg` are NOT included** from `printer.cfg` but the files remain (likely symlinked from `~/Happy-Hare/config/addons/`). Don't move them to `archive/` — HH install would recreate them. Toolhead cutter is **Filametrix**, not EREC. Eject buttons are not installed.
 - **`ModemManager` is masked on this Pi (2026-05-14).** It probes new USB-serial devices and could hold MCUs open during enumeration — a footgun on this 5-USB-MCU machine. Caused the `mcu 'mmu': Unable to connect` race during the first live `/deploy-to-pi`. Fixed via `sudo systemctl mask --now ModemManager.service`. Verify with `systemctl is-enabled ModemManager` (should print `masked`).
 - **SKR Z + EASY-BRD MMU consistently fail USB re-enumeration after `FIRMWARE_RESTART`** — root-caused as a kernel timing race, NOT ModemManager and NOT a physical disconnect. Both MCUs boot slower than the kernel's USB enumeration retry budget (~5s). dmesg pattern: `device descriptor read/64, error 2` → `device not accepting address, error -22` → `unable to enumerate USB device`. The boards are physically connected and electrically fine; the kernel just gave up. **One-shot recovery:** `sudo sh -c 'echo 1-1.3 > /sys/bus/usb/drivers/usb/unbind; sleep 2; echo 1-1.3 > /sys/bus/usb/drivers/usb/bind'`. **Permanent fix:** `klipper-mcu-watchdog.service` (GH issue #37, `scripts/klipper-mcu-watchdog.sh`).
@@ -500,7 +500,7 @@ voron-2-611/
 │   ├── eddy.cfg                 # Eddy probe + bed mesh + temperature_probe + SET_Z_FROM_PROBE pair
 │   ├── toolhead.cfg             # toolhead MCU config (RP2040 EBB SB v1.0, USB mode)
 │   ├── mainsail.cfg             # slimmed local copy (Phase 2); Pi symlink → ~/mainsail-config/mainsail.cfg means our copy doesn't deploy
-│   ├── timelapse.cfg            # symlink target on Pi (unused per Ben)
+│   ├── timelapse.cfg            # symlink target on Pi; opt-in per print, needs webcam #27
 │   ├── moonraker.conf
 │   ├── crowsnest.conf
 │   ├── sonar.conf
