@@ -114,7 +114,8 @@ Every active macro and where it lives. One-liner per macro; deeper context belon
 ### `config/macros/macros.cfg` — Ellis-derived utilities
 - `_CG28` — `G28` only if not already homed
 - `_CQGL` — `QUAD_GANTRY_LEVEL` only if not already applied
-- `OFF` — shut everything off (steppers, heaters, part fan, chamber fan, bed fan, case light)
+- `CASELIGHT_ON` / `CASELIGHT_OFF` — case light helpers (default ON brightness 0.3, overridable with `VALUE=`). Match the `BEDFANS*` pattern. Added 2026-05-18.
+- `OFF` — shut everything off (steppers, heaters, part fan, chamber fan, bed fan, calls `CASELIGHT_OFF`)
 - `SHUTDOWN` — `OFF` + tell Moonraker to power off the host
 - `PARKFRONT` / `PARKFRONTLOW` / `PARKREAR` / `PARKCENTER` / `PARKBED` — toolhead parking positions
 - `_RESETSPEEDS` — revert velocity/accel/SCV to configured maxima
@@ -123,10 +124,11 @@ Every active macro and where it lives. One-liner per macro; deeper context belon
 - `HEATSOAK` — heat bed (+ optional chamber wait) + park center
 - `SET_ACTIVE_SPOOL` / `CLEAR_ACTIVE_SPOOL` — Spoolman handoff via Moonraker remote method
 
-### `config/macros/print_start.cfg` — print sequence (jontek2 pattern)
-- `PRINT_WARMUP` — pre-heat without printing (caselight on, BED_MESH_CLEAR, home, QGL, start bed+ext heating)
-- `PRINT_START` — full start: tap_threshold guard → home → QGL → bed heat + chamber wait (if bed > 90 °C) → `BLOBIFIER_CLEAN` → re-home Z (auto-applies tap via `[homing_override]`) → adaptive bed mesh → heat hotend
-- `PRINT_END` — cool, clear mesh, wait 60 s, `OFF`, `_RESETSPEEDS`
+### `config/macros/print_start.cfg` — print lifecycle (heat-overlap, post-2026-05-18 redesign)
+- `PRINT_START` — full start: tap_threshold guard → param validation (BED/EXTRUDER max-temp) → CLEAR_PAUSE + UI hints (M117, SET_PRINT_STATS_INFO TOTAL_LAYER) → bed + hotend partial heat NON-BLOCKING → home + QGL (cold, in parallel with heat) → wait for bed + hotend partial → chamber soak branch (`CHAMBER>0` from slicer; `CHAMBER=0` runs a `bed_stabilization_soak_seconds` G4) → tap-Z → optional `Z_ADJUST` → adaptive bed mesh → final `M109` → hot-nozzle `BLOBIFIER_CLEAN`. Spec: `docs/superpowers/specs/2026-05-18-print-lifecycle-redesign.md`. Slicer contract: `docs/slicer-templates/orcaslicer.md`.
+- `PRINT_END` — flush buffer, retract 2mm, lift 10mm, park rear-left, heaters off, then `_PRINT_END_CLEANUP`.
+- `_PRINT_END_CLEANUP` — shared cleanup tail (`BED_MESH_CLEAR`, `G4` cooldown, `OFF`, `_RESETSPEEDS`). Called by both `PRINT_END` and `_CANCEL_PRINT_HOOK`.
+- (removed 2026-05-18) `PRINT_WARMUP` — was a separate manual prewarm macro; never called by slicer. Prewarming pre-print is now direct gcode (`M140 S110` + `M104 S150`) or `HEATSOAK`.
 
 ### `config/macros/bedfans.cfg` — Ellis BedFans automation
 - `_BEDFANVARS` — config (threshold, fast, slow speeds)
@@ -171,7 +173,9 @@ Key macros from Happy Hare (not exhaustive — see `config/mmu/base/mmu_software
 - `_MMU_CUT_TIP` (Filametrix toolhead cutter, from `config/mmu/base/mmu_cut_tip.cfg` — file header explicitly says "Filametrix style toolhead cutters")
 
 ### `config/mainsail.cfg` — Mainsail client.cfg (symlink target on Pi)
-- `[gcode_macro PAUSE]` / `RESUME` / `CANCEL_PRINT` / `_CLIENT_*` — standard Mainsail pause/cancel with park behavior
+- `[gcode_macro PAUSE]` / `RESUME` / `CANCEL_PRINT` / `_CLIENT_*` — standard Mainsail pause/cancel with park behavior. **Note: defined upstream in `~/mainsail-config/client.cfg`** (Pi-side symlink); do not override locally.
+- `_CLIENT_VARIABLE` — holds hook variables consumed by upstream `client.cfg`. `user_cancel_macro: "_CANCEL_PRINT_HOOK"` routes cancel-mid-print into our cleanup tail. Added locally 2026-05-18.
+- `_CANCEL_PRINT_HOOK` — runs when CANCEL_PRINT fires mid-print. Calls `MMU_END UNLOAD=1` (HH's end-of-print hook with forced unload, while extruder is still hot) then defers to `_PRINT_END_CLEANUP`. Added 2026-05-18.
 
 ### `config/archive/` — historical, **not included in config/printer.cfg**
 - `config/archive/klicky/` — pre-Eddy probe (Klicky) macros: bed mesh calibrate, QGL, klicky macros
