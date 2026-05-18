@@ -134,11 +134,12 @@ Order picked so cleanup ships before structural moves (small PRs lower the surfa
 
 | F# | Title | Severity | Action | Linked PR/issue |
 |---:|---|:---:|:---:|---|
-| **F9 + F1** | Delete printer.cfg leading cruft + dead `# [pause_resume]` / `# [display_status]` | P2 | PR | _pending_ |
-| **F6** | Remove duplicate `progress_text` display_data | P2 | PR | _pending_ |
-| **F5** | Add `m190_tolerance_celsius` variable, replace hardcoded `+5` in bedfans.cfg | P2 | PR | _pending_ |
-| **F8** | Reorder `macros.cfg` section ordering (home → shutdown → parks → speed → heater → soak) | P3 | PR | _pending_ |
-| **F2** | Split `printer.cfg` by subsystem (motion / bed / display / system) | P2 | issue → brainstorm | _pending GH issue_ |
+| **F9 + F1** | Delete printer.cfg leading cruft + dead `# [pause_resume]` / `# [display_status]` | P2 | PR | [#59](https://github.com/bjdeng/voron-2-611/pull/59) merged |
+| **F6** | Remove duplicate `progress_text` display_data | P2 | PR | [#60](https://github.com/bjdeng/voron-2-611/pull/60) merged |
+| **F5** | Add `m190_tolerance_celsius` variable, replace hardcoded `+5` in bedfans.cfg | P2 | PR | [#61](https://github.com/bjdeng/voron-2-611/pull/61) merged |
+| **F8** | Reorder `macros.cfg` section ordering (home → shutdown → parks → speed → heater → soak) | P3 | PR | [#62](https://github.com/bjdeng/voron-2-611/pull/62) merged |
+| **F12** | Document `_USER_VARIABLE` architectural limit in CLAUDE.md | P3 | docs-direct | `331a523` on main |
+| **F2** | Split `printer.cfg` by subsystem (motion / bed / display / system) | P2 | issue → brainstorm | [#63](https://github.com/bjdeng/voron-2-611/issues/63) |
 | **F7** | Drop `[update_manager timelapse]` + `[timelapse]` blocks | P3 | blocked | depends on [#26](https://github.com/bjdeng/voron-2-611/issues/26) |
 | **F13** | Bed-center `(175, 175)` duplication in eddy.cfg | P3 | no-action | document in `memory/decisions.md` |
 
