@@ -246,11 +246,32 @@ build_rsync_excludes() {
   #   archive/  — historical configs we don't run
   #   printer.cfg — handled separately via SAVE_CONFIG splice
   #
-  # Plus the dynamic symlink list from discover_pi_symlinks.
+  # We also protect Pi-managed state from the --delete pass below.
+  # rsync's --exclude protects matched paths from BOTH transfer and
+  # deletion, so listing them here keeps them on the Pi even though they
+  # aren't in the repo source:
+  #   printer-*.cfg — Klipper SAVE_CONFIG rotations (rollback safety net,
+  #                   one per SAVE_CONFIG invocation; see CLAUDE.md
+  #                   ## Known quirks for why we keep these on the Pi).
+  #   mmu-*         — defensive against any future Klipper rotation of
+  #                   MMU state following the same name-TIMESTAMP pattern.
+  #                   Already in .gitignore (line 12); preserving that intent.
+  #   .last-deploy-sha   — written by this script; consulted on next
+  #                        deploy to choose restart vs firmware_restart.
+  #   .moonraker.conf.bkp — Moonraker's own backup of moonraker.conf,
+  #                         rewritten on Moonraker restart.
+  #
+  # Plus the dynamic symlink list from discover_pi_symlinks (those are
+  # symlinks pointing into upstream install dirs like ~/Happy-Hare/ and
+  # ~/mainsail-config/ — deleting them would mutate the upstream repos).
   RSYNC_EXCLUDES=(
     --exclude='/firmware/'
     --exclude='/archive/'
     --exclude='/printer.cfg'
+    --exclude='/printer-*.cfg'
+    --exclude='/mmu-*'
+    --exclude='/.last-deploy-sha'
+    --exclude='/.moonraker.conf.bkp'
   )
   RSYNC_EXCLUDES+=("${PI_SYMLINK_EXCLUDES[@]}")
 }
@@ -292,7 +313,7 @@ show_plan_and_confirm() {
   else
     # Preview is informational. If it fails (e.g., transient network), let
     # do_rsync's hard-fail-and-exit-2 path be the authoritative failure.
-    rsync -av --dry-run "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/config/" "${PI_HOST}:~/printer_data/config/" \
+    rsync -av --delete --dry-run "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/config/" "${PI_HOST}:~/printer_data/config/" \
       | tail -20 || echo "(preview unavailable; do_rsync will report the real failure)"
   fi
 
@@ -317,7 +338,11 @@ show_plan_and_confirm() {
 }
 
 do_rsync() {
-  rsync -av "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/config/" "${PI_HOST}:~/printer_data/config/" || {
+  # --delete + the protective excludes in build_rsync_excludes() make
+  # the deploy self-cleaning: anything that lives on the Pi but isn't
+  # in our source AND isn't on the protect list gets wiped. See the
+  # comment block in build_rsync_excludes() for what's protected and why.
+  rsync -av --delete "${RSYNC_EXCLUDES[@]}" "$REPO_ROOT/config/" "${PI_HOST}:~/printer_data/config/" || {
     echo "ERR: rsync failed mid-deploy. Pi state may be partially updated; run sync-from-pi to inspect." >&2
     exit 2
   }

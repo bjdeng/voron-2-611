@@ -534,6 +534,65 @@ def test_deploy_excludes_pi_side_symlinks(fake_log):
     assert "--exclude=/mmu/base/some_new_symlink.cfg" in log, log
 
 
+def test_deploy_uses_delete_flag(fake_log):
+    """rsync must run with --delete so files removed from the repo
+    (or never deployed by us) get cleaned up on the Pi. Without --delete,
+    the Pi's ~/printer_data/config/ accumulates renamed files, manual
+    safety copies, log uploads, etc. forever. See #26-followup cleanup
+    work — 53 such files were found before this flag was added."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env, args=["--yes"])
+    assert r.returncode == 0, _diag(r)
+    log = fake_log.read_text()
+    # Both the real rsync AND the dry-run preview should use --delete so
+    # the preview shows what would be deleted.
+    assert log.count("--delete") >= 2, (
+        f"expected --delete in both dry-run preview AND real rsync invocation, "
+        f"got {log.count('--delete')} occurrence(s).\nlog:\n{log}"
+    )
+
+
+def test_deploy_protects_klipper_rotations(fake_log):
+    """Klipper rotates printer.cfg into printer-YYYYMMDD_HHMMSS.cfg on every
+    SAVE_CONFIG and similarly for any mmu-*.cfg. These are Pi-side rollback
+    safety net — must NOT be wiped by --delete."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env, args=["--yes"])
+    assert r.returncode == 0, _diag(r)
+    log = fake_log.read_text()
+    assert "--exclude=/printer-*.cfg" in log, log
+    assert "--exclude=/mmu-*" in log, log
+
+
+def test_deploy_protects_pi_managed_hidden_files(fake_log):
+    """Hidden state files in ~/printer_data/config/ are written by the Pi
+    side (Moonraker's .moonraker.conf.bkp, our own .last-deploy-sha) and
+    must NOT be wiped by --delete. The deploy marker in particular is
+    consulted by THIS script to choose restart vs firmware_restart — losing
+    it on every deploy would degrade that heuristic to its safe fallback."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+    }
+    r = _run(env=env, args=["--yes"])
+    assert r.returncode == 0, _diag(r)
+    log = fake_log.read_text()
+    assert "--exclude=/.last-deploy-sha" in log, log
+    assert "--exclude=/.moonraker.conf.bkp" in log, log
+
+
 def test_dry_run_does_not_print_deploy_complete(fake_log):
     env = {
         "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),

@@ -94,7 +94,11 @@ Exit codes:
 **Klipper's auto-backup is created during `SAVE_CONFIG`, not on parse failure or restart failure.** That means if you deploy a bad config that Klipper can't parse, there is no automatic `printer-YYYYMMDD_HHMMSS.cfg` from this deploy — only whatever the most recent prior `SAVE_CONFIG` left behind. **Take a manual safety copy before any risky deploy:**
 
 ```sh
-ssh pi@mainsailos.local "cp ~/printer_data/config/printer.cfg ~/printer_data/config/printer.cfg.pre-deploy"
+# Store the copy OUTSIDE ~/printer_data/config/ — the deploy runs rsync
+# with --delete and will wipe stray .pre-deploy / .bak files inside the
+# config directory on the next deploy. Klipper-rotated printer-2*.cfg
+# files are explicitly protected from the cleanup and survive.
+ssh pi@mainsailos.local "cp ~/printer_data/config/printer.cfg ~/printer.cfg.pre-deploy"
 ```
 
 If a deploy goes bad, roll back via:
@@ -102,8 +106,8 @@ If a deploy goes bad, roll back via:
 ```sh
 ssh pi@mainsailos.local
 cd ~/printer_data/config
-ls printer-2*.cfg printer.cfg.pre-deploy 2>/dev/null | tail -3   # find a good source
-cp printer.cfg.pre-deploy printer.cfg                            # or the dated backup
+ls printer-2*.cfg ~/printer.cfg.pre-deploy 2>/dev/null | tail -3   # find a good source
+cp ~/printer.cfg.pre-deploy printer.cfg                            # or the dated backup
 curl -X POST http://localhost:7125/printer/restart
 ```
 
