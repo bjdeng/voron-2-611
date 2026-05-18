@@ -102,17 +102,14 @@ def test_real_repo_passes():
     import glob
 
     cfgs = (
-        [
-            "config/printer.cfg",
-            "config/eddy.cfg",
-            "config/toolhead.cfg",
-            "config/mainsail.cfg",
-            "config/timelapse.cfg",
-        ]
+        sorted(glob.glob("config/*.cfg"))
         + sorted(glob.glob("config/macros/*.cfg"))
         + sorted(glob.glob("config/mmu/base/*.cfg"))
         + sorted(glob.glob("config/mmu/addons/*.cfg"))
         + sorted(glob.glob("config/mmu/optional/*.cfg"))
+    )
+    assert any(c.endswith("printer.cfg") for c in cfgs), (
+        "config/*.cfg glob did not match printer.cfg — directory renamed?"
     )
     r = run(*cfgs)
     assert r.returncode == 0, f"stdout={r.stdout!r}"
