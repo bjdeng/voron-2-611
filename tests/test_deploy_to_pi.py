@@ -603,6 +603,7 @@ def test_smoke_fails_when_gcode_script_rejected(fake_log):
         "READY_POLL_INTERVAL": "0",
         "READY_POLL_MAX": "3",
         "FAKE_GCODE_SCRIPT_OK": "0",
+        "EDDY_RETRY_SLEEP": "0",  # don't actually sleep during the eddy-flake retry path
     }
     r = _run(env=env, args=["--yes", "--smoke"])
     assert r.returncode == 4, _diag(r)
@@ -701,3 +702,61 @@ def test_smoke_gcode_sequence_does_not_include_unsupported_commands():
         assert (
             cmd not in smoke_tokens
         ), f"{cmd} re-introduced into SMOKE_GCODE — see PR #46 for why this fails on hardware"
+
+
+def test_smoke_first_command_retries_on_eddy_flake(fake_log):
+    """The first smoke command (G28) flakes after firmware_restart because
+    native [probe_eddy_current] needs the LDC1612 to settle before the
+    first descend-probe is reliable. Smoke must retry once and pass if
+    the retry succeeds. Memory: eddy-first-tap-flake. Issue: #65.
+
+    Asserts:
+    - rc=0 (smoke passes via retry)
+    - The retry banner appears in stdout
+    - /printer/gcode/script was POSTed exactly 5 times (G28×2 + 3 others),
+      proving only the first command retried.
+    """
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+        "FAKE_KLIPPY_LOG_NEW_ERRORS": "",
+        "FAKE_GCODE_SCRIPT_FIRST_FAIL": "1",
+        "EDDY_RETRY_SLEEP": "0",  # don't actually sleep in tests
+    }
+    r = _run(env=env, args=["--yes", "--smoke"])
+    assert r.returncode == 0, _diag(r)
+    assert "Retry succeeded" in r.stdout, _diag(r)
+    assert "Smoke test passed" in r.stdout, _diag(r)
+    log = fake_log.read_text()
+    gcode_posts = log.count("printer/gcode/script")
+    assert gcode_posts == 5, (
+        f"expected 5 gcode/script POSTs (G28×2 retry + 3 others), got {gcode_posts}.\n"
+        f"log:\n{log}"
+    )
+
+
+def test_smoke_fails_if_first_command_fails_twice(fake_log):
+    """If both the first G28 AND the retry fail, smoke fails (rc=4).
+    Distinguishes the eddy-first-tap-flake (transient) from a real
+    broken G28 (persistent)."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "READY_POLL_INTERVAL": "0",
+        "READY_POLL_MAX": "3",
+        "FAKE_GCODE_SCRIPT_OK": "0",  # ALL calls fail
+        "EDDY_RETRY_SLEEP": "0",
+    }
+    r = _run(env=env, args=["--yes", "--smoke"])
+    assert r.returncode == 4, _diag(r)
+    assert "smoke FAILED" in r.stderr, _diag(r)
+    assert "twice" in r.stderr, _diag(r)
+    # Verify the retry was actually attempted (two POSTs against the gcode endpoint).
+    log = fake_log.read_text()
+    gcode_posts = log.count("printer/gcode/script")
+    assert gcode_posts == 2, (
+        f"expected 2 gcode/script POSTs (initial + retry), got {gcode_posts}.\n"
+        f"log:\n{log}"
+    )

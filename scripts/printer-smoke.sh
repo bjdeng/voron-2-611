@@ -96,21 +96,58 @@ echo "    klippy.log: inode=$before_inode lines=$before_lines"
 #    Klipper has nothing queued behind the current command and look-ahead
 #    can't shift PROBE METHOD=tap's sample window timestamps. --max-time
 #    120 covers a normal G28 (~30s) plus a generous buffer.
+#
+# The FIRST command (G28) gets a one-shot retry to absorb the
+# eddy-first-tap flake: after `firmware_restart`, native
+# `[probe_eddy_current]` needs the LDC1612 to settle before the first
+# descend-probe is reliable. Klipper sometimes reports `state=ready`
+# before that settling completes, so the first G28 fails with
+# "insufficient lift" or "No trigger on stepper_z after full movement".
+# An immediate retry (after a short pause) succeeds. Once the first
+# probe completes the eddy is warm — subsequent commands (PARKCENTER,
+# OFF, _RESETSPEEDS) are reliable, so retry applies to the first
+# command ONLY. See memory/eddy-first-tap-flake.md and #65.
+EDDY_RETRY_SLEEP="${EDDY_RETRY_SLEEP:-5}"
+
+post_gcode() {
+  # POST a single gcode command. Returns 0 on Moonraker accept, non-zero on reject.
+  # Captures Moonraker's response body in the global `moonraker_response`.
+  local cmd="$1"
+  moonraker_response=$(curl -fsS -X POST "$PI_API/printer/gcode/script" \
+    --data-urlencode "script=$cmd" \
+    --max-time 120 \
+    2>&1)
+}
+
 if [[ ${#SMOKE_GCODE[@]} -eq 0 ]]; then
   echo "ERR: SMOKE_GCODE is empty — nothing to run. This is a script bug." >&2
   exit 1
 fi
 echo "==> Running smoke gcode (${#SMOKE_GCODE[@]} commands; ~30-60s total)"
-for cmd in "${SMOKE_GCODE[@]}"; do
+
+# First command: retry once on reject to absorb the eddy-first-tap flake.
+first_cmd="${SMOKE_GCODE[0]}"
+echo "    -> $first_cmd"
+if ! post_gcode "$first_cmd"; then
+  echo "    First '$first_cmd' rejected — likely eddy-first-tap flake (#65)."
+  echo "    Retrying once after ${EDDY_RETRY_SLEEP}s for LDC1612 to settle..."
+  sleep "$EDDY_RETRY_SLEEP"
+  if ! post_gcode "$first_cmd"; then
+    echo "ERR: smoke gcode '$first_cmd' rejected by Moonraker (twice):" >&2
+    printf '  %s\n' "$moonraker_response" >&2
+    exit 2
+  fi
+  echo "    Retry succeeded (eddy-first-tap-flake pattern)."
+fi
+
+# Remaining commands: no retry — once the Eddy is warm, they're reliable.
+for cmd in "${SMOKE_GCODE[@]:1}"; do
   echo "    -> $cmd"
-  moonraker_response=$(curl -fsS -X POST "$PI_API/printer/gcode/script" \
-    --data-urlencode "script=$cmd" \
-    --max-time 120 \
-    2>&1) || {
-      echo "ERR: smoke gcode '$cmd' rejected by Moonraker:" >&2
-      printf '  %s\n' "$moonraker_response" >&2
-      exit 2
-  }
+  if ! post_gcode "$cmd"; then
+    echo "ERR: smoke gcode '$cmd' rejected by Moonraker:" >&2
+    printf '  %s\n' "$moonraker_response" >&2
+    exit 2
+  fi
 done
 echo "    All commands accepted."
 
