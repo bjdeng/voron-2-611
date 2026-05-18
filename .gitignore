@@ -28,6 +28,10 @@ _pull_staging/
 # Local git worktrees for feature isolation
 .worktrees/
 
+# Claude Code local state — session lock and EnterWorktree-managed worktrees
+.claude/scheduled_tasks.lock
+.claude/worktrees/
+
 # Python virtualenv
 .venv/
 __pycache__/

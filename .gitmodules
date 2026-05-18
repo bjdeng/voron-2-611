@@ -1,21 +1,37 @@
+# All vendor/ submodules are read-only reference clones — we vendor them
+# pinned to the version running on the Pi and grep them for docs. We
+# don't make local commits, and transient test/build artifacts inside
+# them (e.g. test_klippy.py's _test_.gcode / _test_.log in vendor/klipper)
+# shouldn't surface as "modified (untracked content)" in our git status.
+# Setting `ignore = untracked` on each submodule scopes git's awareness
+# to the submodule pointer + tracked file changes only, which is what we
+# actually care about.
+
 [submodule "vendor/klipper"]
 	path = vendor/klipper
 	url = https://github.com/Klipper3d/klipper.git
+	ignore = untracked
 [submodule "vendor/happy-hare"]
 	path = vendor/happy-hare
 	url = https://github.com/moggieuk/Happy-Hare.git
+	ignore = untracked
 [submodule "vendor/eddy-ng"]
 	path = vendor/eddy-ng
 	url = https://github.com/vvuk/eddy-ng.git
+	ignore = untracked
 [submodule "vendor/voron-2"]
 	path = vendor/voron-2
 	url = https://github.com/VoronDesign/Voron-2.git
+	ignore = untracked
 [submodule "vendor/mainsail-config"]
 	path = vendor/mainsail-config
 	url = https://github.com/mainsail-crew/mainsail-config.git
+	ignore = untracked
 [submodule "vendor/moonraker"]
 	path = vendor/moonraker
 	url = https://github.com/Arksine/moonraker.git
+	ignore = untracked
 [submodule "vendor/btt-docs"]
 	path = vendor/btt-docs
 	url = https://github.com/bigtreetech/docs.git
+	ignore = untracked
