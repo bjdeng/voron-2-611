@@ -35,7 +35,7 @@ docker --version                         # Docker is required for L7 (Klipper C 
 | 3 | `config/bed.cfg` | `config/printer.cfg` |
 | 4 | `config/display.cfg` | `config/printer.cfg` |
 | 5 | `config/system.cfg` | `config/printer.cfg` |
-| 6 | — | `.github/workflows/ci.yml`, `tests/test_macro_refcheck.py` |
+| 6 | — | `.github/workflows/ci.yml`, `tests/test_macro_refcheck.py`, `Makefile` |
 | 7 | — | `CLAUDE.md` |
 | 8 | — | — (test run only) |
 | 9 | `tests/snapshots/macro_behavior_after.txt` (overwritten) | — |
@@ -598,13 +598,14 @@ git commit -m "chore(config): move system sections to system.cfg — #63"
 
 ---
 
-### Task 6: Replace literal cfg file list with globs in CI + pytest fixture
+### Task 6: Replace literal cfg file list with globs in CI + pytest fixture + Makefile
 
 **Files:**
 - Modify: `.github/workflows/ci.yml`
 - Modify: `tests/test_macro_refcheck.py`
+- Modify: `Makefile`
 
-Today both files enumerate `config/printer.cfg config/eddy.cfg config/toolhead.cfg config/mainsail.cfg config/timelapse.cfg` by hand. Replacing with `config/*.cfg` survives this split and any future ones.
+Today three files enumerate `config/printer.cfg config/eddy.cfg config/toolhead.cfg config/mainsail.cfg config/timelapse.cfg` by hand. Replacing with `config/*.cfg` survives this split and any future ones.
 
 - [ ] **Step 1: Update `.github/workflows/ci.yml`**
 
@@ -671,18 +672,41 @@ def test_real_repo_passes():
 
 The added assertion replaces the (implicit) safety the literal list provided: if a directory rename empties the glob, the test fails loudly instead of silently testing nothing. (CI's `shopt -s failglob` does the same job on the workflow side.)
 
-- [ ] **Step 3: Run the pytest target locally**
+- [ ] **Step 3: Update `Makefile`**
+
+Find (around line 7):
+
+```make
+CFGS        := config/printer.cfg config/eddy.cfg config/toolhead.cfg config/mainsail.cfg config/timelapse.cfg \
+               $(wildcard config/macros/*.cfg) \
+               $(wildcard config/mmu/base/*.cfg) \
+               $(wildcard config/mmu/addons/*.cfg) \
+               $(wildcard config/mmu/optional/*.cfg)
+```
+
+Replace with:
+
+```make
+CFGS        := $(wildcard config/*.cfg) \
+               $(wildcard config/macros/*.cfg) \
+               $(wildcard config/mmu/base/*.cfg) \
+               $(wildcard config/mmu/addons/*.cfg) \
+               $(wildcard config/mmu/optional/*.cfg)
+```
+
+- [ ] **Step 4: Run the pytest target and `make refcheck` locally**
 
 ```bash
+make refcheck
 .venv/bin/python -m pytest tests/test_macro_refcheck.py::test_real_repo_passes -v
 ```
 
-Expected: PASS.
+Both must pass. If `make refcheck` reports unknown commands, a section was moved into a file with a macro body referencing a now-renamed identifier — investigate before continuing.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add .github/workflows/ci.yml tests/test_macro_refcheck.py
+git add .github/workflows/ci.yml tests/test_macro_refcheck.py Makefile
 git commit -m "chore(ci): switch macro_refcheck cfg list to config/*.cfg glob — #63"
 ```
 
