@@ -4,7 +4,7 @@
 
 PYTHON      := .venv/bin/python
 PRECOMMIT   := .venv/bin/pre-commit
-CFGS        := config/printer.cfg config/eddy.cfg config/toolhead.cfg config/mainsail.cfg config/timelapse.cfg \
+CFGS        := $(wildcard config/*.cfg) \
                $(wildcard config/macros/*.cfg) \
                $(wildcard config/mmu/base/*.cfg) \
                $(wildcard config/mmu/addons/*.cfg) \

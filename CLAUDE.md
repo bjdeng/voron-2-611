@@ -473,6 +473,13 @@ If we ever need to troubleshoot one of these and the URL isn't enough, clone it 
 
 ## Repo layout
 
+Files under `config/` use one of two organizing axes:
+
+- **By feature or MCU** — `eddy.cfg`, `toolhead.cfg`, `mainsail.cfg`, `mmu/*`, `macros/*`. One coherent subsystem per file (the probe, the toolhead board, the UI client, the MMU, etc.). Replacing the underlying hardware = one file diff.
+- **By function** — `motion.cfg`, `bed.cfg`, `display.cfg`, `system.cfg`. For mainboard-resident sections that don't form a coherent feature on their own. Introduced by [#63](https://github.com/bjdeng/voron-2-611/issues/63).
+
+When adding a new section: prefer the feature axis if the section forms or extends a self-contained subsystem; fall back to the function axis only for "this is another mainboard fan / sensor / output_pin" cases.
+
 ```
 voron-2-611/
 ├── CLAUDE.md                    # this file
@@ -485,11 +492,14 @@ voron-2-611/
 ├── requirements.txt             # tooling deps (pytest, pre-commit) — pinned
 │
 ├── config/                      # everything that deploys to the Pi
-│   ├── printer.cfg              # top-level Klipper config (includes everything below)
+│   ├── printer.cfg              # 2× [mcu] + [include]s + SAVE_CONFIG (Klipper's entry point)
+│   ├── motion.cfg               # [printer] + 6 steppers + 6 TMCs + [input_shaper]
+│   ├── bed.cfg                  # heater_bed + chamber thermal + QGL + controller fan
+│   ├── display.cfg              # mini12864 LCD: board_pins, display, beeper, neopixel
+│   ├── system.cfg               # raspberry_pi temp, caselight, idle_timeout
 │   ├── eddy.cfg                 # Eddy probe + bed mesh + temperature_probe + SET_Z_FROM_PROBE pair
 │   ├── toolhead.cfg             # toolhead MCU config (RP2040 EBB SB v1.0, USB mode)
 │   ├── mainsail.cfg             # slimmed local copy (Phase 2); Pi symlink → ~/mainsail-config/mainsail.cfg means our copy doesn't deploy
-
 │   ├── timelapse.cfg            # symlink target on Pi (unused per Ben)
 │   ├── moonraker.conf
 │   ├── crowsnest.conf
