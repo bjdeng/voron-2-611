@@ -173,9 +173,12 @@ Key macros from Happy Hare (not exhaustive — see `config/mmu/base/mmu_software
 - `_MMU_CUT_TIP` (Filametrix toolhead cutter, from `config/mmu/base/mmu_cut_tip.cfg` — file header explicitly says "Filametrix style toolhead cutters")
 
 ### `config/mainsail.cfg` — Mainsail client.cfg (symlink target on Pi)
-- `[gcode_macro PAUSE]` / `RESUME` / `CANCEL_PRINT` / `_CLIENT_*` — standard Mainsail pause/cancel with park behavior. **Note: defined upstream in `~/mainsail-config/client.cfg`** (Pi-side symlink); do not override locally.
-- `_CLIENT_VARIABLE` — holds hook variables consumed by upstream `client.cfg`. `user_cancel_macro: "_CANCEL_PRINT_HOOK"` routes cancel-mid-print into our cleanup tail. Added locally 2026-05-18.
-- `_CANCEL_PRINT_HOOK` — runs when CANCEL_PRINT fires mid-print. Calls `MMU_END UNLOAD=1` (HH's end-of-print hook with forced unload, while extruder is still hot) then defers to `_PRINT_END_CLEANUP`. Added 2026-05-18.
+- `[gcode_macro PAUSE]` / `RESUME` / `CANCEL_PRINT` / `_CLIENT_*` — standard Mainsail pause/cancel with park behavior. **Defined upstream in `~/mainsail-config/client.cfg`** (Pi-side symlink); never override locally. Any macros added to this file get excluded from deploy by `scripts/deploy_to_pi.sh`'s symlink-discovery — `client_hooks.cfg` is where Mainsail-hook customizations live.
+
+### `config/client_hooks.cfg` — Mainsail hook variables + cancel handler
+- `_CLIENT_VARIABLE` — holds hook variables consumed by upstream `client.cfg`. `user_cancel_macro: "_CANCEL_PRINT_HOOK"` routes cancel-mid-print into our cleanup tail. Added 2026-05-18.
+- `_CANCEL_PRINT_HOOK` — runs when CANCEL_PRINT fires mid-print, AFTER upstream commands heaters off but BEFORE base cancel. Calls `MMU_END UNLOAD=1` (HH re-heats extruder via `_ensure_safe_extruder_temperature`, unloads filament) then defers to `_PRINT_END_CLEANUP`. Cancel takes ~1-2 min total. Added 2026-05-18.
+- (PR #71 moved these from `mainsail.cfg` to `client_hooks.cfg` after discovering the symlink-exclusion footgun made PR #70's deploy inert.)
 
 ### `config/archive/` — historical, **not included in config/printer.cfg**
 - `config/archive/klicky/` — pre-Eddy probe (Klicky) macros: bed mesh calibrate, QGL, klicky macros
