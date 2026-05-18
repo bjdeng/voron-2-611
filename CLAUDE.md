@@ -510,7 +510,7 @@ voron-2-611/
 │   ├── sonar.conf
 │   ├── macros/                  # printer-specific macros
 │   │   ├── macros.cfg           # Ellis-derived utility macros
-│   │   ├── print_start.cfg      # PRINT_START / PRINT_END / PRINT_WARMUP
+│   │   ├── print_start.cfg      # PRINT_START / PRINT_END / _PRINT_END_CLEANUP
 │   │   ├── bedfans.cfg          # BedFans with M140/M190 overrides
 │   │   ├── lcd_tweaks.cfg       # Mini12864 display group (renders "V2.611")
 │   │   ├── test_speed.cfg
