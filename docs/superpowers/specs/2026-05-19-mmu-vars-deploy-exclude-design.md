@@ -30,7 +30,7 @@ The file is unique among repo `config/` contents in that the **Pi is the canonic
    - If md5s match: print `==> mmu_vars.cfg: Pi-managed state, deploy skipped (in sync with repo snapshot)`.
    - If md5s differ: print `==> mmu_vars.cfg: Pi-managed state, deploy skipped. Repo snapshot differs from Pi. Run /sync-from-pi to update the repo backup if desired.`
    - If the Pi's file doesn't exist: print `==> mmu_vars.cfg: not present on Pi. Klipper will create on first MMU operation.`
-   - Both messages go to stderr (matches the existing `==>` step indicators in the script).
+   - All messages go to **stdout** (matches the existing `==>` step indicators in the script — verified: lines 168, 345, 356, 358, 403, 424, 443, 478, 491 all echo to stdout).
    - Drift detection happens regardless of `--dry-run` or `--yes`. The check is read-only.
 
 2. **`scripts/sync_from_pi.sh`**: no change. Continues to pull `mmu_vars.cfg` from Pi to repo (correct direction).
@@ -58,8 +58,8 @@ Then re-run any per-gate calibrations that have happened since the repo snapshot
 | Case | Behavior |
 |---|---|
 | First-time deploy on a fresh Pi without the file | rsync skips the file; HH creates it on first `[save_variables]` call. Klipper will print a warning at startup if no save_variables file exists; not a fatal error. |
-| Pi's file present but unreadable (permissions) | md5 fails on Pi side; deploy script falls back to printing `==> mmu_vars.cfg: Pi-managed state, deploy skipped (couldn't read Pi version)`. Deploy still proceeds. |
-| Repo's file present but unreadable (local permissions) | md5 fails on local side; deploy script prints `==> mmu_vars.cfg: deploy skipped (couldn't read repo version)`. Deploy still proceeds. |
+| Pi's file present but unreadable (permissions) | `cat` over ssh returns empty; `diff -q` reports the local file differs from an empty stream; falls into the generic "differs from Pi" branch. Misleading but rare (single-user printer) and harmless — deploy still proceeds, and "run /sync-from-pi" would surface the actual permission issue. Not worth dedicated code complexity. |
+| Repo's file present but unreadable (local permissions) | `diff` exits non-zero; falls into the "differs" branch with same misleading-but-harmless behavior. |
 | `--dry-run` mode | Drift check runs, drift summary printed. No mutation. |
 | CI | Doesn't deploy; not affected. Klippy parse still validates the repo's snapshot as valid Klipper syntax. |
 | User deletes `config/mmu/mmu_vars.cfg` from repo | Subsequent `/sync-from-pi` re-creates it. Deploy script sees no repo copy; prints `==> mmu_vars.cfg: no repo snapshot present. Deploy skipped. Run /sync-from-pi to create one.` |

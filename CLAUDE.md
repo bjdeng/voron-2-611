@@ -296,10 +296,11 @@ There's no `[update_manager klipper]` block in `config/moonraker.conf`, **and th
 ### About this repo as canonical source
 6. **This repo is the canonical config; the Pi is the working copy.** Eventually changes flow `local edit → PR → main → sync to Pi`. Until that CI/CD is built, manual sync is fine, but **never overwrite the Pi's files without confirming** — Mainsail can also edit configs directly and the Pi may be ahead.
 
-7. **Three classes of file on the Pi to be aware of when syncing:**
+7. **Four classes of file on the Pi to be aware of when syncing:**
    - **Real files we own** — `config/printer.cfg`, everything under `config/macros/`, and the other `.cfg`/`.conf` files directly in `config/` (`eddy.cfg`, `toolhead.cfg`, `moonraker.conf`, `crowsnest.conf`, `sonar.conf`). Edit freely here.
    - **Symlinked-from-third-party** — `config/mmu/base/*.cfg` (Happy-Hare), `config/mainsail.cfg` (mainsail-config), `config/timelapse.cfg` (moonraker-timelapse). Editing these on the Pi mutates the upstream install dir. Edits should generally go in the third-party repo, not here.
-   - **Auto-generated** — the `#*# SAVE_CONFIG` block at the bottom of `config/printer.cfg`. Klipper rewrites this on every `SAVE_CONFIG`. Don't merge upstream changes that touch it; always pull the Pi's current version when working with calibration values.
+   - **Auto-generated (block-level)** — the `#*# SAVE_CONFIG` block at the bottom of `config/printer.cfg`. Klipper rewrites this on every `SAVE_CONFIG`. Don't merge upstream changes that touch it; always pull the Pi's current version when working with calibration values.
+   - **Live Klipper state files (file-level)** — `config/mmu/mmu_vars.cfg` is the only one today. It's Klipper's `[save_variables]` file for Happy-Hare; Klipper rewrites it on every MMU operation (gate load/unload, tool change, per-gate calibration save). The Pi is canonical. `/deploy-to-pi` excludes the file from the rsync push (would otherwise clobber live calibrations with a stale snapshot) and prints a one-line drift summary so you can see when the repo's backup snapshot has fallen behind. `/sync-from-pi` continues to pull it as a periodic backup. If the Pi-side file is ever corrupted/deleted, `scp` from the repo's snapshot manually and restart Klipper. Closes [#69](https://github.com/bjdeng/voron-2-611/issues/69).
 
 ### Vendored docs
 See [Vendor / submodules](#vendor--submodules) below. Update with `git submodule update --remote vendor/<name>` only when Ben asks — the pin to the Pi's installed version is intentional.
