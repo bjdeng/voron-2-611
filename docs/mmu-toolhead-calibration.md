@@ -110,23 +110,26 @@ Calibration Results (clean nozzle):
 
 Goal: measure `toolhead_residual_filament` — the material left in the nozzle/heatbreak path after a Filametrix cutter unload.
 
+The melt zone needs to be **fully primed with fresh material** before the cutter unload, otherwise the residual measurement is meaningless. Use `BLOBIFIER PURGE_LENGTH=200` (not a 30 mm `G1 E` extrude — that's less than `toolhead_sensor_to_nozzle` after MMU_LOAD, so filament reaches the sensor but never gets pushed the remaining ~85 mm to the nozzle, and no material flows out).
+
+**`BLOBIFIER` requires QGL first** — the macro positions the toolhead over the purge tower at specific bed coordinates and refuses if the bed plane hasn't been trammed.
+
 ```
-M104 S210
-TEMPERATURE_WAIT SENSOR=extruder MINIMUM=205
+QUAD_GANTRY_LEVEL                     # required by BLOBIFIER
 
-MMU_HOME TOOL=5
+M104 S220
+TEMPERATURE_WAIT SENSOR=extruder MINIMUM=215
 
-G92 E0
-M83
-G1 E30 F100                           # Fill the melt zone
+MMU_LOAD                              # gate 5 already selected
+BLOBIFIER PURGE_LENGTH=200            # purges 200mm onto the purge tower
 
-MMU_UNLOAD SKIP_TIP=1                 # Cutter-based unload, no tip forming
+MMU_UNLOAD SKIP_TIP=1                 # cutter cut, no tip forming
 
 M104 S0
 TEMPERATURE_WAIT SENSOR=extruder MAXIMUM=50
 ```
 
-Wait until the nozzle is fully cool. Residue solidifies; that solid stub is what HH measures against on the next push.
+Watch the purge tower during the BLOBIFIER step — if no blob forms, the load path didn't push filament to the nozzle and you need to debug that before any DIRTY measurement is meaningful. Wait until the nozzle is fully cool. Residue solidifies; that solid stub is what HH measures against on the next push.
 
 ```
 MMU_CALIBRATE_TOOLHEAD DIRTY=1
@@ -184,7 +187,11 @@ For values that changed, edit:
   - `variable_blade_pos`
   - `variable_retract_length`
 
-**Symlink footgun** (per CLAUDE.md "Known quirks"): both files are symlinks on the Pi to `~/Happy-Hare/config/base/`. The repo holds dereferenced copies. Editing locally + running `/deploy-to-pi` is OK because the deploy script handles symlinks correctly. But **never `tar` these files back to the Pi without `--preserve-symlinks`** — that breaks HH's update model and overwrites the upstream files in `~/Happy-Hare/config/base/`. Safest path: edit at the Pi-side source (`ssh pi@mainsailos.local`, edit `~/Happy-Hare/config/base/mmu_parameters.cfg`), then sync the change back to the repo via `/sync-from-pi`. After edits + deploy: `RESTART` Klipper.
+**Note on `mmu_parameters.cfg`**: Unlike the other `mmu/base/*.cfg` files (which are Pi-side symlinks into `~/Happy-Hare/config/base/`), `mmu_parameters.cfg` is a **real file** at `~/printer_data/config/mmu/base/mmu_parameters.cfg` — HH copies it from its template at install time to allow per-printer customization. Verified 2026-05-19: `ls -l` shows two separate inodes (Pi-side file dated 2026-05-17 vs `~/Happy-Hare/config/base/mmu_parameters.cfg` dated 2026-02-15 with stock defaults). Edit directly on the Pi at `~/printer_data/config/mmu/base/mmu_parameters.cfg`, then `RESTART` Klipper, then `/sync-from-pi` to update the repo snapshot.
+
+**Why not SAVE_CONFIG?** Klipper's `SAVE_CONFIG` mechanism only persists values that plugins explicitly register via `configfile.set()`. HH never calls `configfile.set()` for toolhead parameters (grep confirmed) — `MMU_CALIBRATE_TOOLHEAD` with `SAVE=1` only updates Python module attributes in memory. They reset on the next restart unless persisted via manual `mmu_parameters.cfg` edit. The calibration command itself prints `"Update mmu_parameters.cfg to persist settings"` for this reason.
+
+**`mmu_macro_vars.cfg`** (used for Phase 4 CUT values) **IS** a Pi-side symlink to `~/Happy-Hare/config/base/`. Same caveats as the other symlinked HH files — edits to the dereferenced repo copy mutate the upstream install dir if deployed without `--preserve-symlinks`. Safer to edit the Pi-side symlink target directly.
 
 ## Pitfalls
 
