@@ -22,7 +22,7 @@ Ben's stated requirements:
 
 1. **VOC baseline:** Bedfans should run continuously at low speed during prints to cycle air across the charcoal filter and scrub off-gassing materials.
 2. **Cooldown VOC capture:** Continue baseline circulation after print ends, while the bed (and chamber) is still warm enough to off-gas residuals.
-3. **Active heat:** When the slicer specifies a chamber target (ABS/ASA/PA-CF: CHAMBER=30 per the print lifecycle spec), bedfans push bed warmth into the chamber to reach target faster.
+3. **Active heat:** When the slicer specifies a chamber target (ABS/ASA/PA-CF: CHAMBER=55 — the in-print setpoint, decoupled from PRINT_START's wait threshold per §3.4), bedfans push bed warmth into the chamber to reach and hold target.
 4. **Active cool:** When chamber is above target (e.g., transitioning from an ABS print into a cool-material follow-up), exhaust fan vents hot air.
 5. **Safety cap:** Don't try to drive chamber above 60°C; the build can't reliably reach more without doors closed AND chamber heater (which doesn't exist).
 6. **Practical floor:** Below ~30°C is hard to reach with doors closed; cooling has limited authority. Accept this — don't promise impossible setpoints.
@@ -106,13 +106,15 @@ Before (current PRINT_START, in `config/macros/print_start.cfg` §9):
 After:
 ```
 {% if chamber > 0 %}
-  SET_CHAMBER_TARGET TARGET={chamber}                  # active heat via bedfans + (later) cool via exhaust
+  SET_CHAMBER_TARGET TARGET={chamber}                  # loop holds chamber at full setpoint for the whole print
   PARKCENTER
-  TEMPERATURE_WAIT SENSOR="temperature_fan chamber" MINIMUM={chamber}
+  TEMPERATURE_WAIT SENSOR="temperature_fan chamber" MINIMUM={(chamber / 2)|int}   # wait for partial warmth, NOT the full setpoint
 {% elif soak_s > 0 %}
   G4 P{(soak_s * 1000)|int}                            # cold-material brief bed-stabilization soak
 {% endif %}
 ```
+
+The slicer's `CHAMBER` value is the in-print setpoint the loop holds for the duration of the print. PRINT_START's `TEMPERATURE_WAIT` blocks only until chamber reaches half that value (achievable cold-start from bed radiation alone in a few minutes) rather than the full setpoint (which takes 30+ min on a build with no chamber heater — Klipper has no native `TEMPERATURE_WAIT` timeout, so waiting for the full target risks hanging PRINT_START indefinitely if the chamber tops out below it). The loop keeps driving heat-mode after the print starts; chamber climbs the rest of the way from accumulating part radiation while the early layers go down. This is why old "wait for full target" guidance produced 30°C-everywhere setpoints — it conflated "achievable wait threshold" with "in-print target." Decoupling them lets the slicer pass the real desired in-print chamber temp (55 for ABS, 0 for PLA, etc.) without hanging.
 
 The PRINT_START path doesn't need to call `SET_CHAMBER_TARGET TARGET=0` for the cold-material branch — `target` defaults to 0 in `_CHAMBER_CONTROL`, and the loop's VOC-baseline state covers print-time bedfan operation. Loop is bootstrapped at the start of PRINT_START (just below the existing `CLEAR_PAUSE` block):
 ```
@@ -207,7 +209,7 @@ CLAUDE.md macro inventory gets a new block for this file.
 **Manual print tests after deploy:**
 
 - **PLA print** (CHAMBER=0, bed=60): expect bedfans at VOC baseline during print. Print ends → bedfans continue baseline through cooldown. Bed crosses 40°C → bedfans off. Chamber fan never runs.
-- **ABS print** (CHAMBER=30, bed=110): expect chamber control loop to ramp bedfans to heat_speed during PRINT_START soak. Once chamber reaches 30°C, transitions to MAINTAIN (baseline bedfans, exhaust ready). Print ends → bedfans baseline for cooldown VOC.
+- **ABS print** (CHAMBER=55, bed=110): expect PRINT_START soak's `TEMPERATURE_WAIT` to exit when chamber crosses 27°C (half of 55) — typically a few minutes after bed reaches 110°C. Chamber control loop stays in HEAT (BedFans=1.0, exhaust off) for most of the print until chamber crosses 53°C from accumulating part radiation, then transitions to MAINTAIN/COOL. Print ends → bedfans baseline for cooldown VOC.
 - **Cancel mid-ABS**: expect `_CANCEL_PRINT_HOOK` sequence to set chamber TARGET=0, MMU unload, cleanup tail. Bedfans continue baseline through cooldown.
 - **Manual `SET_CHAMBER_TARGET TARGET=80`** (above cap): expect M117 warning, target clamped to 60.
 

@@ -74,12 +74,12 @@ SET_PRINT_STATS_INFO CURRENT_LAYER={layer_num} ; For pause-at-layer functionalit
 
 ## Per-filament chamber targets
 
-Set `chamber_temperature` per filament in **Filament settings → [filament] → Cooling**:
+Set `chamber_temperature` per filament in **Filament settings → [filament] → Cooling**. The value is the in-print setpoint the chamber control loop holds for the whole print — PRINT_START's `TEMPERATURE_WAIT` only blocks until chamber reaches HALF this value (so a cold-start ABS print doesn't wait an hour for the full 55°C).
 
 | Filament | chamber_temperature | Notes |
 |---|---|---|
-| PLA, PETG, TPU | 0 | No chamber soak — PRINT_START skips to a brief `bed_stabilization_soak_seconds` G4 (default 60s) |
-| ABS, ASA, PA-CF | 30 | Chamber radiates to 50-55°C from bed + part during the print; 30°C is a good universal start threshold on this build (per Ben, 2026-05-18) |
+| PLA, PETG, TPU | 0 | No chamber soak — PRINT_START skips to a brief `bed_stabilization_soak_seconds` G4 (default 60s). Loop runs at VOC baseline throughout. |
+| ABS, ASA, PA-CF | 55 | Loop holds chamber at 55°C for the entire print: HEAT mode (BedFans=1.0, exhaust off) below 53°C, MAINTAIN/COOL above. PRINT_START waits for chamber ≥ 27°C before tap-Z, then the loop keeps driving heat as the print runs and part radiation accumulates. Clamped to `chamber_max_target` (60) inside `SET_CHAMBER_TARGET`. |
 
 For Ben's current filament profiles (as of 2026-05-18), the values needed are:
 
@@ -92,11 +92,11 @@ For Ben's current filament profiles (as of 2026-05-18), the values needed are:
 | `Sunlu PLA+.json` | 0 |
 | `SUNLU Silk PLA.json` | 0 |
 | `Overture Transparent PETG.json` | 0 |
-| `Inland ABS.json` | 30 |
-| `Ambrosia ASA.json` | 30 |
-| `Ambrosia ASA - Black.json` | 30 |
-| `Ambrosia ASA - Planetary Blue.json` | 30 |
-| `Ambrosia ASA -Voron Red.json` | 30 |
+| `Inland ABS.json` | 55 |
+| `Ambrosia ASA.json` | 55 |
+| `Ambrosia ASA - Black.json` | 55 |
+| `Ambrosia ASA - Planetary Blue.json` | 55 |
+| `Ambrosia ASA -Voron Red.json` | 55 |
 
 ## Per-filament MATERIAL string
 
