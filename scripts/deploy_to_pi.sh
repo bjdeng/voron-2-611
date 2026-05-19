@@ -245,6 +245,10 @@ build_rsync_excludes() {
   #   firmware/ — build kconfigs aren't deployed (they're flash-time inputs)
   #   archive/  — historical configs we don't run
   #   printer.cfg — handled separately via SAVE_CONFIG splice
+  #   mmu/mmu_vars.cfg — Klipper [save_variables] file. Pi is canonical.
+  #                      Klipper rewrites it on every MMU operation. Repo's
+  #                      copy is a backup snapshot maintained by sync-from-pi.
+  #                      Never deploy. Drift summary in check_mmu_vars_drift().
   #
   # We also protect Pi-managed state from the --delete pass below.
   # rsync's --exclude protects matched paths from BOTH transfer and
@@ -269,11 +273,42 @@ build_rsync_excludes() {
     --exclude='/archive/'
     --exclude='/printer.cfg'
     --exclude='/printer-*.cfg'
+    --exclude='/mmu/mmu_vars.cfg'
     --exclude='/mmu-*'
     --exclude='/.last-deploy-sha'
     --exclude='/.moonraker.conf.bkp'
   )
   RSYNC_EXCLUDES+=("${PI_SYMLINK_EXCLUDES[@]}")
+}
+
+check_mmu_vars_drift() {
+  # mmu_vars.cfg is Klipper [save_variables] state — rewritten on every MMU
+  # operation. The Pi is canonical. The repo's copy is a periodic backup
+  # snapshot maintained by /sync-from-pi. We never deploy it (see rsync
+  # exclude above). This function reports whether the repo's backup is in
+  # sync with the Pi so the user can decide whether to /sync-from-pi.
+  local repo_path="$REPO_ROOT/config/mmu/mmu_vars.cfg"
+
+  if [[ ! -f "$repo_path" ]]; then
+    echo "==> mmu_vars.cfg: no repo snapshot present. Deploy skipped (Pi-managed). Run /sync-from-pi to create a backup."
+    return
+  fi
+
+  local pi_exists
+  pi_exists=$(ssh "$PI_HOST" 'test -f ~/printer_data/config/mmu/mmu_vars.cfg && echo yes || echo no' 2>/dev/null)
+  if [[ "$pi_exists" != "yes" ]]; then
+    echo "==> mmu_vars.cfg: not present on Pi (Klipper will create on first MMU [save_variables] write). Deploy skipped."
+    return
+  fi
+
+  # Compare via diff -q: streams Pi content through ssh, byte-compares to
+  # local file. Avoids hash-tool portability questions (macOS md5 vs Linux
+  # md5sum) and the need for temp files.
+  if diff -q <(ssh "$PI_HOST" 'cat ~/printer_data/config/mmu/mmu_vars.cfg' 2>/dev/null) "$repo_path" >/dev/null 2>&1; then
+    echo "==> mmu_vars.cfg: Pi-managed state, deploy skipped (in sync with repo snapshot)."
+  else
+    echo "==> mmu_vars.cfg: Pi-managed state, deploy skipped. Repo snapshot differs from Pi — run /sync-from-pi to update the backup if desired."
+  fi
 }
 
 choose_restart_kind() {
@@ -319,6 +354,7 @@ show_plan_and_confirm() {
 
   echo
   echo "==> printer.cfg will be uploaded with the Pi's SAVE_CONFIG block re-appended."
+  check_mmu_vars_drift
   echo "==> Restart kind chosen: $RESTART_KIND"
   echo
   if [[ "$YES" == 1 ]]; then
