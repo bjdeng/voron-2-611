@@ -36,7 +36,7 @@ All inherit from system base `0.20mm Standard @Voron` (which inherits from `fdm_
 
 ## Settings — full annotated spec
 
-Cross-deps marked `↔ <setting>`. Sources cited in the rationale column.
+Cross-setting interactions are listed in a single map at the end of this doc; individual rows don't repeat them. Sources cited in the rationale column.
 
 ### Layer & shells
 
@@ -45,7 +45,7 @@ Cross-deps marked `↔ <setting>`. Sources cited in the rationale column.
 | `layer_height` | 0.20 | 0.20 | 0.12 | [speed]/[quality] | Profile axis. Quality doubles vertical resolution at ~1.6× the time |
 | `initial_layer_print_height` | 0.20 | 0.20 | 0.20 | [reliability] | Forgiving on textured PEI; Eddy tap handles squish accurately |
 | `wall_loops` | 3 | 4 | 3 | [speed]/[strength]/[quality] | Strength gets 4th wall for load distribution; Quality 3 keeps detail sharp |
-| `top_shell_layers` | 4 | 4 | 6 | [reliability]/[quality] | Quality 6×0.12mm ≈ same absolute thickness as 4×0.20mm |
+| `top_shell_layers` | 4 | 4 | 6 | [reliability]/[quality] | `top_shell_thickness: 0.8` floor auto-upgrades Quality to 7 layers at 0.12mm |
 | `top_shell_thickness` | 0.8 | 0.8 | 0.8 | [reliability] | Floor. Whichever yields more layers wins — auto-upgrades Quality to 7 layers |
 | `bottom_shell_layers` | 3 | 5 | 4 | [reliability]/[strength] | Strength 5 for floor stiffness on load-bearing parts |
 | `bottom_shell_thickness` | 0 | 0 | 0 | [reliability] | Layers control; thickness=0 makes layer-count the source of truth |
@@ -92,7 +92,7 @@ Cross-deps marked `↔ <setting>`. Sources cited in the rationale column.
 | `bottom_surface_pattern` | monotonic | monotonic | monotonic | [default-inherits] | Voron base |
 | `filter_out_gap_fill` | 0.5 | 0.5 | 0.2 | [reliability]/[quality] | Drops micro-segments that cause Benchy-hull-line PA hunting |
 | `minimum_sparse_infill_area` | 15 mm² | 15 mm² | 15 mm² | [default-inherits] | Small islands → solid |
-| `gap_fill_target` | nowhere | topbottom | topbottom | [speed]/[strength]/[quality] | Ellis: gap_fill on top/bottom only |
+| `gap_fill_target` | nowhere | topbottom | topbottom | [speed] | Speed disables to avoid Benchy-hull-line PA hunting; Strength/Quality use Ellis's top/bottom-only setting |
 | `gap_infill_speed` | 60 | 60 | 60 | [reliability] | Override Voron-common 100 — Galileo PA tracking |
 | `infill_wall_overlap` | 15% | 15% | 15% | [default-inherits] | Override Voron-common 25% — over-extrudes with gap_fill on |
 | `bridge_density` | 100% | 100% | 100% | [default-inherits] | External bridges solid |
@@ -113,9 +113,9 @@ Cross-deps marked `↔ <setting>`. Sources cited in the rationale column.
 | `internal_solid_infill_speed` | 240 | 240 | 200 | [new-default]/[quality] | Matches inner wall |
 | `sparse_infill_speed` | 240 | 240 | 200 | [new-default]/[quality] | Open-air, no surface quality cost |
 | `gap_infill_speed` | 60 | 60 | 60 | [reliability] | (See Infill section) |
-| `support_speed` | 150 | 150 | 150 | [new-default] | Throwaway material; unified across the board |
-| `support_interface_speed` | 80 | 80 | 80 | [new-default] | Unified across the board |
-| `bridge_speed` | 25 | 20 | 20 | [reliability] | Voron stock 25; Ellis 20-40. Don't go below 20 |
+| `support_speed` | 150 | 150 | 150 | [new-default] | (canonical row in Support section) |
+| `support_interface_speed` | 80 | 80 | 80 | [new-default] | (canonical row in Support section) |
+| `bridge_speed` | 25 | 20 | 20 | [speed] | Speed bumps to Voron-stock 25; Strength/Quality at safer 20 (Ellis 20-40). Don't go below 20 |
 | `internal_bridge_speed` | 150 | 100 | 80 | [speed]/[quality] | Hidden by top shells — push fast |
 | `ironing_speed` | (off) | (off) | 30 | [default-inherits] | Quality only; Voron base |
 | `initial_layer_speed` | 50 | 50 | 30 | [reliability]/[quality] | First-layer adhesion |
@@ -145,7 +145,7 @@ Cross-deps marked `↔ <setting>`. Sources cited in the rationale column.
 | `inner_wall_acceleration` | 5400 | 5400 | 5400 | [default-inherits] | All converge |
 | `top_surface_acceleration` | 5000 | 5000 | 3000 | [new-default]/[quality] | Quality lower for ringing visibility on flattest plane |
 | `bottom_surface_acceleration` | 5000 | 5000 | 3000 | [new-default]/[quality] | Match top |
-| `bridge_acceleration` | 3000 | 2000 | 2000 | [reliability] | Per-profile to reduce anchor pullout. Voron Prusa baseline 3000 |
+| `bridge_acceleration` | 3000 | 2000 | 2000 | [speed] | Speed at Voron Prusa baseline 3000; Strength/Quality reduce to 2000 to limit anchor pullout |
 | `sparse_infill_acceleration` | 5000 | 5000 | 4000 | [new-default]/[quality] | Reach 240 mm/s in 50mm span |
 | `internal_solid_infill_acceleration` | 5000 | 5000 | 4000 | [new-default]/[quality] | Same |
 | `travel_acceleration` | 10000 | 10000 | 10000 | [new-default] | Equals Klipper `max_accel: 10000` |
@@ -167,7 +167,7 @@ Cross-deps marked `↔ <setting>`. Sources cited in the rationale column.
 
 | Setting | Speed | Strength | Quality | Tag | Rationale |
 |---|---|---|---|---|---|
-| `bridge_flow` | 0.95 | 0.92 | 0.90 | [reliability] | Voron stock 0.95; Ellis 0.90-0.95 |
+| `bridge_flow` | 0.95 | 0.92 | 0.90 | [speed]/[strength]/[quality] | Voron stock 0.95; Ellis 0.90-0.95 — per-profile across the range |
 | `internal_bridge_flow` | 1.0 | 1.0 | 1.0 | [default-inherits] | Full flow to seal over sparse infill |
 | `thick_bridges` | 0 | 0 | 0 | [reliability] | Smoother visual surface; flow=0.92 carries enough |
 | `thick_internal_bridges` | 1 | 1 | 1 | [reliability] | Internal bridges hide under top shells |
@@ -183,7 +183,7 @@ Cross-deps marked `↔ <setting>`. Sources cited in the rationale column.
 | `slow_down_for_layer_cooling` | 1 | 1 | 1 | [reliability] | Always on |
 | `fan_speedup_time` | 0.5 | 0.5 | 1.0 | [quality] | Quality 1.0s for crisp overhang onset |
 | `fan_speedup_overhangs` | 1 | 1 | 1 | [quality] | Restricts lookahead to overhangs |
-| `full_fan_speed_layer` | 4 | 4 | 3 | [reliability] | Linear ramp from close_fan_first_x to N |
+| `full_fan_speed_layer` | 4 | 4 | 3 | [quality] | Quality ramps fan in 1 layer sooner; linear ramp from close_fan_first_x to N |
 
 Note: `slow_down_layer_time`, `slow_down_min_speed`, `fan_cooling_layer_time`, `close_fan_the_first_x_layers`, `overhang_fan_threshold`, `overhang_fan_speed`, `dont_slow_down_outer_wall`, `reduce_fan_stop_start_freq`, `additional_cooling_fan_speed` are **filament-scope** (`coFloats`/`coInts` per-extruder arrays) in OrcaSlicer's data model. They live in filament profiles, not process. See [`docs/slicer-templates/orcaslicer.md`](./slicer-templates/orcaslicer.md) and the filament audit (separate work).
 
@@ -219,7 +219,7 @@ Note: `slow_down_layer_time`, `slow_down_min_speed`, `fan_cooling_layer_time`, `
 | `seam_position` | aligned | aligned | aligned | [reliability] | Voron stock; scarf operates on aligned (when enabled) |
 | `seam_gap` | 10% | 10% | 5% | [quality] | Quality tighter — calibrated PA makes bulge small |
 | `staggered_inner_seams` | 1 | 1 | 1 | [new-default] | (Wall section) |
-| `seam_slope_*` (scarf) | (off) | (off) | (off) | parked: [#75] | Scarf seam tuning project |
+| `seam_slope_*` (scarf) | (off) | (off) | (off) | [parked] | Parked: [#75] — scarf seam tuning project |
 
 ### Support / Brim / Skirt / Raft
 
@@ -336,13 +336,12 @@ Note: `slow_down_layer_time`, `slow_down_min_speed`, `fan_cooling_layer_time`, `
 | `timelapse_type` | none | none | none | [default-inherits] | Webcam unplugged ([#27]) |
 | `emit_machine_limits_to_gcode` | 0 | 0 | 0 | [new-default] | Klipper enforces |
 | `machine_limits_usage` | ignore | ignore | ignore | [new-default] | Trust Klipper |
-| `arc_fitting` | 1 | 1 | 1 | [new-default] | Klipper `[gcode_arcs]` enabled in `config/system.cfg` (paired change; closes [#76]) |
+| `arc_fitting` | 1 | 1 | 1 | [new-default] | Klipper `[gcode_arcs]` already enabled via `config/macros/calibrate_flow.cfg` (Frix_x v1.6 bundles it at `resolution: 0.1`). Closes [#76]. |
 | `support_chamber_temp_control` | 0 | 0 | 0 | [default-inherits] | Chamber is Klipper-side |
 | `emit_thumbnails_to_gcode` | 1 | 1 | 1 | [new-default] | Mainsail print preview |
 | `thumbnails` | `32x32/PNG, 400x300/PNG` | same | same | [new-default] | Mainsail format |
 | `slicing_mode` | regular | regular | regular | [default-inherits] | Even-odd is for airplanes |
 | `print_extrusion_multiplier` | 1.0 | 1.0 | 1.0 | [default-inherits] | Flow tuning is filament-side |
-| `bridge_no_support` | 0 | 0 | 0 | [default-inherits] | Auto-detect |
 
 ### Machine-side limits (advisory only when `gcode_flavor: klipper`)
 
