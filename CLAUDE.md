@@ -139,8 +139,8 @@ Every active macro and where it lives. One-liner per macro; deeper context belon
 
 ### `config/macros/chamber_control.cfg` — active chamber control
 - `_CHAMBER_CONTROL` — state holder (`variable_target`); single source of the live setpoint
-- `SET_CHAMBER_TARGET TARGET=<°C>` — only mutator of the setpoint; clamps to `[0, chamber_max_target]` with M117/RESPOND warning above cap; kicks the loop with 1s delay
-- `chamber_control_loop` — 5-second delayed_gcode tick; state machine over (target, chamber_temp, bed_temp, print_state) writes BedFans speed + temperature_fan chamber target. Five states: HEAT / COOL / MAINTAIN / VOC BASELINE / OFF (self-terminating). Called from PRINT_START (bootstrap + setter), PRINT_END (TARGET=0), `_CANCEL_PRINT_HOOK` (TARGET=0). Sole automatic writer of BedFans after the bedfans.cfg overrides were stripped (PR for spec 2026-05-18-chamber-control-design).
+- `SET_CHAMBER_TARGET TARGET=<°C>` — only mutator of the setpoint; clamps to `[0, chamber_max_target]` with symmetric M117/RESPOND warnings on either side; kicks the loop with 1s delay
+- `chamber_control_loop` — delayed_gcode tick (5s in active states, 30s when fully idle so the loop wakes up if the bed is reheated outside SET_CHAMBER_TARGET). State machine over (target, chamber_temp, bed_temp, print_state) writes BedFans speed + temperature_fan chamber target. Five labeled branches — HEAT / COOL / MAINTAIN / VOC BASELINE / OFF — but COOL and MAINTAIN emit identical gcode (PID handles bang-bang internally; branches kept separate for future tuning). Called from PRINT_START (bootstrap + setter), PRINT_END (TARGET=0), `_CANCEL_PRINT_HOOK` (TARGET=0), `OFF` macro (TARGET=0). Sole automatic writer of BedFans after the bedfans.cfg overrides were stripped (PR for spec 2026-05-18-chamber-control-design).
 
 ### `config/macros/test_speed.cfg`
 - `TEST_SPEED` — home, snapshot position, throw the toolhead around in a configurable pattern, re-home, compare positions to detect skipped steps
