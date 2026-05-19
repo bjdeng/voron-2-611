@@ -130,11 +130,17 @@ Every active macro and where it lives. One-liner per macro; deeper context belon
 - `_PRINT_END_CLEANUP` — shared cleanup tail (`BED_MESH_CLEAR`, `G4` cooldown, `OFF`, `_RESETSPEEDS`). Called by both `PRINT_END` and `_CANCEL_PRINT_HOOK`.
 - (removed 2026-05-18) `PRINT_WARMUP` — was a separate manual prewarm macro; never called by slicer. Prewarming pre-print is now direct gcode (`M140 S110` + `M104 S150`) or `HEATSOAK`.
 
-### `config/macros/bedfans.cfg` — Ellis BedFans automation
-- `_BEDFANVARS` — config (threshold, fast, slow speeds)
-- `BEDFANSSLOW` / `BEDFANSFAST` / `BEDFANSOFF` — direct controls
-- Overrides: `SET_HEATER_TEMPERATURE`, `M140`, `M190`, `TURN_OFF_HEATERS` (all integrate bed-fan logic)
-- `bedfanloop` — delayed-gcode that ramps to fast speed once target is reached
+### `config/macros/bedfans.cfg` — BedFans hardware + manual aliases
+- `[fan_generic BedFans]` — hardware definition (PWM pin `z:P2.5`)
+- `BEDFANSSLOW` / `BEDFANSFAST` / `BEDFANSOFF` — manual console aliases; no automatic callers (the chamber control loop in `chamber_control.cfg` owns BedFans state automatically). BEDFANSSLOW reads `chamber_voc_baseline`; BEDFANSFAST reads `chamber_heat_speed`.
+- `SET_HEATER_TEMPERATURE` override — routes `HEATER=heater_bed` → `M99140` so M140 / Mainsail / SET_HEATER_TEMPERATURE all route the same way. No bedfan side-effects.
+- `M140` alias — calls `SET_HEATER_TEMPERATURE`
+- `M190` override — uses `TEMPERATURE_WAIT` with `m190_tolerance_celsius` band; no bedfan side-effects
+
+### `config/macros/chamber_control.cfg` — active chamber control
+- `_CHAMBER_CONTROL` — state holder (`variable_target`); single source of the live setpoint
+- `SET_CHAMBER_TARGET TARGET=<°C>` — only mutator of the setpoint; clamps to `[0, chamber_max_target]` with M117/RESPOND warning above cap; kicks the loop with 1s delay
+- `chamber_control_loop` — 5-second delayed_gcode tick; state machine over (target, chamber_temp, bed_temp, print_state) writes BedFans speed + temperature_fan chamber target. Five states: HEAT / COOL / MAINTAIN / VOC BASELINE / OFF (self-terminating). Called from PRINT_START (bootstrap + setter), PRINT_END (TARGET=0), `_CANCEL_PRINT_HOOK` (TARGET=0). Sole automatic writer of BedFans after the bedfans.cfg overrides were stripped (PR for spec 2026-05-18-chamber-control-design).
 
 ### `config/macros/test_speed.cfg`
 - `TEST_SPEED` — home, snapshot position, throw the toolhead around in a configurable pattern, re-home, compare positions to detect skipped steps
@@ -429,6 +435,7 @@ Browsing the full label view in GitHub is the authoritative way to see what's op
 
 ### Recently resolved (historical log)
 
+- ~~Bed-target-driven BedFans automation~~ — replaced 2026-05-18 by the active chamber control loop in `config/macros/chamber_control.cfg`. Spec: `docs/superpowers/specs/2026-05-18-chamber-control-design.md`.
 - ~~`eddy-ng` → native Klipper Eddy migration~~ — shipped PR #17, 2026-05-15. Calibration session completed (main + tap); thermal drift cal deferred to [#25].
 - ~~Initial calibration deploy bugs~~ — `#` in macro strings (PR #18), LPC1769 temp sensors crash (caught by review), tap jinja expansion order (split-macro pattern). All landed.
 - ~~Missing `[update_manager klipper]`~~ — by design; Moonraker auto-detects (`vendor/moonraker/docs/configuration.md:2017-2026`).
