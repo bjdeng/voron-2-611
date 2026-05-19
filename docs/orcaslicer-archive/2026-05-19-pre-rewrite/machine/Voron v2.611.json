@@ -1,0 +1,56 @@
+{
+    "bed_exclude_area": [
+        "0x310",
+        "30x310",
+        "30x350",
+        "0x350"
+    ],
+    "before_layer_change_gcode": "\n",
+    "change_filament_gcode": "\n",
+    "cooling_tube_length": "0",
+    "cooling_tube_retraction": "0",
+    "enable_filament_ramming": "0",
+    "extra_loading_move": "0",
+    "fan_speedup_time": "1",
+    "from": "User",
+    "inherits": "Voron 2.4 350 0.4 nozzle",
+    "layer_change_gcode": ";AFTER_LAYER_CHANGE\n_MMU_UPDATE_HEIGHT\nSET_PRINT_STATS_INFO CURRENT_LAYER={layer_num} ; For pause at layer functionality and better print stats",
+    "machine_end_gcode": "MMU_END\nPRINT_END",
+    "machine_load_filament_time": "30",
+    "machine_start_gcode": "M104 S0\nM140 S0\n\nMMU_START_SETUP INITIAL_TOOL={initial_tool} REFERENCED_TOOLS=!referenced_tools! TOOL_COLORS=!colors! TOOL_TEMPS=!temperatures! TOOL_MATERIALS=!materials! FILAMENT_NAMES=!filament_names!\nPURGE_VOLUMES=!purge_volumes!\n\nMMU_START_CHECK\n\nPRINT_START EXTRUDER=[first_layer_temperature[initial_tool]] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature[initial_tool]] MATERIAL=\"[filament_type[initial_tool]]\"\nTOTAL_LAYER=[total_layer_count]\n\nMMU_START_LOAD_INITIAL_TOOL",
+    "machine_unload_filament_time": "30",
+    "name": "Voron v2.611",
+    "nozzle_type": [
+        "brass"
+    ],
+    "parking_pos_retraction": "0",
+    "print_host": "mainsailos.local",
+    "printer_extruder_id": [
+        "1"
+    ],
+    "printer_extruder_variant": [
+        "Direct Drive Standard"
+    ],
+    "printer_settings_id": "Voron v2.611",
+    "printhost_apikey": "1653C1C814304883B7D45750712A14D1",
+    "purge_in_prime_tower": "0",
+    "retract_before_wipe": [
+        "0%"
+    ],
+    "retract_length_toolchange": [
+        "0"
+    ],
+    "retract_lift_below": [
+        "350"
+    ],
+    "retraction_length": [
+        "0.5"
+    ],
+    "version": "2.0.2.0",
+    "z_hop": [
+        "0.2"
+    ],
+    "z_hop_types": [
+        "Auto Lift"
+    ]
+}

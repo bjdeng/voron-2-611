@@ -1,0 +1,9 @@
+{
+    "from": "User",
+    "inherits": "Voron 2.4 350 0.4 nozzle",
+    "is_custom_defined": "0",
+    "name": "Voron 2.4 350 0.4 nozzle - Copy",
+    "print_host": "mainsailos.local",
+    "printer_settings_id": "Voron 2.4 350 0.4 nozzle - Copy",
+    "version": "2.3.0.3"
+}

@@ -1,0 +1,67 @@
+{
+    "compatible_printers": [
+        "Voron 2.4 350 0.4 nozzle"
+    ],
+    "enable_pressure_advance": [
+        "1"
+    ],
+    "filament_cooling_final_speed": [
+        "0"
+    ],
+    "filament_cooling_initial_speed": [
+        "0"
+    ],
+    "filament_cooling_moves": [
+        "0"
+    ],
+    "filament_flow_ratio": [
+        "0.975"
+    ],
+    "filament_loading_speed": [
+        "0"
+    ],
+    "filament_loading_speed_start": [
+        "0"
+    ],
+    "filament_max_volumetric_speed": [
+        "15"
+    ],
+    "filament_minimal_purge_on_wipe_tower": [
+        "0"
+    ],
+    "filament_multitool_ramming_flow": [
+        "0"
+    ],
+    "filament_multitool_ramming_volume": [
+        "0"
+    ],
+    "filament_settings_id": [
+        "SUNLU Silk PLA"
+    ],
+    "filament_unloading_speed": [
+        "0"
+    ],
+    "filament_unloading_speed_start": [
+        "0"
+    ],
+    "from": "User",
+    "full_fan_speed_layer": [
+        "2"
+    ],
+    "hot_plate_temp": [
+        "50"
+    ],
+    "inherits": "SUNLU Silk PLA+ @System",
+    "is_custom_defined": "0",
+    "name": "SUNLU Silk PLA",
+    "nozzle_temperature": [
+        "200"
+    ],
+    "nozzle_temperature_initial_layer": [
+        "210"
+    ],
+    "slow_down_layer_time": [
+        "20"
+    ],
+    "version": "2.3.0.3"
+}
