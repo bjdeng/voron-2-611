@@ -130,11 +130,17 @@ Every active macro and where it lives. One-liner per macro; deeper context belon
 - `_PRINT_END_CLEANUP` — shared cleanup tail (`BED_MESH_CLEAR`, `G4` cooldown, `OFF`, `_RESETSPEEDS`). Called by both `PRINT_END` and `_CANCEL_PRINT_HOOK`.
 - (removed 2026-05-18) `PRINT_WARMUP` — was a separate manual prewarm macro; never called by slicer. Prewarming pre-print is now direct gcode (`M140 S110` + `M104 S150`) or `HEATSOAK`.
 
-### `config/macros/bedfans.cfg` — Ellis BedFans automation
-- `_BEDFANVARS` — config (threshold, fast, slow speeds)
-- `BEDFANSSLOW` / `BEDFANSFAST` / `BEDFANSOFF` — direct controls
-- Overrides: `SET_HEATER_TEMPERATURE`, `M140`, `M190`, `TURN_OFF_HEATERS` (all integrate bed-fan logic)
-- `bedfanloop` — delayed-gcode that ramps to fast speed once target is reached
+### `config/macros/bedfans.cfg` — BedFans hardware + manual aliases
+- `[fan_generic BedFans]` — hardware definition (PWM pin `z:P2.5`)
+- `BEDFANSSLOW` / `BEDFANSFAST` / `BEDFANSOFF` — manual console aliases; no automatic callers (the chamber control loop in `chamber_control.cfg` owns BedFans state automatically). BEDFANSSLOW reads `chamber_voc_baseline`; BEDFANSFAST reads `chamber_heat_speed`.
+- `SET_HEATER_TEMPERATURE` override — routes `HEATER=heater_bed` → `M99140` so M140 / Mainsail / SET_HEATER_TEMPERATURE all route the same way. No bedfan side-effects.
+- `M140` alias — calls `SET_HEATER_TEMPERATURE`
+- `M190` override — uses `TEMPERATURE_WAIT` with `m190_tolerance_celsius` band; no bedfan side-effects
+
+### `config/macros/chamber_control.cfg` — active chamber control
+- `_CHAMBER_CONTROL` — state holder (`variable_target`); single source of the live setpoint
+- `SET_CHAMBER_TARGET TARGET=<°C>` — only mutator of the setpoint; clamps to `[0, chamber_max_target]` with symmetric M117/RESPOND warnings on either side; kicks the loop with 1s delay
+- `chamber_control_loop` — delayed_gcode tick (5s in active states, 30s when fully idle so the loop wakes up if the bed is reheated outside SET_CHAMBER_TARGET). State machine over (target, chamber_temp, bed_temp, print_state) writes BedFans speed + temperature_fan chamber target. Five labeled branches — HEAT / COOL / MAINTAIN / VOC BASELINE / OFF — but COOL and MAINTAIN emit identical gcode (PID handles bang-bang internally; branches kept separate for future tuning). Called from PRINT_START (bootstrap + setter), PRINT_END (TARGET=0), `_CANCEL_PRINT_HOOK` (TARGET=0), `OFF` macro (TARGET=0). Sole automatic writer of BedFans after the bedfans.cfg overrides were stripped (PR for spec 2026-05-18-chamber-control-design).
 
 ### `config/macros/test_speed.cfg`
 - `TEST_SPEED` — home, snapshot position, throw the toolhead around in a configurable pattern, re-home, compare positions to detect skipped steps
@@ -376,7 +382,7 @@ These have already tripped someone up — flag them when relevant.
 
 Lessons hard-won during the 2026-05-15 Eddy migration session. None of these are documented in obvious places.
 
-- **`#` is a comment delimiter everywhere in Klipper macros — even inside string literals in `{ ... }` action blocks.** A `#` in `{ action_raise_error("...#TBD...") }` truncates the string and breaks the template, producing a cascading parse error elsewhere in the macro. Workaround: don't put `#` in macro strings. (Caught by PR #18 hotfix after the Eddy migration deploy.)
+- **`#` is a comment delimiter everywhere in Klipper macros — including inside string literals in `{ ... }` action blocks, and inside jinja `{# ... #}` comment blocks (single-line or multi-line).** Klipper's `configfile.py:append_fileconfig` runs `line.find('#')` per line BEFORE the gcode body reaches jinja, truncating each line at the first `#`. So `{# tag #}` becomes `{` + nothing (everything from the first `#` on is stripped), leaving jinja with an unclosed expression — fails on the next non-whitespace token, typically deep inside the macro body where the cause is unobvious. **Workaround: never use `{# ... #}` jinja comments in this codebase.** Use Klipper `# ...` line comments instead — those get stripped to whitespace per line and never reach jinja. (String-literal case caught by PR #18 after Eddy migration; full `{# #}` failure mode — even single-line — caught by PR #73 CI during the chamber control review-fixup pass. Earlier Task 3 single-line `{# #}` tags shipped without exercising klippy parse on their own because assembled-stack CI failed earlier and masked the issue.)
 - **A gcode_macro template renders ONCE per macro invocation, before any commands execute.** A macro body like `PROBE METHOD=tap; SET_KINEMATIC_POSITION Z={printer.probe.last_z_result}` substitutes `last_z_result` to the PRIOR value because jinja runs before the gcode. Split into two macros (parent calls A then B; B's template renders separately after A finishes) — see `vendor/klipper/docs/Eddy_Probe.md:379-389` and `config/eddy.cfg`'s `SET_Z_FROM_PROBE`/`_RELOAD_Z_OFFSET_FROM_PROBE` pair.
 - **`sensor_type: temperature_mcu` is NOT supported on LPC1769.** Klipper's supported list (`vendor/klipper/klippy/extras/temperature_mcu.py`) covers rp2/sam3/sam4/samd21/samd51/stm32f1-4/stm32g0/stm32g4/stm32l4/stm32h7 only. Cannot add MCU die-temp sensors for the SKR 1.4 boards on this build.
 - **MCU firmware can lag host Klipper version.** Bumping `vendor/klipper` doesn't reflash MCUs. New host features (e.g., `trigger_analog_query_state` for native Eddy) require corresponding firmware. Klipper will report version mismatch + missing commands on `RESTART`.
@@ -429,6 +435,7 @@ Browsing the full label view in GitHub is the authoritative way to see what's op
 
 ### Recently resolved (historical log)
 
+- ~~Bed-target-driven BedFans automation~~ — replaced 2026-05-18 by the active chamber control loop in `config/macros/chamber_control.cfg`. Spec: `docs/superpowers/specs/2026-05-18-chamber-control-design.md`.
 - ~~`eddy-ng` → native Klipper Eddy migration~~ — shipped PR #17, 2026-05-15. Calibration session completed (main + tap); thermal drift cal deferred to [#25].
 - ~~Initial calibration deploy bugs~~ — `#` in macro strings (PR #18), LPC1769 temp sensors crash (caught by review), tap jinja expansion order (split-macro pattern). All landed.
 - ~~Missing `[update_manager klipper]`~~ — by design; Moonraker auto-detects (`vendor/moonraker/docs/configuration.md:2017-2026`).
