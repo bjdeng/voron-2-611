@@ -176,10 +176,10 @@ CLAUDE.md macro inventory gets a new block for this file.
 
 ## 7. Safety
 
-- `[temperature_fan chamber].max_temp` lowered from 70 to 60 to match the operator-stated safety cap. Klipper will raise an error if measured chamber temp exceeds 60°C — protective shutdown.
-- `SET_CHAMBER_TARGET` clamps input. Negative values treated as 0. Above `chamber_max_target` (60), clamped to 60 with M117 warning.
+- `[temperature_fan chamber].max_temp` stays at **70** (kept from prior config). This is the **sensor-shutdown ceiling** — Klipper raises a protective shutdown if the chamber sensor exceeds it. The **user setpoint cap** is `_USER_VARIABLE.chamber_max_target = 60`, software-clamped in `SET_CHAMBER_TARGET`. These are independent concerns: ABS prints steady-state ≈ 55°C from bed radiation, so 10°C of headroom over the user cap absorbs hot-day spikes / brief sensor read excursions without false-positive shutdowns. Earlier drafts of this spec had both values collapsed at 60 — the review found this conflated sensor protection with user policy; corrected here.
+- `SET_CHAMBER_TARGET` clamps input. Negative values clamp to 0 with M117 + RESPOND warning (symmetric with the overshoot branch). Above `chamber_max_target` (60), clamp to 60 with M117 + RESPOND warning.
 - The control loop reads `printer.heater_bed.temperature` — if the bed thermistor disconnects (Klipper reports an error and shuts down). No need for our loop to handle this; Klipper's MCU layer does.
-- `OFF` macro forces BedFans to 0 explicitly — defense in depth in case the control loop state is wedged.
+- `OFF` macro forces BedFans to 0 explicitly AND calls `SET_CHAMBER_TARGET TARGET=0` — clearing the live setpoint so the loop's next tick doesn't re-engage HEAT on a stale target. Defense in depth in case the control loop state is wedged.
 
 ## 8. Failure modes
 
