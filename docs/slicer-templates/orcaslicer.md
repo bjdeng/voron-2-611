@@ -81,22 +81,96 @@ Set `chamber_temperature` per filament in **Filament settings → [filament] →
 | PLA, PETG, TPU | 0 | No chamber soak — PRINT_START skips to a brief `bed_stabilization_soak_seconds` G4 (default 60s). Loop runs at VOC baseline throughout. |
 | ABS, ASA, PA-CF | 55 | Loop holds chamber at 55°C for the entire print: HEAT mode (BedFans=1.0, exhaust off) below 53°C, MAINTAIN/COOL above. PRINT_START waits for chamber ≥ 27°C before tap-Z, then the loop keeps driving heat as the print runs and part radiation accumulates. Clamped to `chamber_max_target` (60) inside `SET_CHAMBER_TARGET`. |
 
-For Ben's current filament profiles (as of 2026-05-18), the values needed are:
+For Ben's current filament profiles (post 2026-05-19 audit):
 
 | Profile file | Set to |
 |---|---|
-| `PLA.json` | 0 |
-| `Inland PLA+.json` | 0 |
-| `Inland Silk PLA.json` | 0 |
 | `Sunlu PLA.json` | 0 |
 | `Sunlu PLA+.json` | 0 |
-| `SUNLU Silk PLA.json` | 0 |
+| `Sunlu Silk PLA.json` | 0 |
+| `Inland PLA+.json` | 0 |
+| `Inland Silk PLA.json` | 0 |
 | `Overture Transparent PETG.json` | 0 |
 | `Inland ABS.json` | 55 |
 | `Ambrosia ASA.json` | 55 |
-| `Ambrosia ASA - Black.json` | 55 |
-| `Ambrosia ASA - Planetary Blue.json` | 55 |
-| `Ambrosia ASA -Voron Red.json` | 55 |
+
+## Filament profile cascade (2026-05-19 audit)
+
+Two-level cascade. Material defaults flow down via inheritance; brand profiles override only brand-specific values.
+
+```
+Generic <Material> @System            ← OrcaFilamentLibrary, system (don't edit)
+    └─ <Brand> <Material>             ← user-level, calibrated per spool
+```
+
+After the audit, every user filament profile inherits from `Generic <Material> @System` (the canonical user-level parent in OrcaSlicer 2.2+). Previously most profiles pointed at `Voron Generic <Material>` — a dead parent that no longer exists; inheritance silently fell through to whatever default the slicer picked. Overture Transparent PETG was the worst offender (inheriting from `Voron Generic PLA` — wrong material AND dead parent).
+
+Brand profile inventory:
+
+| File | Inherits | Material |
+|---|---|---|
+| `Sunlu PLA.json` | `Generic PLA @System` | PLA |
+| `Sunlu PLA+.json` | `Generic PLA @System` | PLA |
+| `Sunlu Silk PLA.json` | `Generic PLA Silk @System` | PLA Silk |
+| `Inland PLA+.json` | `Generic PLA @System` | PLA |
+| `Inland Silk PLA.json` | `Generic PLA Silk @System` | PLA Silk |
+| `Overture Transparent PETG.json` | `Generic PETG @System` | PETG |
+| `Inland ABS.json` | `Generic ABS @System` | ABS |
+| `Ambrosia ASA.json` | `Generic ASA @System` | ASA |
+
+What lives at the **material layer** (set explicitly on every brand profile of that material):
+- Plate temps, range_low/high, chamber_temperature, VFR cap
+- Fan curves (`fan_min_speed`, `fan_max_speed`, `overhang_fan_threshold`, `overhang_fan_speed`)
+- Layer-time triad (`slow_down_layer_time`, `slow_down_min_speed`, `fan_cooling_layer_time`)
+- First-layer fan ramp (`close_fan_the_first_x_layers`, `full_fan_speed_layer`)
+- `temperature_vitrification`, `enable_pressure_advance`, `filament_diameter`
+
+What lives at the **brand layer** (per-spool, calibrated):
+- `nozzle_temperature` / `nozzle_temperature_initial_layer` (from temp tower)
+- `pressure_advance` (from PA cal)
+- `filament_flow_ratio` (from flow cal)
+- `filament_density` / `filament_cost` (datasheet)
+- `filament_vendor`
+- `filament_start_gcode` / `filament_end_gcode` (Spoolman handoff, per-filament Z_ADJUST)
+
+## Per-material defaults (locked 2026-05-19)
+
+These values are set explicitly on every brand profile of that material. The cascade structure makes this duplication slightly unfortunate but worth it — flat is easier to diff than an extra intermediate parent for 8 profiles.
+
+| Setting | PLA | PETG | ABS | ASA | PLA Silk |
+|---|---|---|---|---|---|
+| `chamber_temperature` | 0 | 0 | **55** | **55** | 0 |
+| `hot_plate_temp` | 60 | 75 | 100 | 100 | 60 |
+| `hot_plate_temp_initial_layer` | 60 | 75 | 110 | 110 | 60 |
+| `textured_plate_temp` | 60 | 75 | 100 | 100 | 60 |
+| `textured_plate_temp_initial_layer` | 60 | 75 | 110 | 110 | 60 |
+| `nozzle_temperature_range_low` | 190 | 230 | 235 | 240 | 200 |
+| `nozzle_temperature_range_high` | 230 | 260 | 260 | 270 | 230 |
+| `filament_max_volumetric_speed` | 18 | 12 | 14 | 14 | 7.5 |
+| `fan_min_speed` | 100 | 30 | 5 | 5 | 100 |
+| `fan_max_speed` | 100 | 50 | 30 | 30 | 100 |
+| `overhang_fan_threshold` | 50% | 50% | 50% | 50% | 50% |
+| `overhang_fan_speed` | 100 | 80 | 70 | 70 | 100 |
+| `slow_down_layer_time` | 6 | 10 | 15 | 15 | 8 |
+| `slow_down_min_speed` | 20 | 20 | 15 | 15 | 20 |
+| `close_fan_the_first_x_layers` | 1 | 2 | 3 | 3 | 1 |
+| `full_fan_speed_layer` | 2 | 4 | 5 | 5 | 2 |
+| `temperature_vitrification` | 70 | 85 | 105 | 105 | 70 |
+
+**`filament_max_volumetric_speed` ceiling**: 18 mm³/s for this hotend. Per-material values are below the cap by material rheology.
+
+### What about `M106 P3` / auxiliary fan / air filtration?
+
+OrcaSlicer can emit `M106 P3 S<n>` commands for an auxiliary fan and `M106 P<aux>` for active filtration. **Neither maps to anything on this build.** The chamber control loop in `config/macros/chamber_control.cfg` owns BedFans + `[temperature_fan chamber]` (which drives the exhaust hardware via PID; there's no separate `[fan_generic]` aux fan wired). Every brand profile sets:
+
+```json
+"additional_cooling_fan_speed": ["0"],
+"during_print_exhaust_fan_speed": ["0"],
+"complete_print_exhaust_fan_speed": ["0"],
+"activate_air_filtration": ["0"]
+```
+
+These prevent `M106 P3` lines from being emitted into the gcode (where they'd be silent no-ops cluttering the output).
 
 ## Per-filament MATERIAL string
 
@@ -145,12 +219,30 @@ This runs AFTER PRINT_START finishes and applies the offset on top of the tap-Z 
 - **`TIMELAPSE_TAKE_FRAME`** — opt-in per print, set in **Filament settings → [filament] → Custom G-code → Layer change G-code** if you want timelapse for that filament/print. Closed [#26](https://github.com/bjdeng/voron-2-611/issues/26). Currently gated on webcam re-plug ([#27](https://github.com/bjdeng/voron-2-611/issues/27)).
 - **`SET_PRESSURE_ADVANCE ADVANCE=...`** — best set in **Filament settings → [filament] → Custom G-code → Filament start G-code**, per-filament. PRINT_START intentionally doesn't take a `PRESSURE_ADVANCE` param; the slicer's inline `SET_PRESSURE_ADVANCE` is the canonical pattern.
 
-## Profile cleanup recommended (mess noted by Ben, 2026-05-18)
+## Profile cleanup (status 2026-05-19)
 
-Stale items in the user settings dir worth deleting:
+The 2026-05-18 audit identified these as stale; the 2026-05-19 audits resolved them in two PRs:
 
-- `default/machine/Voron 2.4 350 0.4 nozzle - Copy.json` — empty shell, no real content; superseded by `Voron v2.611.json`.
-- `default/process/0.20mm Standard @Voron - Copy.json` — likely accidental "Save As" remnant.
-- `user/3087889866/` — looks like a stale OrcaSlicer cloud-sync user-ID dir. Only contains 4 ASA filament profiles that duplicate the canonical ones in `default/filament/`. Safe to delete if Orca doesn't actively reference it after a restart.
+**Resolved by PR #78 (process-profile audit):**
+- ~~`default/machine/Voron 2.4 350 0.4 nozzle - Copy.json`~~ — empty machine shell, deleted
+- ~~`default/process/0.20mm Standard @Voron - Copy.json`~~ — accidental Save-As, deleted
+- ~~`default/process/0.20mm Standard @Voron - Fast/Match SS/PLA.json`~~ — 3 process variants, deleted; replaced by Speed/Strength/Quality
 
-OrcaSlicer UI deletion path: **Printer settings → drop-down → [the stale profile] → Delete**, similar for filament and process profiles. The `3087889866/` directory can be deleted from Finder once Orca is closed.
+**Resolved by filament audit (this work):**
+- ~~`default/filament/PLA.json`~~ — generic, no brand attached, deleted
+- ~~`default/filament/Ambrosia ASA - <color>.json` (3 variants)~~ — collapsed to single `Ambrosia ASA.json`
+- `user/3087889866/` — interactive delete prompt in filament apply.sh; leave or delete per session
+
+All deletions are preserved in `docs/orcaslicer-archive/2026-05-19-pre-rewrite/` as a rollback point.
+
+## Calibration workflow (per spool)
+
+Tracked in [#79](https://github.com/bjdeng/voron-2-611/issues/79) — a planned skill that walks through temp → flow → PA per spool with logging. Until that ships, manual workflow:
+
+1. Pick the existing brand profile in OrcaSlicer (NOT `Generic @System` — that bypasses your calibration)
+2. Run temp tower in OrcaSlicer Calibration menu → update `nozzle_temperature` / `_initial_layer`
+3. Run flow Pass 1 + Pass 2 → update `filament_flow_ratio`
+4. Run `PRESSURE_ADVANCE_CALIBRATION` (Frix_x macro) → update `pressure_advance`
+5. Run Max Volumetric Speed → confirm `filament_max_volumetric_speed` (should be at or below the per-material default)
+
+Anomaly currently flagged (kept as-is pending re-cal): **`Inland PLA+.json: filament_flow_ratio=1.1`** — unusually high; verify via flow Pass 2.
