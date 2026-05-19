@@ -29,6 +29,7 @@ The machine has years of trial-and-error baked into it. **Do not assume the curr
 - **Stealthburner v2** body (no SB LEDs installed — only the LCD neopixel chain in `[neopixel lcd]`)
 - **Galileo extruder** — explains the unusual `gear_ratio: 9:1` + `rotation_distance: 48.033` in `config/toolhead.cfg`
 - **Dragon clone hotend** (vendor unknown; behaves Dragon-compatible)
+- **Delta BFB0524HH** 24V 2-pin 5015 part cooling fan on `EBB:gpio4` (community upgrade from BOM Sunon MF50151VX-A99; matches EBB SB v1.0 FAN1 factory-default 24V output). Slightly weaker on paper than Sunon (4.6 vs 5.4 CFM) but better build / longer-rated / 24V-native. Cooling settings in filament profiles tuned for this fan — see `docs/slicer-templates/orcaslicer.md`.
 - 0.4 mm nozzle, 1.75 mm filament (Generic 3950 thermistor, pullup 2200 Ω)
 - **LIS2DW** accelerometer on toolhead (for resonance testing); `axes_map: z,x,y`
 

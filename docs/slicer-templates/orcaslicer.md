@@ -140,24 +140,36 @@ These values are set explicitly on every brand profile of that material. The cas
 | Setting | PLA | PETG | ABS | ASA | PLA Silk |
 |---|---|---|---|---|---|
 | `chamber_temperature` | 0 | 0 | **55** | **55** | 0 |
-| `hot_plate_temp` | 60 | 75 | 100 | 100 | 60 |
-| `hot_plate_temp_initial_layer` | 60 | 75 | 110 | 110 | 60 |
-| `textured_plate_temp` | 60 | 75 | 100 | 100 | 60 |
-| `textured_plate_temp_initial_layer` | 60 | 75 | 110 | 110 | 60 |
+| `hot_plate_temp` | 55 | 55 | 100 | 100 | 55 |
+| `hot_plate_temp_initial_layer` | 55 | 55 | 110 | 110 | 55 |
+| `textured_plate_temp` | 55 | 55 | 100 | 100 | 55 |
+| `textured_plate_temp_initial_layer` | 55 | 55 | 110 | 110 | 55 |
 | `nozzle_temperature_range_low` | 190 | 230 | 235 | 240 | 200 |
 | `nozzle_temperature_range_high` | 230 | 260 | 260 | 270 | 230 |
 | `filament_max_volumetric_speed` | 18 | 12 | 14 | 14 | 7.5 |
-| `fan_min_speed` | 100 | 30 | 5 | 5 | 100 |
-| `fan_max_speed` | 100 | 50 | 30 | 30 | 100 |
-| `overhang_fan_threshold` | 50% | 50% | 50% | 50% | 50% |
-| `overhang_fan_speed` | 100 | 80 | 70 | 70 | 100 |
+| `fan_min_speed` | 100 | 20 | 10 | 10 | 100 |
+| `fan_max_speed` | 100 | 60 | 40 | 40 | 100 |
+| `overhang_fan_threshold` | 50% | 50% | 25% | 25% | 50% |
+| `overhang_fan_speed` | 100 | 80 | 80 | 80 | 100 |
 | `slow_down_layer_time` | 6 | 10 | 15 | 15 | 8 |
 | `slow_down_min_speed` | 20 | 20 | 15 | 15 | 20 |
 | `close_fan_the_first_x_layers` | 1 | 2 | 3 | 3 | 1 |
 | `full_fan_speed_layer` | 2 | 4 | 5 | 5 | 2 |
 | `temperature_vitrification` | 70 | 85 | 105 | 105 | 70 |
 
+**Bed temps**: PLA/PETG at 55°C reflects empirical printer behavior on this build — 60°C bed surface temperature noticeably radiated into the toolhead's hotend cold-end zone, causing inconsistent extrusion as the heatbreak warmed. Lower bed sidesteps the issue. ABS/ASA at 100/110 unchanged (their print temps already require active hotend cooling regardless).
+
 **`filament_max_volumetric_speed` ceiling**: 18 mm³/s for this hotend. Per-material values are below the cap by material rheology.
+
+### Cooling values are tuned for Stealthburner v2 + Delta BFB0524HH
+
+The part cooling fan on this build is a **Delta BFB0524HH** (24V 2-pin 5015) on `EBB:gpio4`, plugged into the EBB SB v1.0's FAN1 port (factory default: 24V output, matches the fan; verified per `vendor/btt-docs/docs/EBB SB2209 USB.md:137`). It's a community-favored upgrade from the BOM Sunon MF50151VX-A99, but datasheets (Delta + Sunon product pages, accessed 2026-05-19) confirm it delivers **comparable airflow** (Delta 4.6 CFM / 0.866 in H₂O vs. Sunon 5.4 CFM / 0.97 in H₂O) — the Delta wins on build quality and PWM linearity, not raw cooling power.
+
+ABS/ASA-specific tuning: per [Ellis Print Tuning Guide — Cooling and Layer Times](https://ellis3dp.com/Print-Tuning-Guide/articles/cooling_and_layer_times.html) on his AB-BN (Delta-class 5015) build at 63°C chamber, ABS sweet spot is 40-50% fan_max. Our 40% in a 55°C chamber matches this — tune up if you see overhang sag, tune down if you see ABS delam at corners.
+
+The `overhang_fan_threshold: 25%` (vs OrcaSlicer's stock 95% for PETG / 50% PLA-baseline) is the more surprising knob: with ABS/ASA general fan capped low (10-40%), overhang regions need the fan to *trigger sooner* to catch mild overhangs that would otherwise sag. Pairing 25% threshold with `overhang_fan_speed: 80` (vs the 40% general max) means overhangs get nearly 2× the baseline airflow.
+
+**Minimum PWM threshold note**: 5015 blowers (both Sunon and Delta) may stall below ~15-20% PWM. Klipper's default `kick_start_time: 0.1s` (per `vendor/klipper/docs/Config_Reference.md:3244`) typically gets the impeller spinning, then it settles at the commanded PWM. If you ever see "fan commanded but no air" at low % during a print, **add** a `kick_start_time: 0.5` line to `config/toolhead.cfg`'s `[fan]` block at line 52 (the block currently only has `pin:` uncommented — `kick_start_time` is not present, you'd be adding it).
 
 ### What about `M106 P3` / auxiliary fan / air filtration?
 
