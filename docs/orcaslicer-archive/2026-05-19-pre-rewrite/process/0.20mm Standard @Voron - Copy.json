@@ -1,0 +1,9 @@
+{
+    "from": "User",
+    "inherits": "0.20mm Standard @Voron",
+    "is_custom_defined": "0",
+    "name": "0.20mm Standard @Voron - Copy",
+    "print_settings_id": "0.20mm Standard @Voron - Copy",
+    "small_area_infill_flow_compensation": "1",
+    "version": "2.3.1.10"
+}
