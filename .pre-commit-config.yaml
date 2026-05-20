@@ -1,21 +1,58 @@
 # pre-commit hooks for voron-2-611
 # Local: `pre-commit run --all-files` (or auto on commit if installed via `pre-commit install`)
 # CI: same hooks run in .github/workflows/ci.yml
+#
+# Exclude pattern: vendor, tests/dict, tests/snapshots, firmware are sources we
+# don't own. config/mainsail.cfg, config/timelapse.cfg, everything under
+# config/mmu/base/, and the two optional Happy-Hare files are dereferenced
+# from third-party symlinks on the Pi (mainsail-config, moonraker-timelapse,
+# Happy-Hare) — see CLAUDE.md "Four classes of file on the Pi". The deploy
+# script excludes them from push, so whitespace normalization here would
+# create perpetual sync churn without any benefit.
+#
+# Note: config/mmu/base/mmu_parameters.cfg is NOT a symlink (per CLAUDE.md
+# Known quirks) but is excluded along with the rest of mmu/base/ for pattern
+# simplicity. Whitespace in it doesn't affect Klipper parsing.
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
-      # tests/snapshots/ contains L7 macro-behavior dumps with significant
-      # trailing whitespace (gcode dispatcher output) — stripping breaks
-      # byte-identity vs the captured baseline.
       - id: trailing-whitespace
-        exclude: ^vendor/|^tests/dict/|^tests/snapshots/|^firmware/
+        exclude: |
+          (?x)^(
+            vendor/|
+            tests/dict/|
+            tests/snapshots/|
+            firmware/|
+            config/(mainsail|timelapse)\.cfg|
+            config/mmu/base/|
+            config/mmu/optional/(client_macros|mmu_menu)\.cfg
+          )
       - id: end-of-file-fixer
-        exclude: ^vendor/|^tests/dict/|^tests/snapshots/|^firmware/|^tests/builtins\.txt$
+        exclude: |
+          (?x)^(
+            vendor/|
+            tests/dict/|
+            tests/snapshots/|
+            firmware/|
+            tests/builtins\.txt|
+            config/(mainsail|timelapse)\.cfg|
+            config/mmu/base/|
+            config/mmu/optional/(client_macros|mmu_menu)\.cfg
+          )
       - id: mixed-line-ending
         args: ['--fix=lf']
-        exclude: ^vendor/|^tests/dict/|^tests/snapshots/|^firmware/
+        exclude: |
+          (?x)^(
+            vendor/|
+            tests/dict/|
+            tests/snapshots/|
+            firmware/|
+            config/(mainsail|timelapse)\.cfg|
+            config/mmu/base/|
+            config/mmu/optional/(client_macros|mmu_menu)\.cfg
+          )
       - id: check-yaml
         files: \.(yaml|yml)$
         exclude: ^vendor/
