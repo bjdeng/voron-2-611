@@ -17,86 +17,30 @@ The machine has years of trial-and-error baked into it. **Do not assume the curr
 
 ---
 
-## Hardware inventory
+## Build at a glance
 
-### Frame & motion
-- 350 × 350 × ~300 mm build volume (Z position_max = 330, used max ≈ 335 per mesh)
-- CoreXY kinematics, quad gantry leveling (QGL — not Z-tilt; this is a V2, not a Trident)
-- **MGN12 X carriage** (upgraded from stock MGN9)
-- Beefy idlers mod
+- V2.4 350 mm CoreXY, milled aluminum bed, quad gantry leveling
+- Stealthburner v2 + Galileo G2E (9:1 — explains `gear_ratio: 9:1`/`rotation_distance: 48.033`) + Dragon clone hotend
+- BTT Eddy probe (native Klipper `[probe_eddy_current]`; migrated from `vvuk/eddy-ng` in PR #17)
+- ERCF v2 MMU, 6 gates, Filametrix toolhead cutter, Blobifier purge tower
+- 5 USB-attached MCUs (no CAN): 2× BTT SKR 1.4 (LPC1769), EBB SB v1.0, BTT Eddy, ERCF EASY-BRD
+- 0.4 mm nozzle, 1.75 mm filament; PEI textured magnetic flex plate
 
-### Toolhead
-- **Stealthburner v2** body (no SB LEDs installed — only the LCD neopixel chain in `[neopixel lcd]`)
-- **Galileo extruder** — explains the unusual `gear_ratio: 9:1` + `rotation_distance: 48.033` in `config/toolhead.cfg`
-- **Dragon clone hotend** (vendor unknown; behaves Dragon-compatible)
-- **Delta BFB0524HH** 24V 2-pin 5015 part cooling fan on `EBB:gpio4` (community upgrade from BOM Sunon MF50151VX-A99; matches EBB SB v1.0 FAN1 factory-default 24V output). Slightly weaker on paper than Sunon (4.6 vs 5.4 CFM) but better build / longer-rated / 24V-native. Cooling settings in filament profiles tuned for this fan — see `docs/slicer-templates/orcaslicer.md`.
-- 0.4 mm nozzle, 1.75 mm filament (Generic 3950 thermistor, pullup 2200 Ω)
-- **LIS2DW** accelerometer on toolhead (for resonance testing); `axes_map: z,x,y`
-
-### Probe
-- **BTT Eddy** running Klipper's native `[probe_eddy_current btt_eddy]` (migrated from `vvuk/eddy-ng` in PR #17, 2026-05-15)
-- Linked `[temperature_probe btt_eddy]` for thermal drift compensation (shares the postfix; same NTC on `eddy:gpio26`)
-- `reg_drive_current: 15` (carried over from prior eddy-ng calibration; same LDC1612 register)
-- Probe offset: `x_offset: 0`, `y_offset: 21.42`
-- `[bed_mesh] fade_target: 0` + `zero_reference_position: 175, 175` paired with tap workflow (matches the homing_override's Z-home XY position)
-- Tap-Z application uses the doc-blessed split-macro pattern: `SET_Z_FROM_PROBE` (runs `PROBE METHOD=tap`) then `_RELOAD_Z_OFFSET_FROM_PROBE` (applies the result via `SET_KINEMATIC_POSITION`). Two macros because jinja templates render once per macro — see [Klipper gotchas](#klipper-gotchas).
-- Tap-Z auto-applies via `[homing_override] axes: z` in `config/eddy.cfg` — every `G28 Z` (or full `G28`) runs `SET_Z_FROM_PROBE` automatically, including ad-hoc homes from the Mainsail console. `G28 X` / `G28 Y` alone bypass the override.
-
-### Bed
-- Textured PEI **magnetic flex plate**
-- Silicone heater (NTC 100K MGB18-104F39050L32 thermistor)
-- **SSR** for bed heater (max_power 0.8)
-- Ellis-style **BedFans** with a modified housing including a **charcoal filter** (https://www.printables.com/model/334276-the-filter-for-voron-24); threshold 100 °C, fast=0.6, slow=0.2
-
-### Chamber
-- Active control via `[temperature_fan chamber]` on `z:P2.7` with a 10k_thermistor on `z:P0.24` (custom temperature/resistance table)
-
-### Display & lighting
-- fysetc Mini12864 (EXP1/EXP2 on the XYE SKR 1.4)
-- 3-LED Neopixel chain on the display
-- **Caselight** (PWM output_pin on `P2.5` on the XYE board)
-
-### MMU (Multi-Material Unit)
-- **Self-printed ERCF v2** (Enraged Rabbit Carrot Feeder, community edition v2.0)
-- 6 gates, BTT EASY-BRD MCU (SAMD21G18A)
-- LinearSelector + selector servo + Binky-style encoder
-- **No buffer** — spools sit on **Filamentalist rewinders**
-- Add-ons enabled: **Blobifier** (purge tower). **Filametrix** is the toolhead filament cutter ([Carrot-collective/Filametrix](https://github.com/Carrot-collective/Filametrix)) — driven via `_MMU_CUT_TIP` which Happy Hare invokes during toolchange (`config/mmu/base/mmu_cut_tip.cfg`, with cutter pin location in `config/mmu/base/mmu_macro_vars.cfg::_MMU_CUT_TIP_VARS`).
-- **Files present but NOT active:** `config/mmu/addons/mmu_erec_cutter.cfg` and `mmu_eject_buttons.cfg` are not `[include]`d from `config/printer.cfg`. EREC is NOT used (Filametrix is); eject buttons are NOT installed.
-- Toolhead/extruder filament sensors on the EBB board (gpio6, gpio21)
-- Sync feedback: tension switch on `mmu:PA7` (compression switch not connected)
-
-### Additional temperature sensors (worth knowing about)
-
-Beyond `[heater_bed]` + `[extruder]` + `[temperature_fan chamber]`, these sensors are wired and active for diagnostics:
-
-| Section | Source | Notes |
-|---|---|---|
-| `[temperature_probe btt_eddy]` | Generic 3950 NTC on `eddy:gpio26` | Coil-adjacent; linked to `[probe_eddy_current btt_eddy]` for drift comp |
-| `[temperature_sensor btt_eddy_mcu]` | RP2040 die temp | MCU temperature for the Eddy board |
-| `[temperature_sensor EBB_NTC]` | Generic 3950 NTC on `EBB:gpio27` | NTC on the EBB toolhead board |
-| `[temperature_sensor raspberry_pi]` | `temperature_host` | Pi SoC temperature |
-
-**`sensor_type: temperature_mcu` is NOT supported on LPC1769** (per `vendor/klipper/klippy/extras/temperature_mcu.py` supported list: rp2/sam3/sam4/samd21/samd51/stm32f1-4/stm32g0/stm32g4/stm32l4/stm32h7). Cannot add die-temp sensors for the two SKR 1.4 boards; the Eddy MCU temp sensor works because it's an RP2040.
-
-### Installed but **not** in active use (per Ben, 2026-05-13)
-- **moonraker-timelapse** — installed 2026-05-18 (closed #26; missed install step had left the Moonraker component dormant since initial setup). Active but **opt-in per print**: Ben does not have `TIMELAPSE_TAKE_FRAME` wired into OrcaSlicer's layer-change gcode by default. Two ways to invoke: (a) add `TIMELAPSE_TAKE_FRAME` to a specific print's slicer custom gcode, or (b) `HYPERLAPSE ACTION=START [CYCLE=30]` in the Mainsail console before starting a print, `HYPERLAPSE ACTION=STOP` after. Both require a webcam (currently unplugged — see below + #27).
-- **Webcam** — physically unplugged because of timing/streaming issues. Crowsnest + Sonar daemons still run. Plan: re-enable after Eddy NG → native Klipper Eddy migration.
-- **Spoolman** — Moonraker is configured against an external Spoolman at [`spoolman-server`](../.claude/projects/-Users-ben-code-voron-2-611/memory/spoolman-server.md) (http://192.168.0.89:7912 on Ben's LAN), but Ben isn't fully using it.
+Hardware history + non-obvious mods + community context: [`docs/hardware.md`](docs/hardware.md). Actual electrical specs (pins, drive currents, kinematic constants, USB serials) live in the [`config/*.cfg`](config/) files — `docs/hardware.md` is the *why* layer, not a duplicate spec.
 
 ---
 
 ## MCU map
 
-The printer uses **5 USB-attached MCUs** (no CAN bus, despite the toolhead board name suggesting it). Always confirm USB serials with `ls -l /dev/serial/by-id/` on the Pi when adding/replacing hardware.
+The printer uses **5 USB-attached MCUs** (no CAN bus, despite the toolhead board name suggesting it). USB serial IDs live in [`config/printer.cfg`](config/printer.cfg)'s `[mcu]` blocks (`serial:` lines). Confirm with `ls -l /dev/serial/by-id/` on the Pi when adding/replacing hardware.
 
-| Klipper name | Board | MCU | Serial | Role |
-|---|---|---|---|---|
-| `mcu` | BTT SKR 1.4 | LPC1769 | `usb-Klipper_lpc1769_05E0FF1627903CAF12CA6D5CC62000F5-if00` | X/Y steppers, extruder uart-mux home (EBB connects too), main MCU. Also drives caselight, beeper, mini12864, neopixel LCD. |
-| `mcu z` | BTT SKR 1.4 | LPC1769 | `usb-Klipper_lpc1769_1560011845084AAF45F07F5DC52000F5-if00` | Four Z steppers, bed heater (SSR via z:P2.3), controller fan, bedfans, chamber heater fan, chamber thermistor |
-| `mcu EBB` | BTT EBB SB v1.0 (USB mode) | RP2040 | `usb-Klipper_rp2040_5044340310C4D61C-if00` | Extruder stepper, hotend heater, part fan, hotend fan, LIS2DW accel, toolhead filament sensors |
-| `mcu eddy` | BTT Eddy | RP2040 | `usb-Klipper_rp2040_5044340310B85E1C-if00` | Eddy probe (LDC1612 sensor + MCU temperature sensor) |
-| `mcu mmu` | ERCF EASY-BRD | SAMD21G18A | `usb-Klipper_samd21g18a_B8D81297503854512020204E2F1C13FF-if00` | MMU gear stepper, selector stepper, selector servo, encoder, selector endstop, sync feedback tension switch |
+| Klipper name | Board | MCU | Role |
+|---|---|---|---|
+| `mcu` | BTT SKR 1.4 | LPC1769 | X/Y steppers, extruder uart-mux home (EBB connects too), main MCU. Also drives caselight, beeper, mini12864, neopixel LCD. |
+| `mcu z` | BTT SKR 1.4 | LPC1769 | Four Z steppers, bed heater (SSR via z:P2.3), controller fan, bedfans, chamber heater fan, chamber thermistor |
+| `mcu EBB` | BTT EBB SB v1.0 (USB mode) | RP2040 | Extruder stepper, hotend heater, part fan, hotend fan, LIS2DW accel, toolhead filament sensors |
+| `mcu eddy` | BTT Eddy | RP2040 | Eddy probe (LDC1612 sensor + MCU temperature sensor) |
+| `mcu mmu` | ERCF EASY-BRD | SAMD21G18A | MMU gear stepper, selector stepper, selector servo, encoder, selector endstop, sync feedback tension switch |
 
 **Firmware build kconfigs are vendored in `config/firmware/`** (pulled from `~/klipper-kconfigs/` on the Pi):
 - `config/firmware/mcu.config` — both SKR 1.4 boards (LPC1769 with USB)
@@ -207,7 +151,7 @@ From the SAVE_CONFIG block at the bottom of `config/printer.cfg`. Per Ben: **ass
 | Pressure advance | 0.05 (smooth time 0.040) | from `pressure_advance` in `[extruder]` defaults |
 | Bed mesh `default` | 9×9, (15, 21.42) → (335, 334.94) | bicubic, full bed |
 | Bed mesh `Default2` | 5×5, (30, 30) → (320, 320) | smaller fallback |
-| Eddy native | `reg_drive_current: 15`, freq range ~31607 Hz, Z range 0.05–4.05 mm (101 samples × 40 µm — Klipper hardcoded, see Klipper gotchas), `tap_threshold: 2419.384` | from 2026-05-19 re-calibration. Thermal drift cal pending — see [#25](https://github.com/bjdeng/voron-2-611/issues/25). [#22](https://github.com/bjdeng/voron-2-611/issues/22) (widening cal range to cover QGL first pass at z=8) closed as won't-fix — Klipper caps cal at z=4. |
+| Eddy native | freq range ~31607 Hz, Z range 0.05–4.05 mm (101 samples × 40 µm — Klipper hardcoded, see Klipper gotchas), `tap_threshold: 2711.866`, `calibration_temp: 57.92 °C` | tap_threshold from 2026-05-19 refine+verify session. Cal anchor rolled back to May-15 SAVE_CONFIG state (commit 0e48365) after re-running PROBE_EDDY_CURRENT_CALIBRATE at a different coil temp broke tap — see Klipper gotchas on native-tap drift sensitivity. Drift cal still pending — [#25](https://github.com/bjdeng/voron-2-611/issues/25). [#22](https://github.com/bjdeng/voron-2-611/issues/22) (widening cal range to cover QGL first pass at z=8) closed as won't-fix — Klipper caps cal at z=4. |
 
 Update [`memory/tuning-log.md`](memory/tuning-log.md) whenever you re-run a calibration.
 
@@ -377,6 +321,8 @@ These have already tripped someone up — flag them when relevant.
 - **Microsteps 128 on X/Y/Z** (atypically high), plus `interpolate: False` on the TMC2209s. Followed third-party online advice rather than analyzed for this hardware. Real goal: quiet without losing steps. Don't change blindly ([#24](https://github.com/bjdeng/voron-2-611/issues/24) tracks deliberate investigation).
 - **The 2-pass `QUAD_GANTRY_LEVEL` override is load-bearing and will stay that way.** A/B motor weight sags the rear when motors are off; a single-pass QGL would fail. First pass uses `METHOD=default` (descend) because `horizontal_move_z=8` is outside the eddy cal range, which is hardcoded to Z≤4 mm in Klipper (see Klipper gotchas). Second pass uses `METHOD=scan` at `horizontal_move_z=2`. See `memory/qgl-two-pass-intentional.md`. ([#22](https://github.com/bjdeng/voron-2-611/issues/22) closed won't-fix 2026-05-19.)
 - **`config/mainsail.cfg` is "read-only" upstream.** mainsail-config's file header says don't edit. We've been pulling Ben's customizations through `[gcode_macro _CLIENT_VARIABLE]` instead. The refactor spec (Phase 2) plans to break the symlink and slim the file locally — when that happens, future mainsail-config updates won't auto-apply.
+- **`config/mmu/base/mmu_parameters.cfg` is NOT a Pi-side symlink** — unique exception among the otherwise-symlinked `mmu/base/*.cfg` files. HH copies it from its template at install time so users can hold per-printer customizations (Ben's toolhead distances live here). Verified 2026-05-19 by `ls -l ~/printer_data/config/mmu/base/mmu_parameters.cfg` showing a different inode from `~/Happy-Hare/config/base/mmu_parameters.cfg`. Edit on the Pi at `~/printer_data/config/mmu/base/mmu_parameters.cfg` directly, then RESTART + `/sync-from-pi` to update the repo snapshot.
+- **`BLOBIFIER` requires `QUAD_GANTRY_LEVEL` first.** The macro parks at the purge tower at specific bed coords and won't proceed if the gantry isn't trammed — fails with a quiet `Purging...` log line but no actual extrusion. Also: a manual `G1 E30` after `MMU_LOAD` won't push filament out the nozzle — `toolhead_sensor_to_nozzle` is ~85 mm on this build, so the load ends with filament at the sensor but ~85 mm short of the nozzle. Use `BLOBIFIER PURGE_LENGTH=200` (or higher) to actually purge through the melt zone.
 
 ---
 
@@ -393,6 +339,9 @@ Lessons hard-won during the 2026-05-15 Eddy migration session. None of these are
 - **SAMD21 boards use BOSSA, not katapult.** For the EASY-BRD MMU MCU, prefer KIAUH's flash flow over hand-driving `~/BOSSA/` — KIAUH handles the bootloader-button timing.
 - **eddy native scan probing refuses out-of-calibrated-range Z, and the calibrated range is hardcoded to Z=0–4 mm.** `PROBE_EDDY_CURRENT_CALIBRATE` always samples `max_z = 4.0` in 40 µm steps regardless of the toolhead's starting Z — see `vendor/klipper/klippy/extras/probe_eddy_current.py:150-152`. Scan/rapid_scan modes error with "sensor not in valid range" above 4 mm. eddy-ng was more permissive. This is why our QGL first pass at `horizontal_move_z=8` uses `METHOD=default` instead of scan — won't change without a Klipper patch. [#22](https://github.com/bjdeng/voron-2-611/issues/22) closed 2026-05-19 as won't-fix.
 - **`PROBE_EDDY_CURRENT_TAP_CALIBRATE` flow:** `guess` → `refine` → `verify`. **Only `verify` saves to config.** `_refine_tap_threshold` lives in memory only; don't restart Klipper between `refine` and `verify`.
+- **Native Klipper's tap detection has NO signal filtering — `TEMPERATURE_PROBE_CALIBRATE` is a prerequisite, not optional.** Eddy-ng's tap mode used a 5–25 Hz Butterworth band-pass filter (`vendor/eddy-ng/probe_eddy_ng.py:251-254`) that removed slow-varying thermal drift before tap detection ran. Native Klipper (`probe_eddy_current.py:_find_least_squares`) fits a piecewise-quadratic model directly to raw `(freq, z)` data — any drift between cal-time and probe-time coil temp breaks the slope-inflection detection. Symptom: `Unable to detect tap: insufficient slope delta` with `contact_slope_delta` ≤ 0 in the `PROBE_EDDY_CURRENT_TAP_CALIBRATE` (no args) diagnostic. Verified 2026-05-19: cal anchored at coil 57.9 °C, re-cal attempted at 69.2 °C → subsequent taps failed at coil temps outside ±5 °C of either anchor. Rollback procedure: splice old SAVE_CONFIG block from Klipper backups at `~/printer_data/config/printer-YYYYMMDD_*.cfg`. Real fix: [#25](https://github.com/bjdeng/voron-2-611/issues/25).
+- **Happy Hare toolhead parameters do NOT persist via SAVE_CONFIG.** `MMU_CALIBRATE_TOOLHEAD CLEAN=1/DIRTY=1/CUT=1` with `SAVE=1` (default) updates Python module attributes in memory — but HH never calls Klipper's `configfile.set()` API for these (`vendor/happy-hare/extras/mmu/mmu.py:2792-2809`). To persist, manually edit `~/printer_data/config/mmu/base/mmu_parameters.cfg` + RESTART. The calibration command itself prints `"Update mmu_parameters.cfg to persist settings"` for this reason.
+- **`MMU_CALIBRATE_TOOLHEAD` requires extruder ≤ 70 °C.** `_probe_toolhead()` (`mmu.py:2447`) sets target to 0 and waits for cooldown before each probe — uses collision detection against a solid (cold) heatbreak/nozzle to measure dimensions. Don't try to run it at print temps. CLEAN measurement is order-dependent: feeds filament through bowden+extruder, probes against nozzle's internal shoulder. Procedure: [`docs/mmu-toolhead-calibration.md`](docs/mmu-toolhead-calibration.md).
 - **`TEMPERATURE_PROBE_CALIBRATE` requires a paper test at every STEP°C.** Default `STEP=2` → ~25 paper tests over 50°C. Quadratic LSQ fit error ≈ σ × √(3/(N−3)). STEP=2 gives ~1-2µm fit error. Higher STEP = fewer samples, worse fit. Tradeoff is real — see source comments around line 374 of `temperature_probe.py`.
 - **Circular dependency on first Eddy calibration.** Native Eddy needs calibration to home Z, but calibration needs Z-homed first. Workaround: `FORCE_MOVE STEPPER=stepper_z DISTANCE=N VELOCITY=5` to manually position, then `SET_KINEMATIC_POSITION Z=20` to claim Z homed, then run `PROBE_EDDY_CURRENT_CALIBRATE`. Documented at `vendor/klipper/docs/Eddy_Probe.md:402-450`.
 - **`deploy_to_pi.sh` drift gate can't distinguish Pi-ahead from repo-ahead.** When the repo has changes the Pi doesn't have yet, the gate fires anyway. Workaround: temporarily disable the gate (or use the fix from [#19](https://github.com/bjdeng/voron-2-611/issues/19)).
@@ -472,18 +421,7 @@ Reference docs are pinned to versions matching the Pi. Always grep these first b
 
 Bump deliberately with `git submodule update --remote vendor/<name>` — pin updates are PRs, not auto-pulled in CI.
 
-### Hardware references (not vendored — too heavy)
-
-These hardware projects ship with CAD / STLs / heavy assets that aren't worth vendoring (the ERCF v2 repo alone is 1.3 GB on a fresh clone). Use the URLs below when troubleshooting; they're the canonical upstreams for the hardware on this build.
-
-| Hardware | Upstream | Why we don't vendor |
-|---|---|---|
-| **ERCF v2** (MMU) | [Carrot-collective/ERCF_v2](https://github.com/Carrot-collective/ERCF_v2) | 1.3 GB — CAD + STLs + recommended-mods assets. `Documentation/` alone is 91 MB. |
-| **Galileo 2** (extruder; 9:1 ratio matches our `config/toolhead.cfg`) | [JaredC01/Galileo2](https://github.com/JaredC01/Galileo2) | CAD-heavy. The Voron Stealthburner drop-in (G2E) is what's on this build. The original (7.5:1) lives at [JaredC01/Galileo](https://github.com/JaredC01/Galileo) — not what we have. |
-| **EASY-BRD** (ERCF SAMD21 MCU) | [Tircown/ERCF-easy-brd](https://github.com/Tircown/ERCF-easy-brd) | Schematic + KiCad files + reference configs. Probably small enough to vendor if we ever need to dig in — check size first. |
-| **Stealthburner v2** (toolhead) | [VoronDesign/Voron-Stealthburner](https://github.com/VoronDesign/Voron-Stealthburner) | CAD + STLs + assembly manual. Separate from `vendor/voron-2` (the main Voron 2 repo doesn't include the SB toolhead). |
-
-If we ever need to troubleshoot one of these and the URL isn't enough, clone it ad-hoc into `~/scratch/` rather than committing it as a submodule.
+Non-vendored hardware references (ERCF v2, Galileo G2E, EASY-BRD, Stealthburner v2 — too CAD-heavy to vendor): see [`docs/hardware.md`](docs/hardware.md#hardware-references-not-vendored).
 
 ---
 
