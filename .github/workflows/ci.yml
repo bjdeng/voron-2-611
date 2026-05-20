@@ -60,6 +60,22 @@ jobs:
       # If a future change re-introduces a third-party Klipper section that
       # isn't in vanilla Klipper, the install.sh / install.py from that
       # project documents the file set to symlink — add a step here.
+      - name: Strip [shaketune] from system.cfg (klippain-shaketune not vendored yet)
+        # klippain-shaketune lives at ~/klippain_shaketune on the Pi with a
+        # symlink into ~/klipper/klippy/extras/shaketune.py. Vendoring is
+        # tracked as a follow-up — once that lands, replace this strip with
+        # a real symlink step (matching the comment block above).
+        # The [shaketune] block sits at the END of config/system.cfg under
+        # the "Klippain Shake&Tune" banner. Strip from that banner to EOF.
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i '/^#   Klippain Shake&Tune$/,$d' config/system.cfg
+          # The banner above the title is a "#####" line — also drop that
+          # plus any trailing whitespace it leaves behind.
+          sed -i -e :a -e '/^[#[:space:]]*$/{$d;N;ba' -e '}' config/system.cfg
+          echo "Post-strip tail of system.cfg:"
+          tail -10 config/system.cfg
       - name: Strip MMU includes from printer.cfg (Happy-Hare incompat)
         # Happy-Hare's mmu.py:_setup_logging is invoked at handle_connect
         # (load time, before any gcode) and crashes under test_klippy.py in
