@@ -58,14 +58,27 @@ jobs:
           cache: pip
       - name: Install Klipper's runtime deps (greenlet, cffi, jinja2, …)
         run: pip install -r vendor/klipper/scripts/klippy-requirements.txt -r vendor/klipper/scripts/tests-requirements.txt
-      # No third-party Klipper extensions need to be linked in:
+      # Third-party Klipper extensions:
       #   • eddy-ng: PR #17 migrated to the native [probe_eddy_current] which
       #     lives in vanilla vendor/klipper/klippy/extras/. No symlink needed.
       #   • Happy-Hare: its includes are stripped in the next step, so
       #     Klipper never instantiates [mmu]/[mmu_machine]. No symlink needed.
+      #   • klippain-shaketune: not vendored yet; section is stripped below.
+      #   • klipper-tmc-autotune: vendored at vendor/klipper-tmc-autotune;
+      #     symlinked into klippy/extras below.
       # If a future change re-introduces a third-party Klipper section that
       # isn't in vanilla Klipper, the install.sh / install.py from that
       # project documents the file set to symlink — add a step here.
+      - name: Symlink TMC Autotune extension into vendor/klipper
+        # klipper-tmc-autotune is a vendored submodule (Phase B of issue #24).
+        # Its install.sh symlinks 3 files into ~/klipper/klippy/extras/ on the
+        # Pi; mirror that here so klippy parse recognizes [autotune_tmc] sections.
+        shell: bash
+        run: |
+          set -euo pipefail
+          ln -sf "$GITHUB_WORKSPACE/vendor/klipper-tmc-autotune/autotune_tmc.py" vendor/klipper/klippy/extras/autotune_tmc.py
+          ln -sf "$GITHUB_WORKSPACE/vendor/klipper-tmc-autotune/motor_constants.py" vendor/klipper/klippy/extras/motor_constants.py
+          ln -sf "$GITHUB_WORKSPACE/vendor/klipper-tmc-autotune/motor_database.cfg" vendor/klipper/klippy/extras/motor_database.cfg
       - name: Strip [shaketune] from system.cfg (klippain-shaketune not vendored yet)
         # klippain-shaketune lives at ~/klippain_shaketune on the Pi with a
         # symlink into ~/klipper/klippy/extras/shaketune.py. Vendoring is
