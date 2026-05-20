@@ -95,6 +95,17 @@ jobs:
           sed -i -e :a -e '/^[#[:space:]]*$/{$d;N;ba' -e '}' config/system.cfg
           echo "Post-strip tail of system.cfg:"
           tail -10 config/system.cfg
+      - name: Strip [include chopper_tune.cfg] from printer.cfg (chopper-resonance-tuner not vendored)
+        # chopper_tune.cfg is a Pi-side symlink to ~/chopper-resonance-tuner/chopper_tune.cfg
+        # (install.sh adds the include at the top of printer.cfg). Same install pattern as
+        # klippain-shaketune — not vendored, so the target file doesn't exist under CI's
+        # checkout. [respond] is left as-is (built-in Klipper section, parses fine).
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i '/^\[include chopper_tune\.cfg\]$/d' config/printer.cfg
+          echo "Post-strip [include] lines in printer.cfg:"
+          grep -n '^\[include' config/printer.cfg || true
       - name: Strip MMU includes from printer.cfg (Happy-Hare incompat)
         # Happy-Hare's mmu.py:_setup_logging is invoked at handle_connect
         # (load time, before any gcode) and crashes under test_klippy.py in
