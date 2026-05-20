@@ -35,3 +35,6 @@
 	path = vendor/btt-docs
 	url = https://github.com/bigtreetech/docs.git
 	ignore = untracked
+[submodule "vendor/klipper-tmc-autotune"]
+	path = vendor/klipper-tmc-autotune
+	url = https://github.com/andrewmcgr/klipper_tmc_autotune.git
