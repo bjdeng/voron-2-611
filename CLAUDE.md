@@ -159,47 +159,9 @@ Update [`memory/tuning-log.md`](memory/tuning-log.md) whenever you re-run a cali
 
 ## Machine context beyond `~/printer_data/config/`
 
-Ben's note: *"on the machine some updates to klipper, happy hare and others occasionally require running ./setup.sh in their home directories and klipper configs rely on other scripts on the machine sometimes."* So the config tree alone is not the whole story.
+The Pi has additional repos (Klipper, Happy-Hare, eddy-ng, Moonraker, mainsail, crowsnest, etc.) outside `~/printer_data/config/` that configs sometimes depend on. Some require running `./install.sh` from their home directory after upgrades (eddy-ng, Happy-Hare especially — their installers create symlinks into `~/klipper/klippy/extras/` that break on Klipper version bumps).
 
-**Repos installed on the Pi (as of 2026-05-13):**
-
-| Path | Version | Upstream | Notes |
-|---|---|---|---|
-| `~/klipper` | `v0.13.0-649-g4767a8ed` (master) | Klipper3d/klipper | **Has uncommitted local files** from `eddy-ng/install.sh` and `Happy-Hare/install.sh` (symlinks into `klippy/extras/`). |
-| `~/Happy-Hare` | `v3.4.2-22-ga880ac0a` | moggieuk/Happy-Hare | Has `install.sh`. Owns `~/printer_data/config/mmu/base/*` (those files in this repo are dereferenced copies of symlinks). |
-| `~/eddy-ng` | `v0.1-73-gc7ca62e` | vvuk/eddy-ng | Has `install.sh`. **Migrated off to native `[probe_eddy_current]` in PR #17, 2026-05-15.** Install dir retained for rollback; eventual cleanup TBD. |
-| `~/moonraker` | `v0.10.0-19-g1ed102e` | Arksine/moonraker | Standard. |
-| `~/moonraker-timelapse` | `v0.0.1-143-gc7fff11` | mainsail-crew/moonraker-timelapse | Installed via `make install` 2026-05-18 (closes #26). Opt-in per print; needs webcam (#27). |
-| `~/mainsail` | (web release) | mainsail-crew/mainsail | Static UI files served by nginx. |
-| `~/mainsail-config` | `v1.2.1-1-gff3869a` | mainsail-crew/mainsail-config | Owns `mainsail.cfg` (the actual symlink target — `client.cfg` in the same dir is an identical copy, unused by us). |
-| `~/kiauh` | `v6.0.6` | dw-0/kiauh | Klipper installer/manager (interactive helper). |
-| `~/crowsnest` | `v4.2.0-1-gcf936da` | mainsail-crew/crowsnest | Webcam stack. Daemon runs even though webcam is unplugged. |
-| `~/sonar` | `v0.2.0-1-g0d1d7c8` | mainsail-crew/sonar | Network keepalive. Daemon runs. |
-| `~/katapult` | `v0.0.1-64-g3e23332` | Arksine/katapult | MCU bootloader for safe re-flashing. |
-| `~/BOSSA` | (present) | shumatech/BOSSA | SAM-BA flasher, likely used to flash the EASY-BRD SAMD21. |
-| `~/klipper-kconfigs` | (saved configs) | — | Per-MCU build kconfigs. **Mirrored into `config/firmware/` in this repo.** |
-| `~/klippy-env`, `~/moonraker-env` | (venvs) | — | Python virtualenvs. |
-
-**Systemd services running:** `klipper`, `klipper_mcu`, `moonraker`, `nginx`, `sonar`, plus the OS-level usuals. **`ModemManager` is masked** (was active until 2026-05-14, then masked after a real USB-MCU enumeration race during the first live `/deploy-to-pi`). If a future MCU connect-error pattern returns, verify ModemManager is still masked.
-
-**`klipper-mcu-watchdog.service`** (Pi-side, install via `sudo bash scripts/install-mcu-watchdog.sh`): a daemon that auto-recovers from the constant USB re-enumeration race that hits SKR Z + EASY-BRD MMU after every `FIRMWARE_RESTART`. Root cause + design at GH issue #37. Logs via `journalctl -u klipper-mcu-watchdog`.
-
-**Install/setup scripts that may need re-running after upgrades:**
-- `~/eddy-ng/install.sh` — after any `~/klipper` update that might break the symlinks into `klippy/extras/`
-- `~/Happy-Hare/install.sh` — same, for the `klippy/extras/mmu/` and `klippy/extras/mmu_*` files
-
-There's no `[update_manager klipper]` block in `config/moonraker.conf`, **and that's by design.** Moonraker auto-detects Klipper and manages it without an explicit block; the block is only needed to override channel/pinned_commit/refresh_interval. Documented at `vendor/moonraker/docs/configuration.md:2017-2026`.
-
-**Active `[update_manager]` blocks in `config/moonraker.conf`:**
-
-| Block | Manages | Notes |
-|---|---|---|
-| `mainsail` | Mainsail web UI | Active |
-| `mainsail-config` | Upstream mainsail-config (`~/mainsail-config/`) | Active. Note: our `config/mainsail.cfg` is symlinked to it on the Pi; if we ever slim that file locally (per refactor spec Phase 2), the symlink would need to be replaced with a real file and upstream changes would no longer auto-apply |
-| `timelapse` | moonraker-timelapse | Active. Component installed 2026-05-18; usage is opt-in per print (`TIMELAPSE_TAKE_FRAME` in slicer custom gcode, or `HYPERLAPSE ACTION=START` in console) and gated on webcam (#27). |
-| `crowsnest` | Webcam stack | Active even though webcam unplugged — see [#27](https://github.com/bjdeng/voron-2-611/issues/27) |
-| `sonar` | Network keepalive daemon | Active |
-| `happy-hare` | HH Klipper extension (`~/Happy-Hare/`) | Active |
+Pi-side state inventory — repos + versions, systemd services, ModemManager masking, `klipper-mcu-watchdog.service`, active `[update_manager]` blocks: [`docs/pi-environment.md`](docs/pi-environment.md).
 
 ---
 
@@ -256,50 +218,15 @@ The Pi is at `mainsailos.local` (current IP 192.168.0.227). Keyed SSH was set up
 
 ## Testing
 
-A 7-layer test pyramid (6 standard + 1 for refactor PRs). New work should add to or extend these rather than inventing new validation patterns ad-hoc.
+**7-layer pyramid** at a glance: pre-commit hooks (L1), `macro_refcheck.py` (L2), klippy parse + MCU load (L3), pytest (L4) — all active in CI. L5 structural assertions, L6 post-deploy smoke, and L7 behavior diff are planned per [`docs/superpowers/specs/2026-05-15-config-macros-refactor.md`](docs/superpowers/specs/2026-05-15-config-macros-refactor.md) §5.
 
-| Layer | What | Where | Runs | Status |
-|---|---|---|---|---|
-| 1 | Pre-commit hooks (trailing-whitespace, end-of-file-fixer, mixed-line-ending, ruff format + lint on Python) | `.pre-commit-config.yaml` | every commit + CI | active |
-| 2 | `macro_refcheck.py` — every gcode command in a `[gcode_macro]` body resolves to a defined macro or an entry in `tests/builtins.txt` / `ALLOWLIST` | `scripts/macro_refcheck.py` | CI | active |
-| 3 | Klippy parse + MCU load — `vendor/klipper/scripts/test_klippy.py` loads `config/printer.cfg` with the 4 non-MMU MCUs simulated (MMU stripped at CI time; see Known quirks) and verifies Klipper reaches steady state. No gcode is executed — calibration state required by `G28`/QGL/PRINT_START doesn't exist in CI, and macro→macro reference rot is already covered by L2. | `tests/voron-2-611.test` + `.github/workflows/ci.yml` | CI | active (PR #34) |
-| 4 | pytest — `scripts/macro_refcheck.py` unit tests, real-repo regression tests, ALLOWLIST-coupling tripwires | `tests/test_*.py` | CI | active |
-| 5 | Structural assertions on `.cfg` files (no deprecated Klipper keys; `[gcode_macro]` description fields; `_USER_VARIABLE.X` references resolve; `[include]` order; `params.X` has default or guard; PAUSE/RESUME/CANCEL_PRINT defined once) | `tests/test_config_structure.py` | CI | **planned** in refactor Phase 1 (`docs/superpowers/specs/2026-05-15-config-macros-refactor.md`) |
-| 6 | Post-deploy smoke (a fixed gcode sequence runs on the Pi after deploy + grep `klippy.log` for `!! Unknown command` / `!! Internal error`) | `scripts/deploy_to_pi.sh --smoke` + `scripts/printer-smoke.sh` on Pi | manual after deploy | **planned** in refactor Phase 1 |
-| 7 (one-shot) | Behavior diff — dump expanded gcode for fixed macro invocations before/after; assert diff is comments/whitespace only | `scripts/macro_behavior_diff.py` + `tests/snapshots/` | manual, before merging refactor PRs | **planned** for refactor Phase 4 only |
+**Running locally**: `make test-py` (macOS subset) or `make test` (Linux only — needs Klipper C extension). New macro? `make refcheck` after adding. Bumped `vendor/klipper`? `make builtins` to regen + rebuild `.dict` files on the Pi.
 
-### What each catches
-- **L1:** text-hygiene drift, Python lint regressions
-- **L2:** macro calls that reference renamed/deleted commands
-- **L3:** Klipper config syntax errors, unknown sections, pin clashes, unsupported sensor types (the LPC1769 `temperature_mcu` trap), jinja2 template parse errors. Does NOT execute any gcode — runtime behavior is L6's job.
-- **L4:** regressions in the testing infrastructure itself
-- **L5:** structural invariants Klipper's own loader misses
-- **L6:** runtime behavior on the actual machine (conditional branches, MCU-specific quirks)
-- **L7:** refactor behavior preservation — proves "values copied verbatim, no behavior change"
+**What CI does NOT catch:** jinja conditionals with state, print quality, slicer-side errors. Those need L6 post-deploy smoke (`scripts/deploy_to_pi.sh --smoke`) + manual first-print testing.
 
-### Not covered
-- Conditional branches inside jinja2 with varied state (mitigated by L6 + L7 for refactor PRs)
-- Print quality / mechanical regression (manual first-print test after each deploy)
-- Slicer-side template errors (lives in OrcaSlicer, not the repo)
+**Docs-only CI lane:** `.github/workflows/ci-docs-noop.yml` reports the required check name as no-op success on docs-only paths (`CLAUDE.md`, `memory/**`, `docs/**`, `.claude/**`, `LICENSE`). Branch protection requires it because `paths-ignore` in `ci.yml` skips the real workflow.
 
-### Running locally
-
-```sh
-make test-py    # macOS-friendly subset: pre-commit + macro_refcheck + pytest + Layer 5 (when built)
-make test       # Adds the klippy step (Linux only — Klipper C extension uses sys/prctl.h and linux/can.h)
-```
-
-### Regenerating cached data
-- `tests/dict/*.dict` — after bumping `vendor/klipper` or modifying `config/firmware/*.config`. Build on the Pi.
-- `tests/builtins.txt` — after bumping `vendor/klipper`. Run `make builtins`.
-
-### Docs-only CI lane
-A companion workflow `.github/workflows/ci-docs-noop.yml` reports the same required check name as a no-op success on docs-only paths (`CLAUDE.md`, `memory/**`, `docs/**`, `.claude/**`, `LICENSE`). Without it, branch protection would block any docs-only PR because `paths-ignore` skips `ci.yml` entirely. For any push, exactly one of the two workflows runs.
-
-### Coupled allowlists (tripwire patterns)
-The **eddy-ng** block in `scripts/macro_refcheck.py`'s `ALLOWLIST` was keyed to `[probe_eddy_ng]` in `config/eddy.cfg`. When PR #17 removed that section, the same PR had to delete those entries. `tests/test_macro_refcheck.py::test_eddy_ng_allowlist_coupling` was the tripwire that enforced this — now satisfied and the tripwire was removed in PR #17. The **Happy-Hare** block in the same ALLOWLIST is NOT coupled this way; those commands are registered by Python and survive any `.cfg` change.
-
-See [`tests/README.md`](tests/README.md) for full mechanics. Test pyramid rationale lives in `docs/superpowers/specs/2026-05-15-config-macros-refactor.md` Section 5.
+Full pyramid table, what each layer catches, ALLOWLIST coupling rules, .dict regeneration procedure: [`tests/README.md`](tests/README.md).
 
 ---
 

@@ -2,6 +2,36 @@
 
 What runs in `make test-py` locally and on every PR/push in CI.
 
+## 7-layer test pyramid
+
+| Layer | What | Where | Runs | Status |
+|---|---|---|---|---|
+| 1 | Pre-commit hooks (trailing-whitespace, end-of-file-fixer, mixed-line-ending, ruff format + lint on Python) | `.pre-commit-config.yaml` | every commit + CI | active |
+| 2 | `macro_refcheck.py` — every gcode command in a `[gcode_macro]` body resolves to a defined macro or an entry in `tests/builtins.txt` / `ALLOWLIST` | `scripts/macro_refcheck.py` | CI | active |
+| 3 | Klippy parse + MCU load — `vendor/klipper/scripts/test_klippy.py` loads `config/printer.cfg` with the 4 non-MMU MCUs simulated (MMU stripped at CI time) and verifies Klipper reaches steady state. No gcode is executed — calibration state required by `G28`/QGL/PRINT_START doesn't exist in CI, and macro→macro reference rot is already covered by L2. | `tests/voron-2-611.test` + `.github/workflows/ci.yml` | CI | active (PR #34) |
+| 4 | pytest — `scripts/macro_refcheck.py` unit tests, real-repo regression tests, ALLOWLIST-coupling tripwires | `tests/test_*.py` | CI | active |
+| 5 | Structural assertions on `.cfg` files (no deprecated Klipper keys; `[gcode_macro]` description fields; `_USER_VARIABLE.X` references resolve; `[include]` order; `params.X` has default or guard; PAUSE/RESUME/CANCEL_PRINT defined once) | `tests/test_config_structure.py` | CI | **planned** in refactor Phase 1 (`docs/superpowers/specs/2026-05-15-config-macros-refactor.md`) |
+| 6 | Post-deploy smoke (a fixed gcode sequence runs on the Pi after deploy + grep `klippy.log` for `!! Unknown command` / `!! Internal error`) | `scripts/deploy_to_pi.sh --smoke` + `scripts/printer-smoke.sh` on Pi | manual after deploy | **planned** in refactor Phase 1 |
+| 7 (one-shot) | Behavior diff — dump expanded gcode for fixed macro invocations before/after; assert diff is comments/whitespace only | `scripts/macro_behavior_diff.py` + `tests/snapshots/` | manual, before merging refactor PRs | **planned** for refactor Phase 4 only |
+
+### What each layer catches
+- **L1:** text-hygiene drift, Python lint regressions
+- **L2:** macro calls that reference renamed/deleted commands
+- **L3:** Klipper config syntax errors, unknown sections, pin clashes, unsupported sensor types (the LPC1769 `temperature_mcu` trap — see CLAUDE.md Klipper gotchas), jinja2 template parse errors. Does NOT execute any gcode — runtime behavior is L6's job.
+- **L4:** regressions in the testing infrastructure itself
+- **L5:** structural invariants Klipper's own loader misses
+- **L6:** runtime behavior on the actual machine (conditional branches, MCU-specific quirks)
+- **L7:** refactor behavior preservation — proves "values copied verbatim, no behavior change"
+
+### Not covered
+- Conditional branches inside jinja2 with varied state (mitigated by L6 + L7 for refactor PRs)
+- Print quality / mechanical regression (manual first-print test after each deploy)
+- Slicer-side template errors (lives in OrcaSlicer, not the repo)
+
+## Docs-only CI lane
+
+A companion workflow `.github/workflows/ci-docs-noop.yml` reports the same required check name as a no-op success on docs-only paths (`CLAUDE.md`, `memory/**`, `docs/**`, `.claude/**`, `LICENSE`). Without it, branch protection would block any docs-only PR because `paths-ignore` skips `ci.yml` entirely. For any push, exactly one of the two workflows runs.
+
 ## Layout
 
 ```
