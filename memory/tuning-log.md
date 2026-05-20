@@ -4,6 +4,23 @@ Running record of calibration runs (input shaper, PID, pressure advance, flow, E
 
 ---
 
+## 2026-05-20 — microsteps 128 → 64 on X/Y/Z mainboard steppers (Phase A of #24)
+
+PR [#95](https://github.com/bjdeng/voron-2-611/pull/95). Halved microsteps on `[stepper_x]`, `[stepper_y]`, `[stepper_z]`, `[stepper_z1]`, `[stepper_z2]`, `[stepper_z3]` from 128 to 64 to recover MCU USB step-rate headroom (LPC1769 was at ~92% of budget at max_velocity). `interpolate: False` retained on all 6 TMC2209s.
+
+**Test plan results (2 × TEST_SPEED before, 2 × TEST_SPEED after):**
+
+| Metric | Baseline (128) | Post-change (64) | Status |
+|---|---|---|---|
+| Subjective noise rating | 3/5 (moderate) | 3.5/5 ("maybe more vibration noise", no abnormal sounds) | ❌ slight regression |
+| X/Y position drift | 0 mm (identical mcu count before/after, both runs) | 0 mm (same) | ✅ |
+| Z probe diff at (175,175) | 0.008 mm run 1, 0.019 mm run 2 | 0.018 mm run 1, 0.007 mm run 2 | ✅ (sensor noise band) |
+| `step_compress` count in klippy.log | 0 | 0 | ✅ |
+
+Klipper docs ([TMC_Drivers.md:106-109](https://github.com/Klipper3d/klipper/blob/master/docs/TMC_Drivers.md)) predicted 64 = 128 acoustically with `interpolate: False`. Empirical result on this machine: 64 is *slightly louder*, not equal. Phase A retained despite the subjective regression because (a) position checks passed cleanly, (b) the increase was small and Ben reported no abnormal sounds, (c) Phase B (TMC Autotune) is explicitly targeting stepper noise and may compensate. Final close-out of #24 will follow Phase B.
+
+---
+
 ## ~2020 — commissioning belt tension (historical, salvaged 2026-05-17)
 
 Salvaged from the Voron template header in `config/printer.cfg` before that header was deleted in F1+F9 (config reorg audit). Values pre-date the repo's git history; provenance is "what was scribbled into the file when Ben commissioned the build." Almost certainly stale today — record kept for historical reference, not a current target.
