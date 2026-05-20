@@ -394,9 +394,9 @@ Either:
 - Most Voron 2.4 r2 builds default to LDO-42STH48-2504AC for X/Y and LDO-42STH48-2004MAH for Z, but CLAUDE.md notes Ben self-sourced from BOM and may differ
 
 Record the model per stepper:
-- X: __________
-- Y: __________
-- Z (all 4 should be identical): __________
+- X: omc-17HS19-2004S1
+- Y: omc-17HS19-2004S1
+- Z (all 4 should be identical): omc-17HS19-2004S1
 
 - [ ] **Step 2: Verify motor models exist in TMC Autotune motor database**
 
