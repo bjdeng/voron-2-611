@@ -10,14 +10,18 @@ Separately, the `/claude-md-improver` audit found six concrete content gaps from
 
 ## Design
 
+### Guiding principle: single source of truth
+
+Klipper config files ARE the canonical source for hardware specs (pin assignments, drive currents, kinematic constants, sensor types, USB serials). The current `CLAUDE.md` "Hardware inventory" largely *restates* those specs — duplication that drifts. The fix isn't to move the duplication to a new file; it's to **stop duplicating**. `CLAUDE.md` and the new `docs/hardware.md` should carry the **context that isn't in config** (history, provenance, the "why") and point at config files for the actual specs.
+
 ### Two coordinated changes, one commit
 
-**Change 1: Extract reference-grade hardware content to `docs/hardware.md`.**
+**Change 1: Replace `CLAUDE.md`'s "Hardware inventory" with a short "Build at a glance" block + a context-and-pointers `docs/hardware.md`.**
 
-Move out of `CLAUDE.md`:
-- Full "Hardware inventory" sub-sections — frame & motion BOM, toolhead BOM (Galileo G2E specifics, Dragon clone, BFB0524HH fan), bed BOM, chamber/bedfans BOM, display BOM, MMU hardware BOM, full "additional temperature sensors" table.
-- The MCU map's USB serial ID column (the rest of the table — Klipper name, board, MCU, role — stays in `CLAUDE.md`).
-- Vendor / submodules table's "Pin" column (keep the table itself in `CLAUDE.md` — it's small and frequently consulted when bumping).
+Remove from `CLAUDE.md`:
+- Full "Hardware inventory" sub-sections (frame & motion BOM, toolhead BOM with Galileo G2E specifics, Dragon clone, BFB0524HH fan, bed BOM, chamber/bedfans BOM, display BOM, MMU hardware BOM, "additional temperature sensors" table).
+- The MCU map's USB serial ID column (the table itself stays, but with Klipper-name + board + role only — serials are in `config/printer.cfg`'s `[mcu]` blocks already).
+- Inline cross-references that are pure duplication of config-file content.
 
 Add to (top of) `CLAUDE.md`:
 
@@ -31,8 +35,21 @@ Add to (top of) `CLAUDE.md`:
 - 5 USB-attached MCUs (no CAN): 2× SKR 1.4 (LPC1769), EBB SB v1.0, BTT Eddy, ERCF EASY-BRD
 - 0.4 mm nozzle, 1.75 mm filament
 
-Full BOM-level detail in [`docs/hardware.md`](docs/hardware.md). Vendor part numbers, fan models, thermistor pullups, MCU USB serial IDs all live there.
+Hardware history + non-obvious mods + community context: [`docs/hardware.md`](docs/hardware.md). Actual electrical specs (pins, drive currents, kinematic constants, USB serials) live in the `config/*.cfg` files — `docs/hardware.md` is the *why* layer, not a duplicate spec.
 ```
+
+Create `docs/hardware.md` (~50-70 lines, NOT 160). Format: one-liners of "what's there + why it's there" + pointer at the config file holding the actual spec. Example shape:
+
+```markdown
+## Toolhead
+
+- **Stealthburner v2** body, no SB LEDs installed (only the LCD neopixel chain — see [`config/display.cfg`](../config/display.cfg) `[neopixel lcd]`).
+- **Galileo G2E extruder** (9:1) — community drop-in for SBv2. Explains the unusual `gear_ratio` + `rotation_distance: 48.033` in [`config/toolhead.cfg`](../config/toolhead.cfg).
+- **Dragon clone hotend** — vendor unknown, behaves Dragon-compatible. Older variant with ~10-15mm longer heatbreak than HF — affects MMU toolhead distances (see [`docs/mmu-toolhead-calibration.md`](mmu-toolhead-calibration.md)).
+- **Delta BFB0524HH part fan** — community upgrade from BOM Sunon MF50151VX-A99 (slightly weaker on paper, 4.6 vs 5.4 CFM, but better build / longer-rated / 24V-native). Slicer filament-cooling profiles tuned for this fan (see [`docs/slicer-templates/orcaslicer.md`](slicer-templates/orcaslicer.md)). Wired to [`config/toolhead.cfg`](../config/toolhead.cfg) `EBB:gpio4`.
+```
+
+Each line: what's there → why it's notable → where the spec/config lives. No restating of pin numbers, drive currents, or kinematic constants — those live in the cited config file.
 
 Keep in `CLAUDE.md` (where they currently live):
 - Printer identity (V2.611 callout) — only 15 lines, frequently relevant to orient.
@@ -56,43 +73,45 @@ All six land inside their respective existing sections — no new structural hea
 
 ```
 voron-2-611/
-├── CLAUDE.md                  # 410 lines (down from 560)
+├── CLAUDE.md                  # ~410 lines (down from 560)
 └── docs/
-    └── hardware.md            # ~160 lines (new)
+    └── hardware.md            # ~50-70 lines (new — context only, not duplicate spec)
 ```
+
+Net repo size *shrinks* (the previous duplication of config-file content goes away entirely). Spec values continue to live in `config/*.cfg` files — the canonical source they already were.
 
 ### Cross-reference policy
 
-`CLAUDE.md`'s "Build at a glance" block ends with a pointer at `docs/hardware.md`. No other cross-links — when Claude needs deep BOM detail, it reads the file via the standard Read tool. Same pattern the repo already uses for `docs/mmu-toolhead-calibration.md` and `docs/slicer-templates/`.
+`CLAUDE.md`'s "Build at a glance" block ends with a pointer at `docs/hardware.md`. Each `docs/hardware.md` entry ends with a pointer at the relevant `config/*.cfg` file. Three-tier navigation: at-a-glance summary → context layer → canonical spec.
 
-The Klipper-gotchas content that *references* hardware specifics (e.g., "no CAN", "LPC1769 doesn't support `temperature_mcu`") keeps its hardware terms inline — those references are short, gotcha-relevant, and don't require the full BOM context.
+The Klipper-gotchas content in `CLAUDE.md` that *references* hardware specifics (e.g., "no CAN", "LPC1769 doesn't support `temperature_mcu`") keeps its hardware terms inline — those references are short, gotcha-relevant, and don't depend on the full hardware-doc context.
 
 ## Why not a skill
 
 Considered making `docs/hardware.md` a `superpowers`-style auto-loading skill (Approach B in the brainstorming dialogue). Rejected because:
 
 - Skill auto-loading is heuristic — a question like "the bed is acting weird" might not trip the trigger, leading to Claude answering without hardware context (silent failure mode).
-- Hardware reference is foundational orientation, not behavior. Skills are a better fit for the latter.
-- The Read-on-demand pattern is more predictable for this content profile, and the repo already establishes the precedent.
+- Hardware context is foundational orientation, not behavior. Skills are a better fit for the latter.
+- The Read-on-demand pattern is more predictable for this content profile, and the repo already establishes the precedent (`docs/mmu-toolhead-calibration.md`, `docs/slicer-templates/`).
 
 ## Trade-offs
 
 | Aspect | Win | Cost |
 |---|---|---|
-| Token cost per session | ~2.5-3k tokens saved | First hardware-detail question pays one `Read` round-trip |
-| Maintenance | Same total content, better organized | Two files to edit instead of one when hardware changes |
-| Discoverability | "Build at a glance" + explicit cross-link | Slight indirection for newcomer Claude sessions |
-| Risk of silent failure | Lower than skill auto-load (Read is explicit) | Non-zero — a session could miss the cross-link |
+| Token cost per session | ~2.5-3k tokens saved (no duplication loaded by default) | First hardware-detail question pays one `Read` round-trip; deep spec questions sometimes need 2 reads (hardware.md → config file) |
+| Drift risk | Eliminated — config is the only source for spec values; `docs/hardware.md` carries only un-duplicable context | A future maintainer could re-introduce duplication if not careful (out of band documentation discipline) |
+| Discoverability | "Build at a glance" + explicit two-step pointer chain | Slight indirection for newcomer Claude sessions |
+| Maintenance | Hardware changes mean editing config + a one-line context note (if any). Today's pattern requires editing config + restating in CLAUDE.md | None — strictly easier to maintain than the duplicating status quo |
 
 ## Acceptance criteria
 
 - `CLAUDE.md` final line count is 400-430.
-- `docs/hardware.md` exists and contains all extracted BOM content.
-- No content is lost — every fact in the current "Hardware inventory" / MCU map USB column / Vendor table pins survives in one of the two files.
+- `docs/hardware.md` exists and is 50-80 lines.
+- **No duplication**: every spec value (pin, drive current, kinematic constant, USB serial) that appears in `docs/hardware.md` also appears in a `config/*.cfg` file — but `docs/hardware.md` itself carries no spec values, only context with pointers.
 - The "Build at a glance" block accurately summarizes the build in ≤8 lines.
-- The six quality updates land in their respective sections inside the slimmed `CLAUDE.md`.
+- The six quality updates from `/claude-md-improver` land in their respective sections inside the slimmed `CLAUDE.md`.
 - Pre-commit hooks pass.
-- No CI changes needed (CLAUDE.md is on the docs-only no-op lane).
+- No CI changes needed (CLAUDE.md and docs/ are on the docs-only no-op lane).
 
 ## Out of scope (explicitly NOT in this change)
 
