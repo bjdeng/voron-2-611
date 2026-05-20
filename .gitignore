@@ -18,6 +18,10 @@ crowsnest.log
 sonar.log
 *.bak
 
+# Deploy-script state files (not config) — written by scripts/deploy_to_pi.sh
+config/.last-deploy-sha
+config/.moonraker.conf.bkp
+
 # Local working scratch
 _pull_staging/
 /tmp_*
