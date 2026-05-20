@@ -21,6 +21,12 @@ on:
       - 'memory/**'
       - 'docs/**'
       - '.claude/**'
+  # Manual trigger via `gh workflow run ci.yml`. Needed for the case where
+  # a squash-merge to main only touches a path-filtered file (e.g. a yaml-only
+  # config change) — GitHub doesn't fire path-filtered workflows for empty
+  # diffs, so the deploy gate (which requires a CI run for HEAD) gets stuck.
+  # `gh workflow run ci.yml --ref main` unblocks it.
+  workflow_dispatch:
 
 jobs:
   # Re-enabled 2026-05-15 after the eddy-ng → native [probe_eddy_current]
