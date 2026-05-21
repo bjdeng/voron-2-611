@@ -12,6 +12,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 YES=0
 DRY_RUN=0
 SMOKE=0
+FORCE=0
 
 # Globals populated by setup functions
 LOCAL=""
@@ -41,6 +42,7 @@ parse_flags() {
       --yes) YES=1 ;;
       --dry-run) DRY_RUN=1 ;;
       --smoke) SMOKE=1 ;;
+      --force) FORCE=1 ;;
       *) echo "ERR: unknown flag: $1" >&2; exit 1 ;;
     esac
     shift
@@ -226,6 +228,72 @@ check_no_pi_drift() {
   fi
 }
 
+check_no_pi_drift_all_files() {
+  # Extended drift gate (#105): the original check_no_pi_drift only covers
+  # printer.cfg. This catches Pi-side edits to ANY deployed file
+  # (mmu_parameters.cfg, macros/*, eddy.cfg, etc.) by comparing each
+  # against the version at the last-deployed commit.
+  #
+  # Approach: stage the last-deployed snapshot locally via `git archive`,
+  # then `rsync -anci --checksum` it against the Pi. Any file rsync would
+  # transfer (output line starting with '>f') = Pi-side drift.
+  #
+  # Skips:
+  #   - First-deploy (no marker on Pi) — no reference to compare against
+  #   - Marker SHA not in git history — same
+  #   - printer.cfg — handled by check_no_pi_drift's body-only compare
+  #   - Everything in RSYNC_EXCLUDES — symlinks, mmu_vars.cfg, adxl_results, etc.
+  #
+  # Bypassed by --force when the user genuinely wants to overwrite Pi-side
+  # changes (e.g., reverting a Pi-side experiment without round-tripping
+  # through /sync-from-pi).
+  local marker_sha snapshot_dir drift_lines drift_files
+  marker_sha=$(ssh "$PI_HOST" 'cat ~/printer_data/config/.last-deploy-sha 2>/dev/null || true')
+  if [[ -z "$marker_sha" ]]; then
+    return 0
+  fi
+  if ! git rev-parse --quiet --verify "${marker_sha}^{commit}" >/dev/null 2>&1; then
+    echo "WARN: deploy marker SHA '$marker_sha' not in git history; skipping all-files drift check." >&2
+    return 0
+  fi
+
+  snapshot_dir=$(mktemp -d)
+  # shellcheck disable=SC2064 # snapshot_dir expansion at trap-set time is intentional
+  trap "rm -rf '$snapshot_dir'" RETURN
+  if ! git archive "$marker_sha" config/ 2>/dev/null | tar -x -C "$snapshot_dir" 2>/dev/null; then
+    echo "WARN: failed to stage marker snapshot (git archive failed); skipping all-files drift check." >&2
+    return 0
+  fi
+  if [[ ! -d "$snapshot_dir/config" ]]; then
+    echo "WARN: marker snapshot has no config/ dir; skipping all-files drift check." >&2
+    return 0
+  fi
+
+  # rsync dry-run with checksum compare. The same RSYNC_EXCLUDES that the
+  # real deploy uses, so we don't flag files we'd never push anyway.
+  # itemize-changes format: `>f.cst....... path` for files that would be sent.
+  drift_lines=$(rsync -anci --checksum "${RSYNC_EXCLUDES[@]}" \
+    "$snapshot_dir/config/" "${PI_HOST}:~/printer_data/config/" 2>/dev/null || true)
+  drift_files=$(printf '%s\n' "$drift_lines" | awk '/^>f/ {print $NF}')
+
+  if [[ -z "$drift_files" ]]; then
+    return 0
+  fi
+
+  if [[ "$FORCE" == 1 ]]; then
+    echo "==> Pi-side drift detected on the following files (--force given, proceeding):"
+    printf '    %s\n' "$drift_files"
+    return 0
+  fi
+
+  echo "ERR: Pi has changes the repo doesn't know about on these files:" >&2
+  printf '    %s\n' "$drift_files" >&2
+  echo "" >&2
+  echo "Run /sync-from-pi to capture them into the repo, then re-run /deploy-to-pi." >&2
+  echo "Or pass --force to overwrite Pi-side changes (only when you're sure they're wrong)." >&2
+  exit 1
+}
+
 build_staged_printer_cfg() {
   # Stage repo printer.cfg minus its own SAVE_CONFIG block, then append Pi's.
   STAGED_PRINTER_CFG=$(mktemp)
@@ -264,6 +332,10 @@ build_rsync_excludes() {
   #                        deploy to choose restart vs firmware_restart.
   #   .moonraker.conf.bkp — Moonraker's own backup of moonraker.conf,
   #                         rewritten on Moonraker restart.
+  #   adxl_results/        — Klipper input_shaper + chopper-resonance-tuner
+  #                         output PNGs/CSVs. .gitignored, generated on Pi
+  #                         only. Deleting them on every deploy loses hours
+  #                         of calibration history (closes #101).
   #
   # Plus the dynamic symlink list from discover_pi_symlinks (those are
   # symlinks pointing into upstream install dirs like ~/Happy-Hare/ and
@@ -277,6 +349,7 @@ build_rsync_excludes() {
     --exclude='/mmu-*'
     --exclude='/.last-deploy-sha'
     --exclude='/.moonraker.conf.bkp'
+    --exclude='/adxl_results/'
   )
   RSYNC_EXCLUDES+=("${PI_SYMLINK_EXCLUDES[@]}")
 }
@@ -472,6 +545,7 @@ main() {
   check_no_pi_drift
   build_staged_printer_cfg
   build_rsync_excludes
+  check_no_pi_drift_all_files
   choose_restart_kind
   show_plan_and_confirm
   if [[ "$DRY_RUN" == 1 ]]; then

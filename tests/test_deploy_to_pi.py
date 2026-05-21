@@ -315,6 +315,139 @@ def test_drift_gate_falls_back_when_reference_body_empty_after_strip():
     assert "yielded empty reference body" in r.stderr, _diag(r)
 
 
+# ---------------------------------------------------------------------------
+# Extended (#105): drift detection covers ALL deployed files, not just printer.cfg
+# ---------------------------------------------------------------------------
+
+
+def _common_drift_env(extra=None):
+    """Env that gets the script through preflight to the drift-all check."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LAST_DEPLOY_SHA": "abcd1234",
+        "FAKE_LAST_DEPLOY_PRINTER_CFG": _matching_pi_cfg(),  # body matches → printer.cfg passes
+    }
+    if extra:
+        env.update(extra)
+    return env
+
+
+def test_drift_all_gate_passes_when_no_drift_reported():
+    """Marker SHA on Pi + git archive succeeds + rsync reports zero drift → proceed."""
+    r = _run(env=_common_drift_env({"FAKE_DRIFT_FILES": ""}))
+    # No error from the extended drift check
+    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
+    assert r.returncode in (0, 2, 3, 4), _diag(r)  # any non-drift outcome is fine
+
+
+def test_drift_all_gate_fires_when_pi_has_modified_file():
+    """rsync reports a Pi-side modified file → exit 1 with the path in the error."""
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_DRIFT_FILES": "mmu/base/mmu_parameters.cfg",
+            }
+        )
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "Pi has changes the repo doesn't know about" in r.stderr, _diag(r)
+    assert "mmu/base/mmu_parameters.cfg" in r.stderr, _diag(r)
+    assert "/sync-from-pi" in r.stderr, _diag(r)
+    assert "--force" in r.stderr, _diag(r)
+
+
+def test_drift_all_gate_lists_all_drifted_files():
+    """Multiple drifted files all appear in the error message."""
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_DRIFT_FILES": "mmu/base/mmu_parameters.cfg\neddy.cfg\nmacros/macros.cfg",
+            }
+        )
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "mmu/base/mmu_parameters.cfg" in r.stderr, _diag(r)
+    assert "eddy.cfg" in r.stderr, _diag(r)
+    assert "macros/macros.cfg" in r.stderr, _diag(r)
+
+
+def test_drift_all_gate_bypassed_by_force(fake_log):
+    """--force overrides the drift-all gate; deploy proceeds with a warning."""
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_DRIFT_FILES": "mmu/base/mmu_parameters.cfg",
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        ),
+        args=["--yes", "--force"],
+    )
+    # Drift check should NOT have caused exit 1; deploy proceeds to restart.
+    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
+    assert "--force given, proceeding" in r.stdout, _diag(r)
+    assert "mmu/base/mmu_parameters.cfg" in r.stdout, _diag(r)
+    # Verify the real rsync (the deploy one) DID run
+    log_contents = fake_log.read_text()
+    assert "rsync -av --delete" in log_contents, log_contents
+
+
+def test_drift_all_gate_skipped_when_no_marker_on_pi():
+    """No .last-deploy-sha file on Pi (first deploy) → drift-all check is a no-op."""
+    # Don't set FAKE_LAST_DEPLOY_SHA → fake_ssh returns empty for cat last-deploy-sha
+    r = _run(
+        env={
+            "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+            "FAKE_DRIFT_FILES": "this/should/not/matter.cfg",
+        }
+    )
+    # Drift-all check skipped → no error from it. (May still fail on other gates;
+    # we're only verifying the drift-all gate didn't fire.)
+    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
+
+
+def test_drift_all_gate_skipped_when_marker_unknown_to_git():
+    """Marker SHA exists on Pi but isn't in local git → WARN + skip."""
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_GIT_MARKER_KNOWN": "0",
+                "FAKE_DRIFT_FILES": "this/should/not/matter.cfg",
+            }
+        )
+    )
+    assert "not in git history; skipping all-files drift check" in r.stderr, _diag(r)
+    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
+
+
+def test_drift_all_gate_skipped_when_git_archive_fails():
+    """git archive fails (corrupt history) → WARN + skip extended check."""
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_GIT_ARCHIVE_OK": "0",
+                "FAKE_DRIFT_FILES": "this/should/not/matter.cfg",
+            }
+        )
+    )
+    assert "failed to stage marker snapshot" in r.stderr, _diag(r)
+    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
+
+
+def test_adxl_results_in_rsync_excludes(fake_log):
+    """Closes #101: /adxl_results/ must be in the rsync exclude list to avoid
+    --delete nuking the input_shaper / chopper-resonance-tuner output dir."""
+    r = _run(
+        env=_common_drift_env({"FAKE_LOG_DIR": str(fake_log)}),
+        args=["--yes"],
+    )
+    log_contents = fake_log.read_text()
+    # Both the dry-run preview AND the real rsync should have the exclude
+    assert "--exclude=/adxl_results/" in log_contents, (
+        f"adxl_results exclude missing from rsync calls.\nrc={r.returncode}\n"
+        f"--- log ---\n{log_contents}\n--- stderr ---\n{r.stderr}"
+    )
+
+
 def test_chooses_firmware_restart_on_non_macro_change(fake_log):
     """A non-macro/non-archive file in the diff routes to firmware_restart."""
     env = {
