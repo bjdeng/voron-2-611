@@ -354,3 +354,27 @@ Manual verification post-deploy:
 - [jontek2 A-better-print_start-macro](https://github.com/jontek2/A-better-print_start-macro) (canonical Voron pattern; original PRINT_START upstream)
 - [Frix-x klippain start_print.cfg](https://github.com/Frix-x/klippain/blob/main/macros/base/start_print.cfg) (modular pattern; inspiration for slicer-passed params, not adopted wholesale)
 - Related GitHub issues: [#29](https://github.com/bjdeng/voron-2-611/issues/29) (Orca filament profile tuning — the at-the-printer half).
+
+---
+
+## 2026-05-21 amendment — pre-mesh tap-Z removed
+
+**Change:** Removed the pre-mesh `G28 Z` (originally step 10 in `print_start.cfg`, between chamber soak and `BED_MESH_CALIBRATE`). The two-tap pattern is now a one-tap pattern — only the post-`BLOBIFIER_CLEAN` tap remains.
+
+**Why the pre-mesh tap was redundant:**
+
+Klipper's `bed_mesh` stores per-XY Z offsets *relative* to the `zero_reference_position` (set to `175, 175` in `config/eddy.cfg`). The mesh describes bed surface SHAPE, not absolute Z values. When kinematic Z=0 is rebased later via another `G28 Z`, the mesh's anchor point follows; the relative shape compensation stays correct against the new reference.
+
+The Eddy probe in scan mode also doesn't require a print-accurate Z=0 to probe — it measures distance-to-bed directly via LDC1612 frequency. As long as the toolhead is within the calibrated 0-4 mm scan range (which the cold-Z reference from step 7's `_CG28` satisfies easily — cold/hot bed delta is ~50 µm, well under 4 mm), the mesh is accurate regardless of when Z was last tapped.
+
+So the original three-tap chain (cold tap in step 7's `_CG28` → warm tap in step 10 → hot tap in step 14) was over-cautious. The cold tap homes Z so QGL + mesh can run; the hot tap establishes the print-authoritative Z=0. The warm middle tap contributed no information not already captured by the other two.
+
+**Savings:** ~10-15 seconds per print.
+
+**Order clarification:** Filament loading via `MMU_START_LOAD_INITIAL_TOOL` happens AFTER PRINT_START returns (slicer's outer wrapper, per `docs/slicer-templates/orcaslicer.md`). The final `G28 Z` in PRINT_START is before filament load and remains the print-authoritative Z reference; loading filament doesn't affect Z calibration.
+
+**Test plan:** one PLA short-print to confirm first-layer quality is unchanged from the pre-amendment baseline. If a first-layer regression appears, revert and re-investigate (the analysis above would be wrong about something specific — likely the mesh anchor behavior under non-default settings).
+
+**Doc sync:**
+- `config/macros/print_start.cfg` step comments rewritten to reflect single-tap pattern; old steps 11→10, 12→11, 13+14 merged into 12.
+- `CLAUDE.md` PRINT_START description in `## Macro inventory` updated (dropped the "first tap-Z" reference).
