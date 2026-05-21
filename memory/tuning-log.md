@@ -4,6 +4,47 @@ Running record of calibration runs (input shaper, PID, pressure advance, flow, E
 
 ---
 
+## 2026-05-20 — CRT chopper tuning, all 6 mainboard steppers (#98 Session 1)
+
+PR [#99](https://github.com/bjdeng/voron-2-611/pull/99) + [#100](https://github.com/bjdeng/voron-2-611/pull/100). First successful empirical TMC2209 chopper tune via MRX8024/chopper-resonance-tuner. LIS2DW toolhead-mounted. All 6 mainboard steppers (X, Y, Z, Z1, Z2, Z3) on motor `omc-17hs19-2004s1` (17HS19-2004S1 hardware).
+
+**Final register values (applied via `[delayed_gcode _apply_crt_chopper]` 1s after autotune):**
+
+| Register | Pre (autotune) X/Y | Pre (autotune) Z | Post (CRT) all 6 |
+|---|---|---|---|
+| TBL  | 1 | 1 | 1 (unchanged) |
+| TOFF | 1 | 1 | **4** |
+| HSTRT | 6 | 7 | **7** (X/Y bumped; Z already matched) |
+| HEND | 3 | 3 | **5** |
+
+**CRT methodology:**
+- `CHOPPER_TUNE FIND_VIBRATIONS=1 AXIS=x`: peak at 40 mm/s (mag 5168), secondary peak at 79-80 mm/s (mag 3100)
+- `CHOPPER_TUNE FIND_VIBRATIONS=1 AXIS=z`: peak at 6 mm/s (mag 1282, right in probe-approach range)
+- Register sweeps at the 3 peak speeds with bounded ranges (TBL 1-2, TOFF 1-4, HSTRT 4-7, HEND 2-5). 384 combinations total tested.
+- (1,4,7,5) wins or ties at all three peaks. Combined sum-of-magnitudes ranking puts it #1 across X 40 + 79 mm/s peaks. At Z 6 mm/s, it ranks #3 of 128, within 1% of absolute Z optimum (2,4,4,3 at mag 909.9).
+
+**Audible validation (custom multi-speed test, 5 back-and-forths per speed):**
+
+| Direction | 40 | 80 | 120 | 160 | 200 mm/s |
+|---|---|---|---|---|---|
+| X-only | base | base | **quiet** | **quiet** | **quiet** |
+| Y-only | base | **quiet** | **quiet** | **quiet** | **quiet** |
+| Diagonal X+Y | **quiet** | **quiet** | **quiet** | **quiet** | **quiet** |
+| Z-only (15-100 mm/s) | base across all 5 speeds (CRT predicted ~3% improvement, below audible threshold) |
+
+13/15 X/Y/diagonal speeds audibly improved. Diagonal motion (most relevant for real prints) improved at every tested speed. 0 missed steps. No abnormal sounds.
+
+**Coexistence with autotune (Path B from CRT plan §S1-9):** `[autotune_tmc]` blocks retained for all 6 steppers. Autotune still writes its values at handle_connect (CoolStep, PWM, IHOLDDELAY, multistep_filt, en_spreadcycle). A `[delayed_gcode _apply_crt_chopper]` with `initial_duration: 1.0` fires after autotune and overrides only the chopper fields (TOFF, HEND on all 6; HSTRT only on X/Y).
+
+**Tool install notes:**
+- MRX8024/chopper-resonance-tuner is Pi-only at `~/chopper-resonance-tuner/` (no vendor submodule, matches shaketune pattern).
+- `chopper_tune.cfg` is a Pi-side symlink; auto-excluded from rsync deploy.
+- Install.sh quirks: has an interactive y/n prompt (broke our automated install); also drops a redundant `[respond]` declaration on printer.cfg line 1 (mainsail.cfg already declares it). Need to also run `apt + venv + pip install` after the y/n prompt.
+
+**Reference:** spec `docs/superpowers/specs/2026-05-20-chopper-resonance-tuner-design.md`, plan `docs/superpowers/plans/2026-05-20-chopper-resonance-tuner.md`.
+
+---
+
 ## 2026-05-20 — microsteps 128 → 64 on X/Y/Z mainboard steppers (Phase A of #24)
 
 PR [#95](https://github.com/bjdeng/voron-2-611/pull/95). Halved microsteps on `[stepper_x]`, `[stepper_y]`, `[stepper_z]`, `[stepper_z1]`, `[stepper_z2]`, `[stepper_z3]` from 128 to 64 to recover MCU USB step-rate headroom (LPC1769 was at ~92% of budget at max_velocity). `interpolate: False` retained on all 6 TMC2209s.
