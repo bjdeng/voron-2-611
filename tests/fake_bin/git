@@ -12,18 +12,18 @@ case "$1 $2" in
     if [[ "${FAKE_GIT_MARKER_KNOWN:-1}" == "1" ]]; then exit 0; else exit 128; fi ;;
   "archive "*)
     # `git archive <sha> config/` — drift-all stages the marker commit
-    # into a tmp dir via tar pipe. Return a tar stream that, when extracted,
-    # writes one synthetic config file we can compare against the fake Pi
-    # version. Tests control the file's contents via FAKE_MARKER_TAR_PATH.
+    # into a tmp dir via tar pipe. Tests that exercise the drift comparison
+    # set FAKE_MARKER_TAR_PATH to a real tarball with `config/<files>`.
+    # The companion FAKE_PI_FILE_HASHES controls the Pi side.
     if [[ "${FAKE_GIT_ARCHIVE_OK:-1}" != "1" ]]; then exit 128; fi
     if [[ -n "${FAKE_MARKER_TAR_PATH:-}" && -f "${FAKE_MARKER_TAR_PATH}" ]]; then
       cat "${FAKE_MARKER_TAR_PATH}"
       exit 0
     fi
-    # Default: emit a tar that creates config/empty.cfg (innocuous).
+    # Default: emit an empty config/ tar. snapshot_hashes will be empty,
+    # which the drift function treats as "nothing to compare" → silent skip.
     local tmpdir; tmpdir=$(mktemp -d)
     mkdir -p "$tmpdir/config"
-    echo "# fake marker snapshot" > "$tmpdir/config/empty.cfg"
     tar -C "$tmpdir" -c config/
     rm -rf "$tmpdir"
     exit 0 ;;

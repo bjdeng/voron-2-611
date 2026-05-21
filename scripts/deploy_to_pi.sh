@@ -253,7 +253,7 @@ check_no_pi_drift_all_files() {
     return 0
   fi
   if ! git rev-parse --quiet --verify "${marker_sha}^{commit}" >/dev/null 2>&1; then
-    echo "WARN: deploy marker SHA '$marker_sha' not in git history; skipping all-files drift check." >&2
+    echo "WARN: deploy marker SHA '$marker_sha' not in git history; skipping extended check." >&2
     return 0
   fi
 
@@ -261,20 +261,86 @@ check_no_pi_drift_all_files() {
   # shellcheck disable=SC2064 # snapshot_dir expansion at trap-set time is intentional
   trap "rm -rf '$snapshot_dir'" RETURN
   if ! git archive "$marker_sha" config/ 2>/dev/null | tar -x -C "$snapshot_dir" 2>/dev/null; then
-    echo "WARN: failed to stage marker snapshot (git archive failed); skipping all-files drift check." >&2
+    echo "WARN: failed to stage marker snapshot (git archive failed); skipping extended check." >&2
     return 0
   fi
   if [[ ! -d "$snapshot_dir/config" ]]; then
-    echo "WARN: marker snapshot has no config/ dir; skipping all-files drift check." >&2
+    echo "WARN: marker snapshot has no config/ dir; skipping extended check." >&2
     return 0
   fi
 
-  # rsync dry-run with checksum compare. The same RSYNC_EXCLUDES that the
-  # real deploy uses, so we don't flag files we'd never push anyway.
-  # itemize-changes format: `>f.cst....... path` for files that would be sent.
-  drift_lines=$(rsync -anci --checksum "${RSYNC_EXCLUDES[@]}" \
-    "$snapshot_dir/config/" "${PI_HOST}:~/printer_data/config/" 2>/dev/null || true)
-  drift_files=$(printf '%s\n' "$drift_lines" | awk '/^>f/ {print $NF}')
+  # Compare via SHA-256. Reasons not to use `rsync -anci --checksum`:
+  #   - macOS bundles rsync 2.6.9 (2006). --checksum in --dry-run is
+  #     unreliable across versions (false positives on identical content
+  #     with different mtimes — observed live on 2026-05-21 incident).
+  #   - sha256sum-based comparison is deterministic, one round-trip per
+  #     side, version-agnostic, and survives the fresh-mtime noise that
+  #     `git archive` always introduces.
+  local hasher
+  if command -v sha256sum >/dev/null 2>&1; then
+    hasher="sha256sum"
+  elif command -v shasum >/dev/null 2>&1; then
+    hasher="shasum -a 256"
+  else
+    echo "WARN: no sha256sum/shasum available locally; skipping extended check." >&2
+    return 0
+  fi
+
+  # Build `find` -path prune patterns mirroring RSYNC_EXCLUDES, plus the
+  # dynamic symlinks from discover_pi_symlinks (their dereferenced content
+  # lives in the snapshot but the Pi has them as symlinks — comparing
+  # would always fire as drift).
+  local -a find_prune
+  find_prune=(
+    -path './firmware' -o
+    -path './archive' -o
+    -path './printer.cfg' -o
+    -path './printer-*.cfg' -o
+    -path './mmu/mmu_vars.cfg' -o
+    -path './mmu-*' -o
+    -path './.last-deploy-sha' -o
+    -path './.moonraker.conf.bkp' -o
+    -path './adxl_results' -o
+    -path './adxl_results/*'
+  )
+  local sym rel
+  for sym in "${PI_SYMLINK_EXCLUDES[@]}"; do
+    # Entries look like "--exclude=/relpath"; strip the prefix.
+    rel="${sym#--exclude=/}"
+    find_prune+=(-o -path "./$rel")
+  done
+
+  # Hash the snapshot (one local pass).
+  local snapshot_hashes pi_hashes drift_files prune_expr
+  snapshot_hashes=$(cd "$snapshot_dir/config" && find . \( "${find_prune[@]}" \) -prune -o -type f -print0 \
+    | xargs -0 $hasher 2>/dev/null \
+    | sed -E 's| +\./| |' \
+    | sort)
+
+  # Same on the Pi (one ssh round-trip). Build a quoted expression we can
+  # send to the remote shell. Use printf with %q for safety.
+  prune_expr=""
+  local arg
+  for arg in "${find_prune[@]}"; do
+    prune_expr+=$(printf '%q ' "$arg")
+  done
+  # shellcheck disable=SC2029 # $prune_expr expands client-side intentionally
+  pi_hashes=$(ssh "$PI_HOST" "cd ~/printer_data/config && find . \\( $prune_expr \\) -prune -o -type f -print0 | xargs -0 sha256sum 2>/dev/null | sed -E 's| +\\./| |' | sort" 2>/dev/null)
+
+  if [[ -z "$snapshot_hashes" || -z "$pi_hashes" ]]; then
+    echo "WARN: could not enumerate hashes on one side; skipping extended check." >&2
+    return 0
+  fi
+
+  # Find files where the Pi hash differs from the snapshot hash. Only
+  # consider files present in BOTH sides (a snapshot-only file means the
+  # Pi is missing it — rsync will create it; a Pi-only file is repo-side
+  # absence — handled by the existing --delete logic).
+  # Format: "HEX  PATH"; key by PATH.
+  drift_files=$(awk '
+    NR==FNR { snap[$2] = $1; next }
+    { if ($2 in snap && snap[$2] != $1) print $2 }
+  ' <(printf '%s\n' "$snapshot_hashes") <(printf '%s\n' "$pi_hashes"))
 
   if [[ -z "$drift_files" ]]; then
     return 0
@@ -282,12 +348,12 @@ check_no_pi_drift_all_files() {
 
   if [[ "$FORCE" == 1 ]]; then
     echo "==> Pi-side drift detected on the following files (--force given, proceeding):"
-    printf '    %s\n' "$drift_files"
+    printf '    %s\n' $drift_files
     return 0
   fi
 
   echo "ERR: Pi has changes the repo doesn't know about on these files:" >&2
-  printf '    %s\n' "$drift_files" >&2
+  printf '    %s\n' $drift_files >&2
   echo "" >&2
   echo "Run /sync-from-pi to capture them into the repo, then re-run /deploy-to-pi." >&2
   echo "Or pass --force to overwrite Pi-side changes (only when you're sure they're wrong)." >&2

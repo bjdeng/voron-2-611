@@ -332,22 +332,67 @@ def _common_drift_env(extra=None):
     return env
 
 
-def test_drift_all_gate_passes_when_no_drift_reported():
-    """Marker SHA on Pi + git archive succeeds + rsync reports zero drift → proceed."""
-    r = _run(env=_common_drift_env({"FAKE_DRIFT_FILES": ""}))
-    # No error from the extended drift check
-    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
-    assert r.returncode in (0, 2, 3, 4), _diag(r)  # any non-drift outcome is fine
+def _build_marker_tar(tmp_path, files):
+    """Build a tar at tmp_path/marker.tar containing config/<path>:<content>.
+
+    Returns (tar_path, {path: sha256_hex}).
+    Each file's sha256 is computed against the EXACT bytes that go into the tar.
+    """
+    import hashlib
+    import tarfile
+
+    tar_path = tmp_path / "marker.tar"
+    hashes = {}
+    with tarfile.open(tar_path, "w") as tf:
+        for path, content in files.items():
+            content_bytes = content.encode() if isinstance(content, str) else content
+            hashes[path] = hashlib.sha256(content_bytes).hexdigest()
+            file_path = tmp_path / "stage" / "config" / path
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_bytes(content_bytes)
+            tf.add(file_path, arcname=f"config/{path}")
+    return tar_path, hashes
 
 
-def test_drift_all_gate_fires_when_pi_has_modified_file():
-    """rsync reports a Pi-side modified file → exit 1 with the path in the error."""
+def _pi_hash_block(hashes):
+    """Format a {path: hex} dict as the `sha256sum` output the fake_ssh emits.
+
+    Real `sha256sum` output is `<hex>  <path>` (two spaces). The deploy script's
+    sed strips a leading `./` from each path; we emit the post-sed form so tests
+    match what the script consumes.
+    """
+    return "\n".join(f"{h}  {p}" for p, h in sorted(hashes.items()))
+
+
+def test_drift_all_gate_passes_when_pi_matches_marker(tmp_path):
+    """Pi reports the SAME hashes as the marker snapshot → no drift, proceed."""
+    files = {"mmu/base/mmu_parameters.cfg": "toolhead_ooze_reduction: 0\n"}
+    tar_path, hashes = _build_marker_tar(tmp_path, files)
     r = _run(
         env=_common_drift_env(
             {
-                "FAKE_DRIFT_FILES": "mmu/base/mmu_parameters.cfg",
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": _pi_hash_block(hashes),
             }
-        )
+        ),
+    )
+    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
+    assert r.returncode in (0, 2, 3, 4), _diag(r)
+
+
+def test_drift_all_gate_fires_when_pi_has_modified_file(tmp_path):
+    """Pi's hash for a tracked file differs from the marker snapshot's hash."""
+    files = {"mmu/base/mmu_parameters.cfg": "toolhead_ooze_reduction: 0\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    # Pi reports a different hash for the same path
+    pi_block = "0000000000000000000000000000000000000000000000000000000000000000  mmu/base/mmu_parameters.cfg"
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+            }
+        ),
     )
     assert r.returncode == 1, _diag(r)
     assert "Pi has changes the repo doesn't know about" in r.stderr, _diag(r)
@@ -356,78 +401,77 @@ def test_drift_all_gate_fires_when_pi_has_modified_file():
     assert "--force" in r.stderr, _diag(r)
 
 
-def test_drift_all_gate_lists_all_drifted_files():
-    """Multiple drifted files all appear in the error message."""
+def test_drift_all_gate_lists_all_drifted_files(tmp_path):
+    """Three files in marker; all three differ on Pi → all three reported."""
+    files = {
+        "mmu/base/mmu_parameters.cfg": "ooze: 0\n",
+        "eddy.cfg": "reg_drive_current: 15\n",
+        "macros/macros.cfg": "# macros\n",
+    }
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = "\n".join(
+        f"11111111111111111111111111111111111111111111111111111111{i:08x}  {p}"
+        for i, p in enumerate(files)
+    )
     r = _run(
         env=_common_drift_env(
             {
-                "FAKE_DRIFT_FILES": "mmu/base/mmu_parameters.cfg\neddy.cfg\nmacros/macros.cfg",
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
             }
-        )
+        ),
     )
     assert r.returncode == 1, _diag(r)
-    assert "mmu/base/mmu_parameters.cfg" in r.stderr, _diag(r)
-    assert "eddy.cfg" in r.stderr, _diag(r)
-    assert "macros/macros.cfg" in r.stderr, _diag(r)
+    for p in files:
+        assert p in r.stderr, _diag(r)
 
 
-def test_drift_all_gate_bypassed_by_force(fake_log):
+def test_drift_all_gate_bypassed_by_force(fake_log, tmp_path):
     """--force overrides the drift-all gate; deploy proceeds with a warning."""
+    files = {"mmu/base/mmu_parameters.cfg": "ooze: 0\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = "ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00  mmu/base/mmu_parameters.cfg"
     r = _run(
         env=_common_drift_env(
             {
-                "FAKE_DRIFT_FILES": "mmu/base/mmu_parameters.cfg",
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
                 "FAKE_LOG_DIR": str(fake_log),
             }
         ),
         args=["--yes", "--force"],
     )
-    # Drift check should NOT have caused exit 1; deploy proceeds to restart.
     assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
     assert "--force given, proceeding" in r.stdout, _diag(r)
     assert "mmu/base/mmu_parameters.cfg" in r.stdout, _diag(r)
-    # Verify the real rsync (the deploy one) DID run
+    # Real deploy rsync ran
     log_contents = fake_log.read_text()
     assert "rsync -av --delete" in log_contents, log_contents
 
 
 def test_drift_all_gate_skipped_when_no_marker_on_pi():
-    """No .last-deploy-sha file on Pi (first deploy) → drift-all check is a no-op."""
-    # Don't set FAKE_LAST_DEPLOY_SHA → fake_ssh returns empty for cat last-deploy-sha
-    r = _run(
-        env={
-            "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
-            "FAKE_DRIFT_FILES": "this/should/not/matter.cfg",
-        }
-    )
-    # Drift-all check skipped → no error from it. (May still fail on other gates;
-    # we're only verifying the drift-all gate didn't fire.)
+    """No .last-deploy-sha on Pi (first deploy) → drift-all is a no-op."""
+    # FAKE_LAST_DEPLOY_SHA unset → fake_ssh returns empty
+    r = _run(env={"FAKE_PI_PRINTER_CFG": _matching_pi_cfg()})
     assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
+    # No WARN about skipping should fire either, since the function returns
+    # silently on the empty-marker path
+    assert "skipping extended check" not in r.stderr, _diag(r)
 
 
 def test_drift_all_gate_skipped_when_marker_unknown_to_git():
     """Marker SHA exists on Pi but isn't in local git → WARN + skip."""
     r = _run(
-        env=_common_drift_env(
-            {
-                "FAKE_GIT_MARKER_KNOWN": "0",
-                "FAKE_DRIFT_FILES": "this/should/not/matter.cfg",
-            }
-        )
+        env=_common_drift_env({"FAKE_GIT_MARKER_KNOWN": "0"}),
     )
-    assert "not in git history; skipping all-files drift check" in r.stderr, _diag(r)
+    assert "not in git history; skipping extended check" in r.stderr, _diag(r)
     assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
 
 
 def test_drift_all_gate_skipped_when_git_archive_fails():
-    """git archive fails (corrupt history) → WARN + skip extended check."""
+    """git archive fails (corrupt history) → WARN + skip."""
     r = _run(
-        env=_common_drift_env(
-            {
-                "FAKE_GIT_ARCHIVE_OK": "0",
-                "FAKE_DRIFT_FILES": "this/should/not/matter.cfg",
-            }
-        )
+        env=_common_drift_env({"FAKE_GIT_ARCHIVE_OK": "0"}),
     )
     assert "failed to stage marker snapshot" in r.stderr, _diag(r)
     assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)

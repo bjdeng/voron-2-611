@@ -4,20 +4,6 @@
 # could coincidentally hit case-insensitive substring assertions like "drift".
 echo "rsync $*" >> "${FAKE_LOG_DIR:-/dev/null}"
 
-# Drift-check rsync uses -anci (dry-run, checksum, itemize). Emit synthetic
-# itemize lines so the script's drift detection can be exercised.
-# Format per real rsync: ">f.cst...... <path>"
-case " $* " in
-  *" -anci "*|*" --checksum "*)
-    if [[ -n "${FAKE_DRIFT_FILES:-}" ]]; then
-      while IFS= read -r path; do
-        [[ -z "$path" ]] && continue
-        printf '>f.cst...... %s\n' "$path"
-      done <<< "${FAKE_DRIFT_FILES}"
-    fi
-    exit 0 ;;
-esac
-
 if [[ "${FAKE_RSYNC_OK:-1}" != "1" ]]; then
   # Real rsync exits 23 on partial transfer (e.g., destination unreachable).
   exit 23
