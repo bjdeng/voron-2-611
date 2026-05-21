@@ -11,6 +11,13 @@ fi
 remote_cmd="${*: -1}"
 case "$remote_cmd" in
   true) exit 0 ;;
+  # Drift-all extended check (#105): enumerate sha256 hashes of in-scope
+  # Pi-side files. Must match BEFORE the *find*-type*l* symlink-discovery
+  # case below — our sha256sum command also contains "find" + "-type" and
+  # may contain stray "l"s in path arguments (e.g. ".last-deploy-sha",
+  # "adxl_results"), which would otherwise shadow this case.
+  *sha256sum*sort*)
+    printf '%s' "${FAKE_PI_FILE_HASHES:-}" ;;
   *find*-type*l*)
     if [[ "${FAKE_SSH_FIND_OK:-1}" != "1" ]]; then
       echo "find: cannot access '~/printer_data/config': No such file or directory" >&2
