@@ -65,6 +65,8 @@ Hardware: a single USB endoscope mounted at 45° on the Stealthburner toolhead, 
 │           ├── score_flow.py     (top-surface variance scorer)  │
 │           ├── narrow.py         (golden-section iterator)      │
 │           ├── spoolman.py       (Moonraker → Spoolman client)  │
+│           ├── seed.py           (3dfilamentprofiles lookup +   │
+│           │                     local cache; best-effort)      │
 │           └── calibrate.py      (orchestrator entrypoint)      │
 │                                                                │
 └────────────────────────────────────────────────────────────────┘
@@ -125,7 +127,7 @@ Each phase ships independently and proves itself end-to-end before the next star
 | **1. PA calibration** | Fork [undingen/PressureAdvanceCamera](https://github.com/undingen/PressureAdvanceCamera), de-cloud (replace fal.ai BiRefNet with local classical segmentation), add perspective-correction step, wrap iterative narrowing, write back to Spoolman. | `CALIBRATE_PA SPOOL_ID=X` macro converges in ≤3 iterations on a known-good filament, persists result. | Two consecutive runs on the same spool converge to within ±0.005 PA. |
 | **2. Flow calibration** | Same chassis as Phase 1; novel CV — SuperSlicer-style top-surface uniformity (Laplacian variance + edge-gap detection) on a 3-5 cube grid. | `CALIBRATE_FLOW SPOOL_ID=X` macro converges in ≤3 iterations, persists result. | Two consecutive runs on the same spool converge to within ±2% flow. |
 | **3. Temp calibration (human-in-loop)** | Same chassis, no scoring CV. Captures a standardized photo of each band of a temp tower (re-parking toolhead per band for focus), renders a montage in Mainsail with a click-to-pick UI, persists chosen temp. | `CALIBRATE_TEMP SPOOL_ID=X` macro prints tower, presents montage, persists selection. | Used end-to-end on 2 different filaments with clear picks. |
-| **4. Orchestration** | `DIAL_IN_FILAMENT SPOOL_ID=X` runs Temp → Flow → PA cascade. `APPLY_SPOOL_CALIBRATION` called from PRINT_START reads Spoolman and issues `SET_PRESSURE_ADVANCE` + `M221` + `M104` per loaded spool. | One-shot dial-in of a new spool with no operator interaction beyond starting it + one temp-pick click. | End-to-end run completes (Temp → Flow → PA → all three persisted to Spoolman) with no manual intervention beyond the temp click. Wall time ~1.5-3 hours expected; not gated. |
+| **4. Orchestration** | `DIAL_IN_FILAMENT SPOOL_ID=X` runs Seed → Temp → Flow → PA cascade. `seed.py` resolves starting-point hierarchy (Spoolman spool → Spoolman filament → 3dfilamentprofiles → defaults per §9.1), auto-populates Spoolman filament records from 3dfilamentprofiles when missing (§9.2). `APPLY_SPOOL_CALIBRATION` called from PRINT_START reads Spoolman and issues `SET_PRESSURE_ADVANCE` + `M221` + `M104` per loaded spool. | One-shot dial-in of a new spool with no operator interaction beyond starting it + one temp-pick click. | End-to-end run completes (Temp → Flow → PA → all three persisted to Spoolman) with no manual intervention beyond the temp click. Wall time ~1.5-3 hours expected; not gated. |
 
 ## 5. Calibration test artifacts and bed layout
 
@@ -271,7 +273,38 @@ return winner   # max_iter reached; return best so far + warning
 | Flow | 0.85 – 1.15 | 5 | 3 | ±0.02 |
 | Temp | manufacturer ±20°C | 5 (20°C bands narrowing to 4°C) | 3 | operator picks |
 
-## 9. Persistence (Spoolman)
+## 9. Persistence + starting points (Spoolman + 3dfilamentprofiles)
+
+### 9.1 Starting-point hierarchy
+
+When `DIAL_IN_FILAMENT SPOOL_ID=X` runs, the initial band for each parameter is centered on the best starting point we can find, queried in this order (first hit wins):
+
+1. **Spoolman per-spool calibration** (`spool.extra.calibration`) — if this spool was previously calibrated, use those values. Narrow initial band tightly (±10% of the convergence threshold). Use case: re-verify after a Klipper version bump or hardware change.
+2. **Spoolman per-filament defaults** (`filament.extra.calibration_defaults`) — if another spool of this same filament was previously calibrated, inherit. Narrow initial band moderately. Use case: second spool of a known filament; biggest practical win since it skips the seed lookup entirely.
+3. **3dfilamentprofiles.com lookup** (best-effort scrape) — if filament+brand matches a profile on the community site, use those values as seed. Wider initial band (default range × 0.5).
+4. **Slicer defaults** (last resort) — full default band. Use case: brand-new unfamiliar filament with no community data.
+
+Each phase logs which starting-point source it used, so the operator can audit (and re-run with wider bands if a stale starting point led the cascade astray).
+
+### 9.2 Spoolman filament-record auto-population
+
+If the loaded `SPOOL_ID` points to a Spoolman spool whose `filament` field is null OR points to a filament record missing core fields (manufacturer, material, color, density, diameter), and 3dfilamentprofiles has a match: auto-create or auto-update the Spoolman filament record with the looked-up metadata. This is one-time per filament (subsequent spools find a populated record).
+
+Fields populated when available from the lookup: `manufacturer`, `material`, `name`, `color_hex`, `density`, `diameter`, `price` (informational), `comment` (link back to the 3dfilamentprofiles entry).
+
+Operator can override any auto-populated field via Spoolman's UI before or after.
+
+### 9.3 3dfilamentprofiles client (`seed.py`)
+
+- **One lookup per `DIAL_IN_FILAMENT` invocation**, not per phase. Result is held in memory for the cascade duration.
+- **Rate-limit self-imposed**: max 1 request per 5 seconds, with exponential backoff on 429.
+- **Cache**: successful lookups stored locally at `~/printer_data/scripts/calibrate_endoscope/seed_cache/<brand>-<material>-<color>.json` for 90 days. Cache hit = no network call.
+- **Failure is non-fatal**: on 429 / timeout / parse failure, log and skip — cascade falls back to hierarchy step 4 (slicer defaults). Never blocks calibration.
+- **Future improvement**: if the upstream ever ships a bulk JSON export or REST API (file as enhancement issue), swap the scraper for the structured source. Architecture keeps scraping isolated to `seed.py` so this swap is local.
+
+**Scraping etiquette**: lookups happen at most once per new spool registration, so worst case is one request per spool added to the printer. Not a load problem in practice.
+
+### 9.4 Spoolman schema (existing convention extended)
 
 Per-spool calibration data lives in Spoolman's extra-fields per spool. Schema (extends [#72](https://github.com/bjdeng/voron-2-611/issues/72)):
 
@@ -312,16 +345,24 @@ PA + Flow calibration conditions are recorded because both optima shift with the
 
 ## 10. Orchestration macro
 
-`DIAL_IN_FILAMENT SPOOL_ID=X [SKIP_TEMP=0] [SKIP_FLOW=0] [SKIP_PA=0]`
+`DIAL_IN_FILAMENT SPOOL_ID=X [SKIP_TEMP=0] [SKIP_FLOW=0] [SKIP_PA=0] [SKIP_SEED=0]`
 
 ```
+Phase 0: SEED LOOKUP  (unless SKIP_SEED=1)
+   → resolve starting-point hierarchy per §9.1
+   → if Spoolman filament record missing fields, populate from
+     3dfilamentprofiles (§9.2)
+   → store seed values + source in memory for the cascade
 Phase 1: CALIBRATE_TEMP  (unless SKIP_TEMP=1)
+   → initial band centered on seed value (or default if no seed)
    → human pick → SET extruder target → persist
 Phase 2: CALIBRATE_FLOW at chosen temp
+   → initial band centered on seed
    → CV pick → SET M221 → persist
 Phase 3: CALIBRATE_PA at chosen temp + flow
+   → initial band centered on seed
    → CV pick → SET_PRESSURE_ADVANCE → persist
-   → final report to console
+   → final report to console (including seed source per phase)
 ```
 
 Total wall time on a brand-new spool: ~1.5-3 hours, walk-away (except for one click during temp pick). Operator pre-loads the spool, runs `DIAL_IN_FILAMENT SPOOL_ID=42`, comes back.
@@ -362,6 +403,10 @@ The cascade can be interrupted at any phase boundary; partial results persist (e
 
 **Slicer profile divergence.** This system persists per-spool calibration to Spoolman; the slicer's filament profile still has its own values. If the operator manually changes the slicer profile, the runtime override from `APPLY_SPOOL_CALIBRATION` will still win at print time, but the slicer's preview shows wrong values. Acceptable; document.
 
+**3dfilamentprofiles scraper brittleness.** No public API; HTML scraping is fragile to markup changes and rate-limited (we confirmed 429s during research). Mitigations: best-effort only (never blocks cascade), 90-day local cache, 1 request per 5s self-imposed rate limit, isolated to `seed.py` so swapping to a future API is local. If the upstream ships a bulk JSON export, switch immediately. Worst case: scraper breaks, all seed lookups return empty, cascade falls back to slicer defaults — calibration still works, just slower for unfamiliar filaments.
+
+**Stale seed values.** A community-submitted PA/flow value may be wrong for our specific setup (different extruder, different hotend, different nozzle wear). Mitigation: seed only centers the *initial* band; iterative narrowing still validates empirically. If narrowing diverges, the cascade catches it via INDETERMINATE warning. Document that "seed = starting point, not gospel."
+
 ## 13. Out of scope (file as separate issues)
 
 - **First-layer squish calibration.** Same endoscope at 45° can view bead-bed interface during first-layer. Pairs with Eddy probe tap calibration. File: "First-layer squish CV alongside Eddy tap."
@@ -383,6 +428,7 @@ Per the [`tests/README.md`](../../../tests/README.md) pyramid:
   - `score_pa.py` / `score_flow.py` against fixture PNG images (golden outputs)
   - `spoolman.py` against a mocked Moonraker proxy
   - `capture.py` against pre-recorded V4L2 frames (no live camera in CI)
+  - `seed.py` against fixture HTML pages (no live 3dfilamentprofiles in CI; cache hit + miss + 429 fallback paths)
 - **L5 structural:** spec says Phase 0 must verify session-to-session repeatability ≤ ±2 px on the same artifact. Quantitative gate.
 - **L6 post-deploy smoke:** new macros surface in `MACRO_LIST`; `CALIBRATE_PA SPOOL_ID=test-spool DRY_RUN=1` reaches scoring without printing. Adds to `scripts/deploy_to_pi.sh --smoke`.
 - **L7 live calibration:** running `DIAL_IN_FILAMENT SPOOL_ID=X` on a known-good filament converges to within ±5% of the previously-validated manual calibration. Done once per phase ship.
@@ -404,6 +450,10 @@ CI does NOT cover: the camera itself, the scoring quality, convergence on real p
 **Hardware references:**
 - DEPSTECH USB Endoscope 2.0 MP IP67 (Amazon B0749BQG1B) — primary endoscope candidate, 3-8 cm focal range.
 - BTT EBB SB2209 USB v1.0 — existing toolhead board with hub.
+
+**Community data:**
+- [3dfilamentprofiles.com](https://3dfilamentprofiles.com/) — community-curated DB of ~27k filaments / 1k brands. Used by `seed.py` as best-effort starting-point source. No public API as of 2026-05; scraped opportunistically with local cache.
+- [MarksMakerSpace/filament-profiles (GitHub)](https://github.com/MarksMakerSpace/filament-profiles) — upstream repo for bug reports + brand logo contributions. File enhancement request here if/when a bulk export becomes worthwhile.
 
 **Internal:**
 - [`config/macros/calibrate_pa.cfg`](../../../config/macros/calibrate_pa.cfg) — Frix_x PA macro we're augmenting (NOT replacing).
