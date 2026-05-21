@@ -6,6 +6,27 @@
 echo "git $*" >> "${FAKE_LOG_DIR:-/dev/stderr}"
 
 case "$1 $2" in
+  "rev-parse --quiet")
+    # `git rev-parse --quiet --verify <sha>^{commit}` — used by drift-all to
+    # verify the marker SHA exists in git history before staging a snapshot.
+    if [[ "${FAKE_GIT_MARKER_KNOWN:-1}" == "1" ]]; then exit 0; else exit 128; fi ;;
+  "archive "*)
+    # `git archive <sha> config/` — drift-all stages the marker commit
+    # into a tmp dir via tar pipe. Return a tar stream that, when extracted,
+    # writes one synthetic config file we can compare against the fake Pi
+    # version. Tests control the file's contents via FAKE_MARKER_TAR_PATH.
+    if [[ "${FAKE_GIT_ARCHIVE_OK:-1}" != "1" ]]; then exit 128; fi
+    if [[ -n "${FAKE_MARKER_TAR_PATH:-}" && -f "${FAKE_MARKER_TAR_PATH}" ]]; then
+      cat "${FAKE_MARKER_TAR_PATH}"
+      exit 0
+    fi
+    # Default: emit a tar that creates config/empty.cfg (innocuous).
+    local tmpdir; tmpdir=$(mktemp -d)
+    mkdir -p "$tmpdir/config"
+    echo "# fake marker snapshot" > "$tmpdir/config/empty.cfg"
+    tar -C "$tmpdir" -c config/
+    rm -rf "$tmpdir"
+    exit 0 ;;
   "branch --show-current") echo "${FAKE_GIT_BRANCH:-main}"; exit 0 ;;
   "diff --quiet")
     if [[ "${FAKE_GIT_DIRTY:-0}" == "1" ]]; then exit 1; else exit 0; fi ;;
