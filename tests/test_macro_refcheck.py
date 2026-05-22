@@ -109,8 +109,11 @@ def test_real_repo_passes():
     import glob
 
     cfgs = (
-        [c for c in sorted(glob.glob("config/*.cfg"))
-         if not c.endswith("chopper_tune.cfg")]
+        [
+            c
+            for c in sorted(glob.glob("config/*.cfg"))
+            if not c.endswith("chopper_tune.cfg")
+        ]
         + sorted(glob.glob("config/macros/*.cfg"))
         + sorted(glob.glob("config/mmu/base/*.cfg"))
         + sorted(glob.glob("config/mmu/addons/*.cfg"))
