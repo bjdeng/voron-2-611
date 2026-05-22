@@ -11,8 +11,8 @@ Ben's actual OrcaSlicer settings live at `/Users/ben/Library/Application Support
 In OrcaSlicer: **Printer settings → Voron v2.611 → Machine G-code → Machine start G-code**.
 
 ```
+M140 S[first_layer_bed_temperature]
 M104 S0
-M140 S0
 
 MMU_START_SETUP INITIAL_TOOL={initial_tool} REFERENCED_TOOLS=!referenced_tools! TOOL_COLORS=!colors! TOOL_TEMPS=!temperatures! TOOL_MATERIALS=!materials! FILAMENT_NAMES=!filament_names! PURGE_VOLUMES=!purge_volumes!
 
@@ -27,7 +27,8 @@ The five sequential calls split responsibility cleanly:
 
 | Call | What it does |
 |---|---|
-| `M104 S0` / `M140 S0` | Suppress OrcaSlicer's own synchronous bed/extruder temp-waits. PRINT_START handles heat-overlap internally; a duplicate `M190` here would block before our gantry can home. |
+| `M140 S[first_layer_bed_temperature]` | **Start bed warming immediately, non-blocking.** Runs before MMU_START_SETUP / MMU_START_CHECK so the bed has the longest possible head start — tens of seconds saved vs. waiting for PRINT_START to issue the same command. PRINT_START will re-issue this with the same target later; duplicate is idempotent. |
+| `M104 S0` | Suppress OrcaSlicer's own synchronous hotend wait. PRINT_START handles hotend heat-overlap internally; a slicer-emitted `M109` here would block before our gantry can home. (No `M140 S0` — we want the bed warming, not zeroed.) |
 | `MMU_START_SETUP` | Happy-Hare's pre-print MMU init. Consumes slicer-injected vars (`!referenced_tools!`, `!colors!`, etc. are processed by HH's slicer hook, not by Orca). Tells HH which tools the print uses, their materials, purge volumes. |
 | `MMU_START_CHECK` | HH's gate-availability check. Verifies the gates the print needs have filament loaded. Fails fast (with operator prompt) if a gate is empty. |
 | `PRINT_START` | Our macro. Tap-threshold guard, max-temp guard, CLEAR_PAUSE, non-blocking bed+hotend heat, home+QGL during heat, chamber soak, tap-Z, mesh, final hotend heat, hot BLOBIFIER_CLEAN. See `config/macros/print_start.cfg`. |
