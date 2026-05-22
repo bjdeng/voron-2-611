@@ -24,6 +24,15 @@ Do NOT use this for thermal drift problems (those need `TEMPERATURE_PROBE_CALIBR
 
 Use `FORCE_MOVE` for any Z motion in phases 1–3.
 
+## Required config: `position_min: -5` on `[stepper_z]`
+
+This printer needs `[stepper_z] position_min: -5` (not the doc-blessed `-1` from `vendor/klipper/docs/Eddy_Probe.md:281`). Reason: the V2.4 front-rear gantry sag (CLAUDE.md "Known quirks" → "V2.4 saggy rear & QGL") means QGL probing at corners needs more downward kinematic room than tap-compression alone calls for. With `position_min: -1`, tap works at bed center but QGL fails with "No trigger on probe after full movement" at the high (front) corners — the descent runs out of kinematic room before the freq reaches the trigger threshold. `-5` is the legacy value (pre-Eddy era, Voron Tap install) and is empirically correct for this machine. Confirm before starting:
+
+```sh
+ssh pi@mainsailos.local "grep -A6 '^\[stepper_z\]' ~/printer_data/config/motion.cfg | grep position_min"
+# should print: position_min: -5
+```
+
 ---
 
 ## Pre-flight
@@ -158,6 +167,16 @@ If `refine` or `verify` fails with `Unable to detect tap: insufficient slope del
 The `PROBE_EDDY_CURRENT_TAP_CALIBRATE CHIP=btt_eddy` command with NO `TAP=` argument is a non-moving diagnostic that prints contact_slope_delta and current state — useful between steps if something looks off.
 
 ---
+
+## Diagnostic notes from the 2026-05-22 first run
+
+Hard-won lessons that aren't obvious from the source or doc:
+
+- **Bootstrap kinematic offset doesn't need a "trick" if `position_min` is correct.** The SET_KINEMATIC_POSITION Z=N value can match the FORCE_MOVE distance (e.g., Z=30 after FORCE_MOVE +30). Paper test descends freely down to bed contact thanks to `position_min: -5`. (The Z=5 trick we improvised mid-session was a workaround for `position_min: 0` being too tight — not needed with the correct value.)
+- **`Unable to detect tap: insufficient lift (X vs 0.350)`** during G28 means the tap descent hit `position_min` before nozzle contact. Caused by `position_min` being too high (≥ 0). Lowering to `-5` is the fix.
+- **`Unable to detect tap: insufficient slope delta (negative vs threshold)`** means the algorithm couldn't separate compression from free-air on the lift curve — also caused by descent floor being too high. Same fix.
+- **`LIFT_SPEED` on `PROBE METHOD=tap` is a red herring.** Bumping `LIFT_SPEED=20` changes the apparent failure mode from "insufficient lift" to "insufficient slope delta" but doesn't fix the root cause (descent room). Default `LIFT_SPEED=5` is fine.
+- **`No trigger on probe after full movement` during QGL** means a corner can't descend enough to reach bed. Either gantry tilt is large (rare without manual asymmetric FORCE_MOVE), or `position_min` is too tight relative to sag — second is far more common.
 
 ## Phase 7 — Drift calibration (optional, ~1.5 hr)
 
