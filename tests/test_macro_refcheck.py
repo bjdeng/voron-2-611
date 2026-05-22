@@ -98,11 +98,22 @@ def test_builtins_has_expected_klipper_commands():
 
 
 def test_real_repo_passes():
-    """The repo's actual configs must pass macro_refcheck."""
+    """The repo's actual configs must pass macro_refcheck.
+
+    config/chopper_tune.cfg is excluded — Pi-side symlink to a third-party
+    file (~/chopper-resonance-tuner/chopper_tune.cfg) referencing
+    RUN_SHELL_COMMAND from a vendor extension. Same exclusion rationale
+    as the text-hygiene hooks in .pre-commit-config.yaml and the
+    refcheck step in .github/workflows/ci.yml.
+    """
     import glob
 
     cfgs = (
-        sorted(glob.glob("config/*.cfg"))
+        [
+            c
+            for c in sorted(glob.glob("config/*.cfg"))
+            if not c.endswith("chopper_tune.cfg")
+        ]
         + sorted(glob.glob("config/macros/*.cfg"))
         + sorted(glob.glob("config/mmu/base/*.cfg"))
         + sorted(glob.glob("config/mmu/addons/*.cfg"))

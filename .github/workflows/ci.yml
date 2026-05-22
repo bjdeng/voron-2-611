@@ -170,9 +170,13 @@ jobs:
         # failglob: bash exits nonzero if any glob matches nothing — catches
         # accidental directory renames / restructures that would otherwise
         # silently shrink coverage. `shell: bash` for `-eo pipefail` consistency.
+        # chopper_tune.cfg is excluded — it's a Pi-side symlink to
+        # ~/chopper-resonance-tuner/chopper_tune.cfg (third-party file we don't
+        # own) and references RUN_SHELL_COMMAND from a vendor extension. Same
+        # exclusion rationale as the text-hygiene hooks in .pre-commit-config.yaml.
         shell: bash
         run: |
-          shopt -s failglob
+          shopt -s failglob extglob
           python scripts/macro_refcheck.py \
-            config/*.cfg \
+            config/!(chopper_tune).cfg \
             config/macros/*.cfg config/mmu/base/*.cfg config/mmu/addons/*.cfg config/mmu/optional/*.cfg
