@@ -4,7 +4,10 @@
 
 PYTHON      := .venv/bin/python
 PRECOMMIT   := .venv/bin/pre-commit
-CFGS        := $(wildcard config/*.cfg) \
+# config/chopper_tune.cfg excluded: Pi-side symlink to a third-party file
+# (~/chopper-resonance-tuner/chopper_tune.cfg) we don't own. Matches the
+# exclusion in .github/workflows/ci.yml + .pre-commit-config.yaml.
+CFGS        := $(filter-out config/chopper_tune.cfg, $(wildcard config/*.cfg)) \
                $(wildcard config/macros/*.cfg) \
                $(wildcard config/mmu/base/*.cfg) \
                $(wildcard config/mmu/addons/*.cfg) \
