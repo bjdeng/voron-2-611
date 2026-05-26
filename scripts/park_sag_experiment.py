@@ -33,13 +33,15 @@ PI_SSH = "pi@mainsailos.local"
 KLIPPY_LOG = "~/printer_data/logs/klippy.log"
 
 POSITIONS = [
-    ("rear-left",   5,   345),
+    ("rear-left", 5, 345),
     ("rear-center", 175, 345),
-    ("rear-right",  345, 345),
-    ("center",      175, 175),
+    ("rear-right", 345, 345),
+    ("center", 175, 175),
 ]
 TRIALS_PER_POSITION = 3
-SETTLE_SECONDS = 120  # 2 min — captures the belt-creep tail beyond the instantaneous drop
+SETTLE_SECONDS = (
+    120  # 2 min — captures the belt-creep tail beyond the instantaneous drop
+)
 
 
 def moonraker_post(path: str, **params) -> dict:
@@ -74,7 +76,9 @@ def gcode(cmd: str) -> bool:
 def log_line_count() -> int:
     r = subprocess.run(
         ["ssh", PI_SSH, f"wc -l < {KLIPPY_LOG}"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return int(r.stdout.strip())
 
@@ -102,9 +106,13 @@ def first_qgl_adjustment(from_line: int):
 def probe_failure_count(from_line: int) -> int:
     """Count 'No trigger on probe' or 'Unable to detect tap' errors since from_line."""
     r = subprocess.run(
-        ["ssh", PI_SSH,
-         f"awk 'NR>={from_line}' {KLIPPY_LOG} | grep -cE 'No trigger on probe|Unable to detect tap' || true"],
-        capture_output=True, text=True,
+        [
+            "ssh",
+            PI_SSH,
+            f"awk 'NR>={from_line}' {KLIPPY_LOG} | grep -cE 'No trigger on probe|Unable to detect tap' || true",
+        ],
+        capture_output=True,
+        text=True,
     )
     return int(r.stdout.strip() or 0)
 
@@ -122,12 +130,18 @@ def auto_recover_via_force_move() -> bool:
     probe budget on the opposite corners).
     """
     print("  auto recovery: FORCE_MOVE pre-tilt (rear+5, front-5), then re-home + QGL")
-    if not gcode("FORCE_MOVE STEPPER=stepper_z1 DISTANCE=5 VELOCITY=5"): return False
-    if not gcode("FORCE_MOVE STEPPER=stepper_z2 DISTANCE=5 VELOCITY=5"): return False
-    if not gcode("FORCE_MOVE STEPPER=stepper_z DISTANCE=-5 VELOCITY=5"):  return False
-    if not gcode("FORCE_MOVE STEPPER=stepper_z3 DISTANCE=-5 VELOCITY=5"): return False
-    if not gcode("G28"): return False
-    if not gcode("QUAD_GANTRY_LEVEL"): return False
+    if not gcode("FORCE_MOVE STEPPER=stepper_z1 DISTANCE=5 VELOCITY=5"):
+        return False
+    if not gcode("FORCE_MOVE STEPPER=stepper_z2 DISTANCE=5 VELOCITY=5"):
+        return False
+    if not gcode("FORCE_MOVE STEPPER=stepper_z DISTANCE=-5 VELOCITY=5"):
+        return False
+    if not gcode("FORCE_MOVE STEPPER=stepper_z3 DISTANCE=-5 VELOCITY=5"):
+        return False
+    if not gcode("G28"):
+        return False
+    if not gcode("QUAD_GANTRY_LEVEL"):
+        return False
     return True
 
 
@@ -145,7 +159,11 @@ def manual_recovery_prompt() -> bool:
         print("  Adjust the gantry by hand until roughly level by eye.")
         print("  (Failure means sag exceeded probe range — push the high corner DOWN")
         print("   or the low corner UP. For typical rear-sag, push front DOWN.)")
-        resp = input("  Press Enter to retry G28 + QGL, or type 'abort' to exit. > ").strip().lower()
+        resp = (
+            input("  Press Enter to retry G28 + QGL, or type 'abort' to exit. > ")
+            .strip()
+            .lower()
+        )
         if resp == "abort":
             return False
         if gcode("G28") and gcode("QUAD_GANTRY_LEVEL"):
@@ -168,7 +186,10 @@ def verify_idle() -> None:
     d = moonraker_get("/printer/objects/query?print_stats")
     state = d["result"]["status"]["print_stats"]["state"]
     if state not in ("standby", "complete", "cancelled"):
-        print(f"REFUSE: printer state is '{state}'. Need standby/complete/cancelled.", file=sys.stderr)
+        print(
+            f"REFUSE: printer state is '{state}'. Need standby/complete/cancelled.",
+            file=sys.stderr,
+        )
         sys.exit(1)
     print(f"Printer state: {state} ✓")
 
@@ -184,19 +205,37 @@ def main() -> None:
     random.shuffle(trials)
 
     est_min = len(trials) * (SETTLE_SECONDS + 180) / 60  # 3 min per trial overhead
-    print(f"Running {len(trials)} trials (~{est_min:.0f} min total). Settle: {SETTLE_SECONDS}s.\n")
+    print(
+        f"Running {len(trials)} trials (~{est_min:.0f} min total). Settle: {SETTLE_SECONDS}s.\n"
+    )
 
-    out_path = Path(__file__).parent.parent / "data" / f"park-sag-{time.strftime('%Y-%m-%d-%H%M')}.csv"
+    out_path = (
+        Path(__file__).parent.parent
+        / "data"
+        / f"park-sag-{time.strftime('%Y-%m-%d-%H%M')}.csv"
+    )
     out_path.parent.mkdir(exist_ok=True)
     print(f"Output: {out_path}\n")
 
     with out_path.open("w") as f:
         w = csv.writer(f)
-        w.writerow([
-            "trial_n", "position", "x", "y", "settle_s",
-            "z_FL", "z_RL", "z_RR", "z_FR", "front_avg", "rear_avg",
-            "probe_failures", "status",
-        ])
+        w.writerow(
+            [
+                "trial_n",
+                "position",
+                "x",
+                "y",
+                "settle_s",
+                "z_FL",
+                "z_RL",
+                "z_RR",
+                "z_FR",
+                "front_avg",
+                "rear_avg",
+                "probe_failures",
+                "status",
+            ]
+        )
 
         for i, (trial_n, label, x, y) in enumerate(trials, 1):
             print(f"[{i}/{len(trials)}] trial {trial_n}: {label} ({x},{y})")
@@ -212,7 +251,23 @@ def main() -> None:
             # Move + release Z
             print(f"  parking at ({x},{y}) + M84 Z")
             if not gcode(f"G1 X{x} Y{y} F6000"):
-                w.writerow([trial_n, label, x, y, SETTLE_SECONDS, "", "", "", "", "", "", "", "park-move-fail"])
+                w.writerow(
+                    [
+                        trial_n,
+                        label,
+                        x,
+                        y,
+                        SETTLE_SECONDS,
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "park-move-fail",
+                    ]
+                )
                 f.flush()
                 continue
             before = log_line_count()
@@ -228,10 +283,27 @@ def main() -> None:
             fail_count = probe_failure_count(before)
 
             if not home_ok or not qgl_ok:
-                print(f"  PROBE FAIL during measure (probe-failure-count={fail_count}) — "
-                      f"this IS the data point: position+settle produced sag exceeding probe range")
-                w.writerow([trial_n, label, x, y, SETTLE_SECONDS, "", "", "", "", "", "",
-                            fail_count, "severe-sag-unmeasurable"])
+                print(
+                    f"  PROBE FAIL during measure (probe-failure-count={fail_count}) — "
+                    f"this IS the data point: position+settle produced sag exceeding probe range"
+                )
+                w.writerow(
+                    [
+                        trial_n,
+                        label,
+                        x,
+                        y,
+                        SETTLE_SECONDS,
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        fail_count,
+                        "severe-sag-unmeasurable",
+                    ]
+                )
                 f.flush()
                 # Next trial needs a level baseline — get operator to recover.
                 if not recover(label="post-measure"):
@@ -241,19 +313,53 @@ def main() -> None:
 
             adj = first_qgl_adjustment(before)
             if adj is None:
-                print(f"  WARN: no adjustment block found (probe-failure-count={fail_count})")
-                w.writerow([trial_n, label, x, y, SETTLE_SECONDS, "", "", "", "", "", "",
-                            fail_count, "no-adjustment-block"])
+                print(
+                    f"  WARN: no adjustment block found (probe-failure-count={fail_count})"
+                )
+                w.writerow(
+                    [
+                        trial_n,
+                        label,
+                        x,
+                        y,
+                        SETTLE_SECONDS,
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        fail_count,
+                        "no-adjustment-block",
+                    ]
+                )
                 f.flush()
                 continue
 
             z_fl, z_rl, z_rr, z_fr = adj
             front_avg = (z_fl + z_fr) / 2
             rear_avg = (z_rl + z_rr) / 2
-            print(f"  result: FL={z_fl:+.2f} RL={z_rl:+.2f} RR={z_rr:+.2f} FR={z_fr:+.2f}"
-                  f"  | front_avg={front_avg:+.2f}, rear_avg={rear_avg:+.2f}, failures={fail_count}")
-            w.writerow([trial_n, label, x, y, SETTLE_SECONDS,
-                        z_fl, z_rl, z_rr, z_fr, front_avg, rear_avg, fail_count, "ok"])
+            print(
+                f"  result: FL={z_fl:+.2f} RL={z_rl:+.2f} RR={z_rr:+.2f} FR={z_fr:+.2f}"
+                f"  | front_avg={front_avg:+.2f}, rear_avg={rear_avg:+.2f}, failures={fail_count}"
+            )
+            w.writerow(
+                [
+                    trial_n,
+                    label,
+                    x,
+                    y,
+                    SETTLE_SECONDS,
+                    z_fl,
+                    z_rl,
+                    z_rr,
+                    z_fr,
+                    front_avg,
+                    rear_avg,
+                    fail_count,
+                    "ok",
+                ]
+            )
             f.flush()
 
     # Final: leave in known-good state
