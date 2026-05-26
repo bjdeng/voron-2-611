@@ -21,6 +21,9 @@ sonar.log
 # Per-run output from chopper-resonance-tuner (~700 MB possible per session)
 config/adxl_results/
 
+# Experiment / data output (e.g., park-sag CSVs from scripts/park_sag_experiment.py)
+data/
+
 # Deploy-script state files (not config) — written by scripts/deploy_to_pi.sh
 config/.last-deploy-sha
 config/.moonraker.conf.bkp
