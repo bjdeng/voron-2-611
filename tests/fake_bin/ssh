@@ -44,5 +44,9 @@ case "$remote_cmd" in
   *tail*klippy.log*grep*)
     # New-error scan. Returns whatever errors the test set up; empty by default.
     printf '%s' "${FAKE_KLIPPY_LOG_NEW_ERRORS:-}" ;;
+  *deploy-to-pi.log*)
+    # log_deploy pipes the formatted line via stdin; capture it so tests can
+    # assert on the result string (which never appears in the command args).
+    cat >> "${FAKE_LOG_DIR:-/dev/stderr}" ;;
   *) exit 0 ;;
 esac

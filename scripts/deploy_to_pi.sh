@@ -657,8 +657,9 @@ log_deploy() {
   flags="${flags%,}"; flags="${flags:--}"
   printf -v line '%s\t%s\t%s\t%s\t%s\t%s' \
     "$ts" "${LOCAL:--}" "$flags" "${RESTART_KIND:-none}" "${DRIFT_OUTCOME:-none}" "$1"
-  # shellcheck disable=SC2029 # $line intentionally expands on the client side
-  ssh "$PI_HOST" "printf '%s\n' '$line' >> ~/printer_data/logs/deploy-to-pi.log" 2>/dev/null || true
+  # Pipe the line via stdin (not embedded in the remote command) so a value
+  # with shell metacharacters can never break the remote shell.
+  printf '%s\n' "$line" | ssh "$PI_HOST" 'cat >> ~/printer_data/logs/deploy-to-pi.log' 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
