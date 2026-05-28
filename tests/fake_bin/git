@@ -20,12 +20,14 @@ case "$1 $2" in
       cat "${FAKE_MARKER_TAR_PATH}"
       exit 0
     fi
-    # Default: emit an empty config/ tar. snapshot_hashes will be empty,
-    # which the drift function treats as "nothing to compare" → silent skip.
-    local tmpdir; tmpdir=$(mktemp -d)
-    mkdir -p "$tmpdir/config"
-    tar -C "$tmpdir" -c config/
-    rm -rf "$tmpdir"
+    # Default: emit a tar with only an empty config/ dir, so snapshot_hashes
+    # comes out empty. NOTE: no `local` here — this case runs at script top
+    # level, not in a function, where `local` errors and (on some platforms)
+    # leaves tmpdir unset → `tar -C ""` would archive the REAL config/ tree.
+    _fa_tmp=$(mktemp -d)
+    mkdir -p "$_fa_tmp/config"
+    tar -C "$_fa_tmp" -c config
+    rm -rf "$_fa_tmp"
     exit 0 ;;
   "branch --show-current") echo "${FAKE_GIT_BRANCH:-main}"; exit 0 ;;
   "diff --quiet")
