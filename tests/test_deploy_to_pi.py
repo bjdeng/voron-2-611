@@ -293,10 +293,10 @@ def test_drift_gate_falls_back_to_repo_compare_when_marker_unresolvable():
     assert "not in git history" in r.stderr, _diag(r)
 
 
-def test_drift_gate_falls_back_when_reference_body_empty_after_strip():
+def test_drift_gate_refuses_when_reference_body_empty_after_strip():
     """git show succeeds with content that's ONLY the SAVE_CONFIG marker
     (or is empty). After stripping SAVE_CONFIG, reference_body is empty;
-    fall back to current-repo comparison with a distinct WARN.
+    refuse unless --force (fail-closed).
     """
     marker = "#*# <---------------------- SAVE_CONFIG ---------------------->"
     # Pi has only SAVE_CONFIG (no body) and FAKE_LAST_DEPLOY_PRINTER_CFG
@@ -309,10 +309,9 @@ def test_drift_gate_falls_back_when_reference_body_empty_after_strip():
             "FAKE_LAST_DEPLOY_PRINTER_CFG": only_save_config,
         }
     )
-    # Pi matches repo HEAD → fallback comparison passes.
-    assert "Pi printer.cfg body has drifted" not in r.stderr, _diag(r)
-    # Distinct WARN identifying the empty-reference reason.
-    assert "yielded empty reference body" in r.stderr, _diag(r)
+    # Must refuse — can't verify Pi state when reference body is empty.
+    assert r.returncode == 1, _diag(r)
+    assert "cannot verify Pi state" in r.stderr, _diag(r)
 
 
 # ---------------------------------------------------------------------------
@@ -459,22 +458,22 @@ def test_drift_all_gate_skipped_when_no_marker_on_pi():
     assert "skipping extended check" not in r.stderr, _diag(r)
 
 
-def test_drift_all_gate_skipped_when_marker_unknown_to_git():
-    """Marker SHA exists on Pi but isn't in local git → WARN + skip."""
+def test_drift_all_refuses_when_marker_unknown_to_git():
+    """Marker SHA exists on Pi but isn't in local git → refuse (fail closed)."""
     r = _run(
         env=_common_drift_env({"FAKE_GIT_MARKER_KNOWN": "0"}),
     )
-    assert "not in git history; skipping extended check" in r.stderr, _diag(r)
-    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
+    assert r.returncode == 1, _diag(r)
+    assert "cannot verify Pi state" in r.stderr, _diag(r)
 
 
-def test_drift_all_gate_skipped_when_git_archive_fails():
-    """git archive fails (corrupt history) → WARN + skip."""
+def test_drift_all_refuses_when_git_archive_fails():
+    """git archive fails (corrupt history) → refuse (fail closed)."""
     r = _run(
         env=_common_drift_env({"FAKE_GIT_ARCHIVE_OK": "0"}),
     )
-    assert "failed to stage marker snapshot" in r.stderr, _diag(r)
-    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
+    assert r.returncode == 1, _diag(r)
+    assert "cannot verify Pi state" in r.stderr, _diag(r)
 
 
 def test_adxl_results_in_rsync_excludes(fake_log):
@@ -996,3 +995,38 @@ def test_smoke_fails_if_first_command_fails_twice(fake_log):
         f"expected 2 gcode/script POSTs (initial + retry), got {gcode_posts}.\n"
         f"log:\n{log}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Fail-closed: can't-verify conditions refuse unless --force
+# ---------------------------------------------------------------------------
+
+
+def test_drift_all_refuses_when_marker_missing(tmp_path):
+    """No .last-deploy-sha on Pi → refuse (fail closed), no rsync."""
+    r = _run(env=_common_drift_env({"FAKE_LAST_DEPLOY_SHA": ""}))
+    assert r.returncode == 1, _diag(r)
+    assert "cannot verify Pi state" in r.stderr, _diag(r)
+
+
+def test_drift_all_marker_missing_proceeds_with_force(tmp_path):
+    """--force overrides the can't-verify refusal."""
+    r = _run(
+        env=_common_drift_env({"FAKE_LAST_DEPLOY_SHA": ""}), args=["--yes", "--force"]
+    )
+    assert "cannot verify Pi state" in r.stderr, _diag(r)
+    assert r.returncode in (0, 2, 3, 4), _diag(r)
+
+
+def test_drift_all_refuses_when_marker_sha_unknown(tmp_path):
+    """Marker SHA not in git history → refuse (was: WARN + fall back)."""
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_LAST_DEPLOY_SHA": "deadbeef",
+                "FAKE_GIT_MARKER_KNOWN": "0",
+            }
+        )
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "cannot verify Pi state" in r.stderr, _diag(r)

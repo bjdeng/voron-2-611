@@ -14,6 +14,9 @@ DRY_RUN=0
 SMOKE=0
 FORCE=0
 
+# Set at each terminal point; consumed by the deploy log (see log_deploy).
+DEPLOY_RESULT="incomplete"
+
 # Globals populated by setup functions
 LOCAL=""
 SAVE_CONFIG_PI=""
@@ -176,6 +179,19 @@ capture_save_config() {
   fi
 }
 
+cant_verify_or_force() {
+  # Fail-closed guard for the drift gate. $1 = human-readable reason.
+  # With --force: warn and let the caller skip its check. Without: refuse.
+  if [[ "$FORCE" == 1 ]]; then
+    echo "WARN: drift gate cannot verify Pi state ($1); --force given, proceeding." >&2
+    return 0
+  fi
+  echo "ERR: drift gate cannot verify Pi state: $1" >&2
+  echo "Refusing to deploy (fail-closed). Fix the cause, or pass --force to override." >&2
+  DEPLOY_RESULT="refused:cant-verify"
+  exit 1
+}
+
 check_no_pi_drift() {
   # The gate's intent: catch SEMANTIC edits on the Pi (Mainsail changes,
   # manual SSH tweaks) that weren't synced back to git. NOT to block
@@ -185,10 +201,8 @@ check_no_pi_drift() {
   # (recorded in ~/printer_data/config/.last-deploy-sha). Any difference =
   # the Pi has changes the repo doesn't know about → Pi-ahead drift → fail.
   #
-  # Fallback: if the marker is missing (fresh deploy) or its SHA isn't in
-  # git history (corrupt marker, from another repo), fall back to comparing
-  # against current-repo printer.cfg — conservative, may fire on repo-ahead
-  # drift in edge cases.
+  # Fail-closed: if the marker is missing or its SHA isn't in git history,
+  # refuse unless --force.
   #
   # Mainsail saves with trailing whitespace that pre-commit strips here;
   # diff -w -B ignores whitespace-only changes either way.
@@ -202,28 +216,22 @@ check_no_pi_drift() {
   pi_body=$(printf '%s\n' "$pi_full" | sed -E "/$SAVE_CONFIG_MARKER/,\$d")
 
   deploy_marker_raw=$(ssh "$PI_HOST" 'cat ~/printer_data/config/.last-deploy-sha 2>/dev/null || true')
-  if [[ -n "$deploy_marker_raw" ]]; then
-    if reference_body=$(git show "$deploy_marker_raw:config/printer.cfg" 2>/dev/null); then
-      reference_body=$(printf '%s\n' "$reference_body" | sed -E "/$SAVE_CONFIG_MARKER/,\$d")
-      if [[ -n "$reference_body" ]]; then
-        if ! diff -q -w -B <(printf '%s\n' "$pi_body") <(printf '%s\n' "$reference_body") >/dev/null; then
-          echo "ERR: Pi printer.cfg body has drifted from the last-deployed commit ($deploy_marker_raw). Run sync-from-pi to capture changes, then re-run deploy-to-pi." >&2
-          exit 1
-        fi
-        return
-      fi
-      echo "WARN: deploy marker '$deploy_marker_raw' yielded empty reference body after SAVE_CONFIG strip; comparing Pi to current repo." >&2
-    else
-      echo "WARN: deploy marker SHA '$deploy_marker_raw' not in git history; comparing Pi to current repo (may fire on legitimate repo-ahead drift)." >&2
-    fi
+  if [[ -z "$deploy_marker_raw" ]]; then
+    cant_verify_or_force "no deploy marker on Pi (.last-deploy-sha missing)"
+    return 0
   fi
-
-  # Fallback path (no marker / unresolvable marker).
-  if ! diff -q -w -B \
-      <(printf '%s\n' "$pi_body") \
-      <(sed -E "/$SAVE_CONFIG_MARKER/,\$d" "$REPO_ROOT/config/printer.cfg") \
-      >/dev/null; then
-    echo "ERR: Pi printer.cfg body has drifted from origin/main. Run sync-from-pi to capture changes, then re-run deploy-to-pi." >&2
+  if ! reference_body=$(git show "$deploy_marker_raw:config/printer.cfg" 2>/dev/null); then
+    cant_verify_or_force "deploy marker SHA '$deploy_marker_raw' not in git history"
+    return 0
+  fi
+  reference_body=$(printf '%s\n' "$reference_body" | sed -E "/$SAVE_CONFIG_MARKER/,\$d")
+  if [[ -z "$reference_body" ]]; then
+    cant_verify_or_force "marker '$deploy_marker_raw' yielded empty printer.cfg reference"
+    return 0
+  fi
+  if ! diff -q -w -B <(printf '%s\n' "$pi_body") <(printf '%s\n' "$reference_body") >/dev/null; then
+    echo "ERR: Pi printer.cfg body has drifted from the last-deployed commit ($deploy_marker_raw). Run sync-from-pi to capture changes, then re-run deploy-to-pi." >&2
+    DEPLOY_RESULT="refused:pi-drift"
     exit 1
   fi
 }
@@ -250,10 +258,11 @@ check_no_pi_drift_all_files() {
   local marker_sha snapshot_dir drift_lines drift_files
   marker_sha=$(ssh "$PI_HOST" 'cat ~/printer_data/config/.last-deploy-sha 2>/dev/null || true')
   if [[ -z "$marker_sha" ]]; then
+    cant_verify_or_force "no deploy marker on Pi (.last-deploy-sha missing)"
     return 0
   fi
   if ! git rev-parse --quiet --verify "${marker_sha}^{commit}" >/dev/null 2>&1; then
-    echo "WARN: deploy marker SHA '$marker_sha' not in git history; skipping extended check." >&2
+    cant_verify_or_force "deploy marker SHA '$marker_sha' not in git history"
     return 0
   fi
 
@@ -261,11 +270,11 @@ check_no_pi_drift_all_files() {
   # shellcheck disable=SC2064 # snapshot_dir expansion at trap-set time is intentional
   trap "rm -rf '$snapshot_dir'" RETURN
   if ! git archive "$marker_sha" config/ 2>/dev/null | tar -x -C "$snapshot_dir" 2>/dev/null; then
-    echo "WARN: failed to stage marker snapshot (git archive failed); skipping extended check." >&2
+    cant_verify_or_force "git archive of marker snapshot failed"
     return 0
   fi
   if [[ ! -d "$snapshot_dir/config" ]]; then
-    echo "WARN: marker snapshot has no config/ dir; skipping extended check." >&2
+    cant_verify_or_force "marker snapshot has no config/ dir"
     return 0
   fi
 
@@ -282,7 +291,7 @@ check_no_pi_drift_all_files() {
   elif command -v shasum >/dev/null 2>&1; then
     hasher="shasum -a 256"
   else
-    echo "WARN: no sha256sum/shasum available locally; skipping extended check." >&2
+    cant_verify_or_force "no local sha256 tool (sha256sum/shasum)"
     return 0
   fi
 
@@ -327,8 +336,8 @@ check_no_pi_drift_all_files() {
   # shellcheck disable=SC2029 # $prune_expr expands client-side intentionally
   pi_hashes=$(ssh "$PI_HOST" "cd ~/printer_data/config && find . \\( $prune_expr \\) -prune -o -type f -print0 | xargs -0 sha256sum 2>/dev/null | sed -E 's| +\\./| |' | sort" 2>/dev/null)
 
-  if [[ -z "$snapshot_hashes" || -z "$pi_hashes" ]]; then
-    echo "WARN: could not enumerate hashes on one side; skipping extended check." >&2
+  if [[ -n "$snapshot_hashes" && -z "$pi_hashes" ]]; then
+    cant_verify_or_force "could not enumerate file hashes on one side"
     return 0
   fi
 

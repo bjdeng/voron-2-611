@@ -30,7 +30,7 @@ case "$remote_cmd" in
   *echo*\>*last-deploy-sha*)
     if [[ "${FAKE_MARKER_WRITE_OK:-1}" != "1" ]]; then exit 1; fi
     exit 0 ;;
-  *cat*last-deploy-sha*) printf '%s' "${FAKE_LAST_DEPLOY_SHA:-}" ;;
+  *cat*last-deploy-sha*) printf '%s' "${FAKE_LAST_DEPLOY_SHA-abc1234}" ;;
   *cat*printer.cfg*) printf '%s' "${FAKE_PI_PRINTER_CFG:-}" ;;
   # Smoke-test helpers (L6, printer-smoke.sh).
   *stat*-c*klippy.log*wc*-l*klippy.log*)
