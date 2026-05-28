@@ -62,6 +62,11 @@ case "$1 $2" in
     exit 0 ;;
   "checkout "*)  exit 0 ;;
   "add "*)       exit 0 ;;
-  "commit "*)    exit 0 ;;
+  "commit "*)
+    # FAKE_GIT_COMMIT_FAIL=1 simulates a failed capture commit (e.g. a
+    # rejecting pre-commit hook) so the abort-before-overwrite path is tested.
+    if [[ "${FAKE_GIT_COMMIT_FAIL:-0}" == "1" ]]; then exit 1; fi
+    exit 0 ;;
+  "branch "*)    exit 0 ;;
   *) echo "fake git: unhandled args: $*" >&2; exit 99 ;;
 esac

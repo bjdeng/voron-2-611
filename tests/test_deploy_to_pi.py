@@ -1096,3 +1096,29 @@ def test_deploy_log_written_on_cant_verify_refusal(tmp_path, fake_log):
     )
     log = fake_log.read_text()
     assert "deploy-to-pi.log" in log and "refused:cant-verify" in log, log
+
+
+def test_drift_capture_aborts_when_commit_fails(tmp_path, fake_log):
+    """If committing captured Pi edits fails, abort (exit 2) before any overwrite.
+
+    Even with --force: capture must succeed before the Pi is touched, else the
+    edits would be silently lost. Asserts no rsync ran.
+    """
+    files = {"mmu/base/mmu_parameters.cfg": "x: 0\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = "00" * 32 + "  mmu/base/mmu_parameters.cfg"
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_GIT_COMMIT_FAIL": "1",
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        ),
+        args=["--yes", "--force"],
+    )
+    assert r.returncode == 2, _diag(r)
+    assert "failed to commit captured Pi edits" in r.stderr, _diag(r)
+    log = fake_log.read_text()
+    assert "rsync" not in log, log  # must NOT have proceeded to overwrite

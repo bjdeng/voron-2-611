@@ -252,17 +252,34 @@ capture_pi_drift() {
     DEPLOY_RESULT="failed:capture-branch"
     exit 2
   fi
+  # On any failure below, restore the original branch cleanly (force-discard
+  # the partial scp'd files) and delete the stub capture branch, so a failed
+  # capture never strands a dirty tree or proceeds to overwrite the Pi.
+  _abort_capture() {
+    git checkout -f "$orig_branch" >/dev/null 2>&1 || true
+    git branch -D "$CAPTURE_BRANCH" >/dev/null 2>&1 || true
+  }
   for f in $files; do
+    mkdir -p "$REPO_ROOT/config/$(dirname "$f")"
     if ! scp -q "${PI_HOST}:~/printer_data/config/$f" "$REPO_ROOT/config/$f"; then
-      echo "ERR: failed to scp '$f' from Pi during capture; aborting." >&2
-      git checkout "$orig_branch" >/dev/null 2>&1 || true
+      echo "ERR: failed to scp '$f' from Pi during capture; aborting before any overwrite." >&2
+      _abort_capture
       DEPLOY_RESULT="failed:capture-scp"
       exit 2
     fi
     git add "config/$f"
   done
-  git commit -q -m "capture: Pi-side edits to $(printf '%s ' $files)" >/dev/null 2>&1 || true
-  git checkout "$orig_branch" >/dev/null 2>&1 || true
+  if ! git commit -q -m "capture: Pi-side edits to $(printf '%s ' $files)" >/dev/null; then
+    echo "ERR: failed to commit captured Pi edits; aborting before any overwrite." >&2
+    _abort_capture
+    DEPLOY_RESULT="failed:capture-commit"
+    exit 2
+  fi
+  if ! git checkout "$orig_branch" >/dev/null 2>&1; then
+    echo "ERR: captured to '$CAPTURE_BRANCH' but could not return to '$orig_branch'; aborting." >&2
+    DEPLOY_RESULT="failed:capture-restore"
+    exit 2
+  fi
   echo "==> Captured Pi-side drift to branch $CAPTURE_BRANCH" >&2
 }
 
