@@ -30,7 +30,7 @@ case "$remote_cmd" in
   *echo*\>*last-deploy-sha*)
     if [[ "${FAKE_MARKER_WRITE_OK:-1}" != "1" ]]; then exit 1; fi
     exit 0 ;;
-  *cat*last-deploy-sha*) printf '%s' "${FAKE_LAST_DEPLOY_SHA:-}" ;;
+  *cat*last-deploy-sha*) printf '%s' "${FAKE_LAST_DEPLOY_SHA-abc1234}" ;;
   *cat*printer.cfg*) printf '%s' "${FAKE_PI_PRINTER_CFG:-}" ;;
   # Smoke-test helpers (L6, printer-smoke.sh).
   *stat*-c*klippy.log*wc*-l*klippy.log*)
@@ -44,5 +44,9 @@ case "$remote_cmd" in
   *tail*klippy.log*grep*)
     # New-error scan. Returns whatever errors the test set up; empty by default.
     printf '%s' "${FAKE_KLIPPY_LOG_NEW_ERRORS:-}" ;;
+  *deploy-to-pi.log*)
+    # log_deploy pipes the formatted line via stdin; capture it so tests can
+    # assert on the result string (which never appears in the command args).
+    cat >> "${FAKE_LOG_DIR:-/dev/stderr}" ;;
   *) exit 0 ;;
 esac

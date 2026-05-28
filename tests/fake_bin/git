@@ -20,12 +20,14 @@ case "$1 $2" in
       cat "${FAKE_MARKER_TAR_PATH}"
       exit 0
     fi
-    # Default: emit an empty config/ tar. snapshot_hashes will be empty,
-    # which the drift function treats as "nothing to compare" → silent skip.
-    local tmpdir; tmpdir=$(mktemp -d)
-    mkdir -p "$tmpdir/config"
-    tar -C "$tmpdir" -c config/
-    rm -rf "$tmpdir"
+    # Default: emit a tar with only an empty config/ dir, so snapshot_hashes
+    # comes out empty. NOTE: no `local` here — this case runs at script top
+    # level, not in a function, where `local` errors and (on some platforms)
+    # leaves tmpdir unset → `tar -C ""` would archive the REAL config/ tree.
+    _fa_tmp=$(mktemp -d)
+    mkdir -p "$_fa_tmp/config"
+    tar -C "$_fa_tmp" -c config
+    rm -rf "$_fa_tmp"
     exit 0 ;;
   "branch --show-current") echo "${FAKE_GIT_BRANCH:-main}"; exit 0 ;;
   "diff --quiet")
@@ -43,15 +45,30 @@ case "$1 $2" in
   "show "*)
     # `git show <sha>:config/printer.cfg` — used by check_no_pi_drift to
     # compare Pi's body to the last-deployed commit's printer.cfg body.
-    # FAKE_LAST_DEPLOY_PRINTER_CFG provides the content; if unset, exit 128
-    # like real git would for an unknown SHA.
+    # FAKE_LAST_DEPLOY_PRINTER_CFG provides the content; if unset, fall back
+    # to the real repo file so tests that don't set it get a valid reference.
     if [[ "${FAKE_GIT_SHOW_ERROR:-0}" == "1" ]]; then exit 128; fi
-    if [[ -z "${FAKE_LAST_DEPLOY_PRINTER_CFG:-}" ]]; then exit 128; fi
-    printf '%s' "${FAKE_LAST_DEPLOY_PRINTER_CFG}"
+    if [[ -n "${FAKE_LAST_DEPLOY_PRINTER_CFG:-}" ]]; then
+      printf '%s' "${FAKE_LAST_DEPLOY_PRINTER_CFG}"
+    else
+      # Default: return the real printer.cfg so the drift check passes for
+      # tests that set FAKE_PI_PRINTER_CFG via _matching_pi_cfg().
+      _repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+      cat "$_repo_root/config/printer.cfg" 2>/dev/null \
+        || { echo "fake git: show fallback: cannot find config/printer.cfg" >&2; exit 128; }
+    fi
     exit 0 ;;
   "status -sb")
     # Diagnostic call from check_tree_clean after detecting a dirty tree.
     # Real git would print the dirty files; the fake just needs to not blow up.
     exit 0 ;;
+  "checkout "*)  exit 0 ;;
+  "add "*)       exit 0 ;;
+  "commit "*)
+    # FAKE_GIT_COMMIT_FAIL=1 simulates a failed capture commit (e.g. a
+    # rejecting pre-commit hook) so the abort-before-overwrite path is tested.
+    if [[ "${FAKE_GIT_COMMIT_FAIL:-0}" == "1" ]]; then exit 1; fi
+    exit 0 ;;
+  "branch "*)    exit 0 ;;
   *) echo "fake git: unhandled args: $*" >&2; exit 99 ;;
 esac

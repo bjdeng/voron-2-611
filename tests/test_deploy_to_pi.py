@@ -293,10 +293,10 @@ def test_drift_gate_falls_back_to_repo_compare_when_marker_unresolvable():
     assert "not in git history" in r.stderr, _diag(r)
 
 
-def test_drift_gate_falls_back_when_reference_body_empty_after_strip():
+def test_drift_gate_refuses_when_reference_body_empty_after_strip():
     """git show succeeds with content that's ONLY the SAVE_CONFIG marker
     (or is empty). After stripping SAVE_CONFIG, reference_body is empty;
-    fall back to current-repo comparison with a distinct WARN.
+    refuse unless --force (fail-closed).
     """
     marker = "#*# <---------------------- SAVE_CONFIG ---------------------->"
     # Pi has only SAVE_CONFIG (no body) and FAKE_LAST_DEPLOY_PRINTER_CFG
@@ -309,10 +309,9 @@ def test_drift_gate_falls_back_when_reference_body_empty_after_strip():
             "FAKE_LAST_DEPLOY_PRINTER_CFG": only_save_config,
         }
     )
-    # Pi matches repo HEAD → fallback comparison passes.
-    assert "Pi printer.cfg body has drifted" not in r.stderr, _diag(r)
-    # Distinct WARN identifying the empty-reference reason.
-    assert "yielded empty reference body" in r.stderr, _diag(r)
+    # Must refuse — can't verify Pi state when reference body is empty.
+    assert r.returncode == 1, _diag(r)
+    assert "cannot verify Pi state" in r.stderr, _diag(r)
 
 
 # ---------------------------------------------------------------------------
@@ -395,9 +394,9 @@ def test_drift_all_gate_fires_when_pi_has_modified_file(tmp_path):
         ),
     )
     assert r.returncode == 1, _diag(r)
-    assert "Pi has changes the repo doesn't know about" in r.stderr, _diag(r)
+    assert "Pi has uncommitted edits the repo doesn't know about" in r.stderr, _diag(r)
     assert "mmu/base/mmu_parameters.cfg" in r.stderr, _diag(r)
-    assert "/sync-from-pi" in r.stderr, _diag(r)
+    assert "pi-drift-capture-" in r.stderr, _diag(r)
     assert "--force" in r.stderr, _diag(r)
 
 
@@ -427,7 +426,7 @@ def test_drift_all_gate_lists_all_drifted_files(tmp_path):
 
 
 def test_drift_all_gate_bypassed_by_force(fake_log, tmp_path):
-    """--force overrides the drift-all gate; deploy proceeds with a warning."""
+    """--force overrides the drift-all gate; capture happens and deploy proceeds."""
     files = {"mmu/base/mmu_parameters.cfg": "ooze: 0\n"}
     tar_path, _ = _build_marker_tar(tmp_path, files)
     pi_block = "ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00  mmu/base/mmu_parameters.cfg"
@@ -441,40 +440,31 @@ def test_drift_all_gate_bypassed_by_force(fake_log, tmp_path):
         ),
         args=["--yes", "--force"],
     )
-    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
-    assert "--force given, proceeding" in r.stdout, _diag(r)
-    assert "mmu/base/mmu_parameters.cfg" in r.stdout, _diag(r)
-    # Real deploy rsync ran
+    # Capture branch must have been created (--force still captures first)
+    assert "pi-drift-capture-" in r.stderr, _diag(r)
+    assert "--force: proceeding" in r.stderr, _diag(r)
+    # Deploy must have proceeded
+    assert r.returncode in (0, 2, 3, 4), _diag(r)
     log_contents = fake_log.read_text()
     assert "rsync -av --delete" in log_contents, log_contents
 
 
-def test_drift_all_gate_skipped_when_no_marker_on_pi():
-    """No .last-deploy-sha on Pi (first deploy) → drift-all is a no-op."""
-    # FAKE_LAST_DEPLOY_SHA unset → fake_ssh returns empty
-    r = _run(env={"FAKE_PI_PRINTER_CFG": _matching_pi_cfg()})
-    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
-    # No WARN about skipping should fire either, since the function returns
-    # silently on the empty-marker path
-    assert "skipping extended check" not in r.stderr, _diag(r)
-
-
-def test_drift_all_gate_skipped_when_marker_unknown_to_git():
-    """Marker SHA exists on Pi but isn't in local git → WARN + skip."""
+def test_drift_all_refuses_when_marker_unknown_to_git():
+    """Marker SHA exists on Pi but isn't in local git → refuse (fail closed)."""
     r = _run(
         env=_common_drift_env({"FAKE_GIT_MARKER_KNOWN": "0"}),
     )
-    assert "not in git history; skipping extended check" in r.stderr, _diag(r)
-    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
+    assert r.returncode == 1, _diag(r)
+    assert "cannot verify Pi state" in r.stderr, _diag(r)
 
 
-def test_drift_all_gate_skipped_when_git_archive_fails():
-    """git archive fails (corrupt history) → WARN + skip."""
+def test_drift_all_refuses_when_git_archive_fails():
+    """git archive fails (corrupt history) → refuse (fail closed)."""
     r = _run(
         env=_common_drift_env({"FAKE_GIT_ARCHIVE_OK": "0"}),
     )
-    assert "failed to stage marker snapshot" in r.stderr, _diag(r)
-    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
+    assert r.returncode == 1, _diag(r)
+    assert "cannot verify Pi state" in r.stderr, _diag(r)
 
 
 def test_adxl_results_in_rsync_excludes(fake_log):
@@ -996,3 +986,139 @@ def test_smoke_fails_if_first_command_fails_twice(fake_log):
         f"expected 2 gcode/script POSTs (initial + retry), got {gcode_posts}.\n"
         f"log:\n{log}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Fail-closed: can't-verify conditions refuse unless --force
+# ---------------------------------------------------------------------------
+
+
+def test_drift_all_refuses_when_marker_missing(tmp_path):
+    """No .last-deploy-sha on Pi → refuse (fail closed), no rsync."""
+    r = _run(env=_common_drift_env({"FAKE_LAST_DEPLOY_SHA": ""}))
+    assert r.returncode == 1, _diag(r)
+    assert "cannot verify Pi state" in r.stderr, _diag(r)
+
+
+def test_drift_all_marker_missing_proceeds_with_force(tmp_path):
+    """--force overrides the can't-verify refusal."""
+    r = _run(
+        env=_common_drift_env({"FAKE_LAST_DEPLOY_SHA": ""}), args=["--yes", "--force"]
+    )
+    assert "cannot verify Pi state" in r.stderr, _diag(r)
+    assert r.returncode in (0, 2, 3, 4), _diag(r)
+
+
+def test_drift_all_refuses_when_marker_sha_unknown(tmp_path):
+    """Marker SHA not in git history → refuse (was: WARN + fall back)."""
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_LAST_DEPLOY_SHA": "deadbeef",
+                "FAKE_GIT_MARKER_KNOWN": "0",
+            }
+        )
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "cannot verify Pi state" in r.stderr, _diag(r)
+
+
+def test_drift_captures_to_branch_then_aborts(tmp_path, fake_log):
+    """Detected drift, no --force → capture to branch, commit, then abort."""
+    files = {"mmu/base/mmu_parameters.cfg": "x: 0\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = "00" * 32 + "  mmu/base/mmu_parameters.cfg"
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        )
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "Captured" in r.stderr and "pi-drift-capture-" in r.stderr, _diag(r)
+    log = fake_log.read_text()
+    assert "git checkout -b pi-drift-capture-" in log, log
+    assert "scp" in log and "mmu/base/mmu_parameters.cfg" in log, log
+    assert "git commit" in log, log
+
+
+def test_drift_captures_then_proceeds_with_force(tmp_path, fake_log):
+    """Detected drift WITH --force → capture happens AND deploy proceeds."""
+    files = {"mmu/base/mmu_parameters.cfg": "x: 0\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = "00" * 32 + "  mmu/base/mmu_parameters.cfg"
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        ),
+        args=["--yes", "--force"],
+    )
+    log = fake_log.read_text()
+    assert "git checkout -b pi-drift-capture-" in log, log
+    assert r.returncode in (0, 2, 3, 4), _diag(r)
+
+
+def test_deploy_log_written_on_success(tmp_path, fake_log):
+    """A clean deploy appends a 'success' line to the Pi deploy log."""
+    files = {"mmu/base/mmu_parameters.cfg": "x: 0\n"}
+    tar_path, hashes = _build_marker_tar(tmp_path, files)
+    _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": _pi_hash_block(hashes),
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        ),
+        args=["--yes"],
+    )
+    log = fake_log.read_text()
+    assert "deploy-to-pi.log" in log, log
+    assert "success" in log, log
+
+
+def test_deploy_log_written_on_cant_verify_refusal(tmp_path, fake_log):
+    """A fail-closed refusal still records 'refused:cant-verify'."""
+    _run(
+        env=_common_drift_env(
+            {
+                "FAKE_LAST_DEPLOY_SHA": "",
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        )
+    )
+    log = fake_log.read_text()
+    assert "deploy-to-pi.log" in log and "refused:cant-verify" in log, log
+
+
+def test_drift_capture_aborts_when_commit_fails(tmp_path, fake_log):
+    """If committing captured Pi edits fails, abort (exit 2) before any overwrite.
+
+    Even with --force: capture must succeed before the Pi is touched, else the
+    edits would be silently lost. Asserts no rsync ran.
+    """
+    files = {"mmu/base/mmu_parameters.cfg": "x: 0\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = "00" * 32 + "  mmu/base/mmu_parameters.cfg"
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_GIT_COMMIT_FAIL": "1",
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        ),
+        args=["--yes", "--force"],
+    )
+    assert r.returncode == 2, _diag(r)
+    assert "failed to commit captured Pi edits" in r.stderr, _diag(r)
+    log = fake_log.read_text()
+    assert "rsync" not in log, log  # must NOT have proceeded to overwrite

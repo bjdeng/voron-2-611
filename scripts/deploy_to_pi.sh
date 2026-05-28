@@ -14,6 +14,11 @@ DRY_RUN=0
 SMOKE=0
 FORCE=0
 
+# Set at each terminal point; consumed by the deploy log (see log_deploy).
+DEPLOY_RESULT="incomplete"
+DRIFT_OUTCOME="none"
+CAPTURE_BRANCH=""
+
 # Globals populated by setup functions
 LOCAL=""
 SAVE_CONFIG_PI=""
@@ -176,6 +181,20 @@ capture_save_config() {
   fi
 }
 
+cant_verify_or_force() {
+  # Fail-closed guard for the drift gate. $1 = human-readable reason.
+  # With --force: warn and let the caller skip its check. Without: refuse.
+  if [[ "$FORCE" == 1 ]]; then
+    echo "WARN: drift gate cannot verify Pi state ($1); --force given, proceeding." >&2
+    return 0
+  fi
+  echo "ERR: drift gate cannot verify Pi state: $1" >&2
+  echo "Refusing to deploy (fail-closed). Fix the cause, or pass --force to override." >&2
+  DEPLOY_RESULT="refused:cant-verify"
+  log_deploy "refused:cant-verify"
+  exit 1
+}
+
 check_no_pi_drift() {
   # The gate's intent: catch SEMANTIC edits on the Pi (Mainsail changes,
   # manual SSH tweaks) that weren't synced back to git. NOT to block
@@ -185,10 +204,8 @@ check_no_pi_drift() {
   # (recorded in ~/printer_data/config/.last-deploy-sha). Any difference =
   # the Pi has changes the repo doesn't know about → Pi-ahead drift → fail.
   #
-  # Fallback: if the marker is missing (fresh deploy) or its SHA isn't in
-  # git history (corrupt marker, from another repo), fall back to comparing
-  # against current-repo printer.cfg — conservative, may fire on repo-ahead
-  # drift in edge cases.
+  # Fail-closed: if the marker is missing or its SHA isn't in git history,
+  # refuse unless --force.
   #
   # Mainsail saves with trailing whitespace that pre-commit strips here;
   # diff -w -B ignores whitespace-only changes either way.
@@ -202,30 +219,68 @@ check_no_pi_drift() {
   pi_body=$(printf '%s\n' "$pi_full" | sed -E "/$SAVE_CONFIG_MARKER/,\$d")
 
   deploy_marker_raw=$(ssh "$PI_HOST" 'cat ~/printer_data/config/.last-deploy-sha 2>/dev/null || true')
-  if [[ -n "$deploy_marker_raw" ]]; then
-    if reference_body=$(git show "$deploy_marker_raw:config/printer.cfg" 2>/dev/null); then
-      reference_body=$(printf '%s\n' "$reference_body" | sed -E "/$SAVE_CONFIG_MARKER/,\$d")
-      if [[ -n "$reference_body" ]]; then
-        if ! diff -q -w -B <(printf '%s\n' "$pi_body") <(printf '%s\n' "$reference_body") >/dev/null; then
-          echo "ERR: Pi printer.cfg body has drifted from the last-deployed commit ($deploy_marker_raw). Run sync-from-pi to capture changes, then re-run deploy-to-pi." >&2
-          exit 1
-        fi
-        return
-      fi
-      echo "WARN: deploy marker '$deploy_marker_raw' yielded empty reference body after SAVE_CONFIG strip; comparing Pi to current repo." >&2
-    else
-      echo "WARN: deploy marker SHA '$deploy_marker_raw' not in git history; comparing Pi to current repo (may fire on legitimate repo-ahead drift)." >&2
-    fi
+  if [[ -z "$deploy_marker_raw" ]]; then
+    cant_verify_or_force "no deploy marker on Pi (.last-deploy-sha missing)"
+    return 0
   fi
-
-  # Fallback path (no marker / unresolvable marker).
-  if ! diff -q -w -B \
-      <(printf '%s\n' "$pi_body") \
-      <(sed -E "/$SAVE_CONFIG_MARKER/,\$d" "$REPO_ROOT/config/printer.cfg") \
-      >/dev/null; then
-    echo "ERR: Pi printer.cfg body has drifted from origin/main. Run sync-from-pi to capture changes, then re-run deploy-to-pi." >&2
+  if ! reference_body=$(git show "$deploy_marker_raw:config/printer.cfg" 2>/dev/null); then
+    cant_verify_or_force "deploy marker SHA '$deploy_marker_raw' not in git history"
+    return 0
+  fi
+  reference_body=$(printf '%s\n' "$reference_body" | sed -E "/$SAVE_CONFIG_MARKER/,\$d")
+  if [[ -z "$reference_body" ]]; then
+    cant_verify_or_force "marker '$deploy_marker_raw' yielded empty printer.cfg reference"
+    return 0
+  fi
+  if ! diff -q -w -B <(printf '%s\n' "$pi_body") <(printf '%s\n' "$reference_body") >/dev/null; then
+    echo "ERR: Pi printer.cfg body has drifted from the last-deployed commit ($deploy_marker_raw). Run sync-from-pi to capture changes, then re-run deploy-to-pi." >&2
+    DEPLOY_RESULT="refused:pi-drift"
+    log_deploy "refused:pi-drift"
     exit 1
   fi
+}
+
+capture_pi_drift() {
+  # Pull the drifted Pi files into a review branch before any overwrite,
+  # so the Pi-only edits are preserved in git regardless of --force.
+  # $1 = newline/space-separated list of drifted paths (relative to config/).
+  local files="$1" orig_branch f
+  orig_branch=$(git branch --show-current)
+  CAPTURE_BRANCH="pi-drift-capture-$(date -u +%Y%m%dT%H%M%SZ)"
+  if ! git checkout -b "$CAPTURE_BRANCH" >/dev/null 2>&1; then
+    echo "ERR: failed to create capture branch '$CAPTURE_BRANCH'; aborting before any overwrite." >&2
+    DEPLOY_RESULT="failed:capture-branch"
+    exit 2
+  fi
+  # On any failure below, restore the original branch cleanly (force-discard
+  # the partial scp'd files) and delete the stub capture branch, so a failed
+  # capture never strands a dirty tree or proceeds to overwrite the Pi.
+  _abort_capture() {
+    git checkout -f "$orig_branch" >/dev/null 2>&1 || true
+    git branch -D "$CAPTURE_BRANCH" >/dev/null 2>&1 || true
+  }
+  for f in $files; do
+    mkdir -p "$REPO_ROOT/config/$(dirname "$f")"
+    if ! scp -q "${PI_HOST}:~/printer_data/config/$f" "$REPO_ROOT/config/$f"; then
+      echo "ERR: failed to scp '$f' from Pi during capture; aborting before any overwrite." >&2
+      _abort_capture
+      DEPLOY_RESULT="failed:capture-scp"
+      exit 2
+    fi
+    git add "config/$f"
+  done
+  if ! git commit -q -m "capture: Pi-side edits to $(printf '%s ' $files)" >/dev/null; then
+    echo "ERR: failed to commit captured Pi edits; aborting before any overwrite." >&2
+    _abort_capture
+    DEPLOY_RESULT="failed:capture-commit"
+    exit 2
+  fi
+  if ! git checkout "$orig_branch" >/dev/null 2>&1; then
+    echo "ERR: captured to '$CAPTURE_BRANCH' but could not return to '$orig_branch'; aborting." >&2
+    DEPLOY_RESULT="failed:capture-restore"
+    exit 2
+  fi
+  echo "==> Captured Pi-side drift to branch $CAPTURE_BRANCH" >&2
 }
 
 check_no_pi_drift_all_files() {
@@ -250,10 +305,11 @@ check_no_pi_drift_all_files() {
   local marker_sha snapshot_dir drift_lines drift_files
   marker_sha=$(ssh "$PI_HOST" 'cat ~/printer_data/config/.last-deploy-sha 2>/dev/null || true')
   if [[ -z "$marker_sha" ]]; then
+    cant_verify_or_force "no deploy marker on Pi (.last-deploy-sha missing)"
     return 0
   fi
   if ! git rev-parse --quiet --verify "${marker_sha}^{commit}" >/dev/null 2>&1; then
-    echo "WARN: deploy marker SHA '$marker_sha' not in git history; skipping extended check." >&2
+    cant_verify_or_force "deploy marker SHA '$marker_sha' not in git history"
     return 0
   fi
 
@@ -261,11 +317,11 @@ check_no_pi_drift_all_files() {
   # shellcheck disable=SC2064 # snapshot_dir expansion at trap-set time is intentional
   trap "rm -rf '$snapshot_dir'" RETURN
   if ! git archive "$marker_sha" config/ 2>/dev/null | tar -x -C "$snapshot_dir" 2>/dev/null; then
-    echo "WARN: failed to stage marker snapshot (git archive failed); skipping extended check." >&2
+    cant_verify_or_force "git archive of marker snapshot failed"
     return 0
   fi
   if [[ ! -d "$snapshot_dir/config" ]]; then
-    echo "WARN: marker snapshot has no config/ dir; skipping extended check." >&2
+    cant_verify_or_force "marker snapshot has no config/ dir"
     return 0
   fi
 
@@ -282,7 +338,7 @@ check_no_pi_drift_all_files() {
   elif command -v shasum >/dev/null 2>&1; then
     hasher="shasum -a 256"
   else
-    echo "WARN: no sha256sum/shasum available locally; skipping extended check." >&2
+    cant_verify_or_force "no local sha256 tool (sha256sum/shasum)"
     return 0
   fi
 
@@ -327,8 +383,14 @@ check_no_pi_drift_all_files() {
   # shellcheck disable=SC2029 # $prune_expr expands client-side intentionally
   pi_hashes=$(ssh "$PI_HOST" "cd ~/printer_data/config && find . \\( $prune_expr \\) -prune -o -type f -print0 | xargs -0 sha256sum 2>/dev/null | sed -E 's| +\\./| |' | sort" 2>/dev/null)
 
+  # If either enumeration came back empty we can't do a meaningful per-file
+  # comparison, so skip (proceed) rather than refuse. This is NOT a fail-open
+  # hole: the high-value can't-verify cases (missing/unknown marker, git-archive
+  # failure, missing config dir, no hasher) are all caught above and DO fail
+  # closed; and a real Pi-side edit shows up as a hash *mismatch* (handled
+  # below as drift), not as an empty enumeration. Both-empty only happens with
+  # an empty marker snapshot — which can't clobber anything.
   if [[ -z "$snapshot_hashes" || -z "$pi_hashes" ]]; then
-    echo "WARN: could not enumerate hashes on one side; skipping extended check." >&2
     return 0
   fi
 
@@ -346,17 +408,24 @@ check_no_pi_drift_all_files() {
     return 0
   fi
 
+  # Pi-side drift detected. Capture it to a review branch BEFORE any
+  # overwrite — unconditionally, even under --force, so edits are never lost.
+  capture_pi_drift "$drift_files"
+
   if [[ "$FORCE" == 1 ]]; then
-    echo "==> Pi-side drift detected on the following files (--force given, proceeding):"
-    printf '    %s\n' $drift_files
+    DRIFT_OUTCOME="forced:$CAPTURE_BRANCH"
+    echo "==> --force: proceeding; Pi edits preserved on $CAPTURE_BRANCH (will be overwritten on the Pi)." >&2
     return 0
   fi
 
-  echo "ERR: Pi has changes the repo doesn't know about on these files:" >&2
+  DRIFT_OUTCOME="captured:$CAPTURE_BRANCH"
+  DEPLOY_RESULT="refused:pi-drift"
+  echo "ERR: Pi has uncommitted edits the repo doesn't know about:" >&2
   printf '    %s\n' $drift_files >&2
   echo "" >&2
-  echo "Run /sync-from-pi to capture them into the repo, then re-run /deploy-to-pi." >&2
-  echo "Or pass --force to overwrite Pi-side changes (only when you're sure they're wrong)." >&2
+  echo "Captured to branch $CAPTURE_BRANCH. Review/merge it, then re-run /deploy-to-pi." >&2
+  echo "Or pass --force to overwrite the Pi (the capture branch keeps your edits)." >&2
+  log_deploy "refused:pi-drift"
   exit 1
 }
 
@@ -594,6 +663,24 @@ cleanup() {
   rm -f "$SAVE_CONFIG_PI" "$STAGED_PRINTER_CFG"
 }
 
+log_deploy() {
+  # Append one line to the Pi's deploy log. $1 = result string.
+  # Best-effort: never fail the deploy on a logging error.
+  local ts flags line
+  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  flags=""
+  [[ "$YES" == 1 ]] && flags+="yes,"
+  [[ "$FORCE" == 1 ]] && flags+="force,"
+  [[ "$DRY_RUN" == 1 ]] && flags+="dry-run,"
+  [[ "$SMOKE" == 1 ]] && flags+="smoke,"
+  flags="${flags%,}"; flags="${flags:--}"
+  printf -v line '%s\t%s\t%s\t%s\t%s\t%s' \
+    "$ts" "${LOCAL:--}" "$flags" "${RESTART_KIND:-none}" "${DRIFT_OUTCOME:-none}" "$1"
+  # Pipe the line via stdin (not embedded in the remote command) so a value
+  # with shell metacharacters can never break the remote shell.
+  printf '%s\n' "$line" | ssh "$PI_HOST" 'cat >> ~/printer_data/logs/deploy-to-pi.log' 2>/dev/null || true
+}
+
 # ---------------------------------------------------------------------------
 
 main() {
@@ -627,6 +714,7 @@ main() {
     run_post_deploy_smoke
   fi
   cleanup
+  log_deploy "success"
   echo
   echo "==> Deploy complete. Verify printer state in Mainsail."
 }
