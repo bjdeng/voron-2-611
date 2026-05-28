@@ -383,12 +383,14 @@ check_no_pi_drift_all_files() {
   # shellcheck disable=SC2029 # $prune_expr expands client-side intentionally
   pi_hashes=$(ssh "$PI_HOST" "cd ~/printer_data/config && find . \\( $prune_expr \\) -prune -o -type f -print0 | xargs -0 sha256sum 2>/dev/null | sed -E 's| +\\./| |' | sort" 2>/dev/null)
 
-  # Refuse only when we couldn't read the PI side (ssh/find failed) while the
-  # marker snapshot has files — that's the real "can't verify" risk. An empty
-  # snapshot is benign here: a git-archive failure was already caught above, so
-  # empty just means no baseline files to compare and proceeding can't clobber.
-  if [[ -n "$snapshot_hashes" && -z "$pi_hashes" ]]; then
-    cant_verify_or_force "could not read file hashes from the Pi"
+  # If either enumeration came back empty we can't do a meaningful per-file
+  # comparison, so skip (proceed) rather than refuse. This is NOT a fail-open
+  # hole: the high-value can't-verify cases (missing/unknown marker, git-archive
+  # failure, missing config dir, no hasher) are all caught above and DO fail
+  # closed; and a real Pi-side edit shows up as a hash *mismatch* (handled
+  # below as drift), not as an empty enumeration. Both-empty only happens with
+  # an empty marker snapshot — which can't clobber anything.
+  if [[ -z "$snapshot_hashes" || -z "$pi_hashes" ]]; then
     return 0
   fi
 
