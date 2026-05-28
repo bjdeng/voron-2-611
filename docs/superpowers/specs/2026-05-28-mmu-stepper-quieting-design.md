@@ -1,7 +1,7 @@
 # MMU stepper quieting — design
 
 **Date:** 2026-05-28
-**Status:** Phase 1 shipped 2026-05-28 (PR #120); Phase 2 (gear autotune) deferred — see `memory/tuning-log.md`. Acoustic result: modest (only slow homing audibly quieter); gear + servo are the real noise sources.
+**Status:** Phase 1 shipped 2026-05-28 (PR #120). Phase 2 (gear autotune) **CLOSED 2026-05-28 — won't pursue** (see Phase 2 section). Servo noise found hardware-bound (`memory/decisions.md`). Net: Phase 1 was a small free win (quieter slow homing only); the load/unload noise Ben cares about is mechanical (belt/gear/servo slew), which none of the TMC levers can touch.
 **Scope:** quieter Happy-Hare MMU operation, minimal reliability risk, speeds unchanged.
 
 ## Goal
@@ -140,15 +140,30 @@ reversible.
   table (currently missing).
 - Deploy + run the validation protocol above.
 
-## Phase 2 — tmc-autotune on the gear (document + defer)
+## Phase 2 — tmc-autotune on the gear — CLOSED 2026-05-28 (won't pursue)
 
-**Not implemented in this spec.** Recorded here so the path is clear.
+**Decision: not worth pursuing for noise.** `autotune_tmc` only optimizes the
+TMC chopper — i.e. the motor's *electrical* whine. The load/unload noise Ben
+actually hears is **mechanical**: belt/gear-train mesh (Galileo/BMG), bearings,
+and filament friction through the bowden. No TMC register touches mechanical
+noise. The gear runs ~1000 RPM during bowden moves, where mechanical noise
+fully masks any chopper component. The Phase 1 selector A/B is the direct
+precedent: at 200 mm/s, spreadCycle vs stealthChop was inaudible — only the
+slow 60 mm/s homing differed. The gear at higher RPM would behave the same, so
+the electrical sliver autotune could shave is both small and masked. Mechanical
+levers (gear-train condition/lube, belt tension, bowden friction) or lower
+speeds are the real options, and a future INDX retrofit would replace the drive
+entirely — so deep investment here is poor ROI. Confirmed with Ben 2026-05-28;
+the gear motor (`17HS08-1004S` = `omc-17hs08-1004s`) IS in the vendored DB, so
+this is a trivial torque-safe add *if* the electrical whine ever becomes the
+target — but not expected to be audible.
 
-**Goal:** torque-neutral chopper optimization on the gear via
+The original deferred plan is kept below for reference.
+
+**Goal (not pursued):** torque-neutral chopper optimization on the gear via
 `[autotune_tmc stepper_mmu_gear]` with `tuning_goal: performance` (forces
 spreadCycle, so current/mode/torque are preserved; only chopper registers
-are computed from motor specs). This is the only quiet lever left for the
-loud motor that respects minimal-risk.
+are computed from motor specs).
 
 **Prerequisites (the gates keeping this out of Phase 1):**
 1. Phase 1 shipped and validated.

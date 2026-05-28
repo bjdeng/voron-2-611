@@ -14,7 +14,9 @@ Investigated as a follow-on to the MMU stepper quieting work (spec `docs/superpo
 
 **Do NOT set `servo_buzz_gear_on_down: 0` for the speed gain.** The A/B ran with filament *unloaded*, so the buzz's actual job (helping the gear teeth grab the filament) wasn't exercised. Disabling it trades engagement reliability for ~0.5 s/toolchange — off Ben's "minimal risk" line and not where load/unload time is actually spent.
 
-**How to apply:** if MMU servo noise comes up again, it's a hardware question (quieter servo), not config. The remaining *software* MMU-quieting lever is the gear (Phase 2 autotune, deferred — see the spec). Note: a future Bondtech INDX retrofit (long-term plan) would replace this servo/selector mechanism entirely, so don't over-invest in servo hardware.
+**How to apply:** if MMU servo noise comes up again, it's a hardware question (quieter servo), not config. Note: a future Bondtech INDX retrofit (long-term plan) would replace this servo/selector mechanism entirely, so don't over-invest in servo hardware.
+
+**Gear autotune also closed (2026-05-28).** The other candidate MMU-quieting lever — `autotune_tmc` on the gear — was likewise closed as not-worth-it: it only tunes the motor's *electrical* chopper whine, but load/unload noise is **mechanical** (belt/gear mesh, filament friction in the bowden), which no TMC register touches. The Phase 1 selector A/B already showed chopper mode is inaudible at these speeds. **Net conclusion of the whole MMU-quieting effort: the only software win was the selector stealthChop (quieter slow homing); everything else Ben hears is mechanical/hardware.** See spec `docs/superpowers/specs/2026-05-28-mmu-stepper-quieting-design.md`.
 
 ## 2026-05-16 — Phase 2 refactor (Mainsail/HH cleanup)
 
