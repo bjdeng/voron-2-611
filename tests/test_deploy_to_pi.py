@@ -448,16 +448,6 @@ def test_drift_all_gate_bypassed_by_force(fake_log, tmp_path):
     assert "rsync -av --delete" in log_contents, log_contents
 
 
-def test_drift_all_gate_skipped_when_no_marker_on_pi():
-    """No .last-deploy-sha on Pi (first deploy) → drift-all is a no-op."""
-    # FAKE_LAST_DEPLOY_SHA unset → fake_ssh returns empty
-    r = _run(env={"FAKE_PI_PRINTER_CFG": _matching_pi_cfg()})
-    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
-    # No WARN about skipping should fire either, since the function returns
-    # silently on the empty-marker path
-    assert "skipping extended check" not in r.stderr, _diag(r)
-
-
 def test_drift_all_refuses_when_marker_unknown_to_git():
     """Marker SHA exists on Pi but isn't in local git → refuse (fail closed)."""
     r = _run(

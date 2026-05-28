@@ -336,8 +336,12 @@ check_no_pi_drift_all_files() {
   # shellcheck disable=SC2029 # $prune_expr expands client-side intentionally
   pi_hashes=$(ssh "$PI_HOST" "cd ~/printer_data/config && find . \\( $prune_expr \\) -prune -o -type f -print0 | xargs -0 sha256sum 2>/dev/null | sed -E 's| +\\./| |' | sort" 2>/dev/null)
 
+  # Refuse only when we couldn't read the PI side (ssh/find failed) while the
+  # marker snapshot has files — that's the real "can't verify" risk. An empty
+  # snapshot is benign here: a git-archive failure was already caught above, so
+  # empty just means no baseline files to compare and proceeding can't clobber.
   if [[ -n "$snapshot_hashes" && -z "$pi_hashes" ]]; then
-    cant_verify_or_force "could not enumerate file hashes on one side"
+    cant_verify_or_force "could not read file hashes from the Pi"
     return 0
   fi
 
