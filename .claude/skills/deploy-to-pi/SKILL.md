@@ -19,12 +19,13 @@ The skill refuses to deploy if any of these gates fail (it tells you what to fix
 - Pi must be reachable via keyed SSH (`ssh pi@mainsailos.local` works without password).
 - Moonraker must be running on the Pi (default API port 7125). Unreachable Moonraker is a hard fail — the restart step would fail anyway.
 - Printer must be **idle** (`print_stats.state == "standby"`). Not `printing`, `paused`, etc.
-- Pi's `printer.cfg` body (everything above the SAVE_CONFIG marker) must match the last-deployed commit (or `origin/main` as fallback). If they've diverged, run `sync-from-pi` first to capture Pi-side edits.
-- **All other deployed files** (`mmu/base/mmu_parameters.cfg`, `macros/*`, `eddy.cfg`, `toolhead.cfg`, etc.) must match the last-deployed commit on the Pi. Closes [#105](https://github.com/bjdeng/voron-2-611/issues/105). Implementation: stage the last-deployed commit's `config/` via `git archive` to a tmp dir, then `rsync -anci --checksum` against the Pi using the real deploy excludes; any line starting with `>f` = Pi-side drift on that file. The first-deploy case (no marker on Pi) and the unknown-marker case (corrupt `.last-deploy-sha`) both skip this check with a WARN and proceed. Bypass with `--force` when you genuinely want to overwrite Pi-side state (e.g., reverting an experiment without round-tripping through `/sync-from-pi`).
+- Pi's `printer.cfg` body (everything above the SAVE_CONFIG marker) must match the last-deployed commit. If they've diverged, run `sync-from-pi` first to capture Pi-side edits.
+- **All other deployed files** (`mmu/base/mmu_parameters.cfg`, `macros/*`, `eddy.cfg`, `toolhead.cfg`, etc.) must match the last-deployed commit on the Pi. Closes [#105](https://github.com/bjdeng/voron-2-611/issues/105). Implementation: stage the last-deployed commit's `config/` via `git archive`, hash every file locally and on the Pi (sha256), compare by path — any hash mismatch = Pi-side drift on that file.
+- **Drift gate is fail-closed.** If the gate cannot verify Pi state for any reason — missing `.last-deploy-sha` marker (including a genuine first deploy), marker SHA not in git history, `git archive` failure, or failure to read Pi file hashes — the deploy **refuses (exit 1)** with a "cannot verify Pi state" message. There is no first-deploy exception. Pass `--force` to override any of these cases.
 
 ## What it does
 
-1. **Sanity gate**: every pre-flight check above.
+1. **Sanity gate**: every pre-flight check above, including the drift gate. When the drift gate detects Pi-side edits the repo doesn't know about, it **always** scp's those files onto a new local branch named `pi-drift-capture-<UTC-timestamp>` and commits them — unconditionally, even under `--force` — before any overwrite occurs. Without `--force` the deploy then aborts, telling you to review/merge that branch and re-run. With `--force` it proceeds (the Pi is overwritten with the repo's version, but your edits are preserved on the capture branch). Capture failure (branch creation or scp error) is itself a hard abort.
 2. **Pull the Pi's current SAVE_CONFIG block** from `printer.cfg` so we don't overwrite it. SAVE_CONFIG is rewritten by Klipper on every calibration command and represents truth on the printer — the repo's copy is a snapshot. (Use `sync-from-pi` first if you want the repo to absorb the Pi's current SAVE_CONFIG.)
 3. **Construct the deploy file set**: root-level `.cfg/.conf` files, `macros/*`, and `mmu/*` (minus the symlinked entries — see step 4). Explicitly excludes `vendor/`, `tests/`, `scripts/`, `docs/`, `memory/`, `firmware/`, `archive/`, `.github/`, `.claude/`, `Makefile`, `requirements.txt`, `.pre-commit-config.yaml`, `README.md`, `LICENSE`, `CLAUDE.md`, `.env`, `.gitignore`.
 4. **Preserve symlinks on the Pi**: skip `mainsail.cfg`, `timelapse.cfg`, the symlinked entries under `mmu/base/`, and `mmu/optional/client_macros.cfg` + `mmu/optional/mmu_menu.cfg` — editing the repo's dereferenced copies of those would mutate the third-party install dirs on the Pi (`~/mainsail-config/`, `~/Happy-Hare/`, `~/moonraker-timelapse/`). Edits to those files belong in their respective upstream repos.
@@ -35,6 +36,21 @@ The skill refuses to deploy if any of these gates fail (it tells you what to fix
 ## Post-deploy
 
 After the deploy + restart, the skill polls Moonraker (`GET /printer/info`) every second for up to 30 seconds, waiting for `state == "ready"`. If Klipper enters `error`, the skill surfaces the `state_message` and exits non-zero (rc=3). If the timeout elapses without a `ready` state, exits 3 with a pointer at klippy.log.
+
+## Deploy log
+
+Every run (including refused and failed runs) appends one tab-separated line to `~/printer_data/logs/deploy-to-pi.log` on the Pi:
+
+```
+<UTC-timestamp>  <HEAD-sha>  <flags>  <restart-kind>  <drift-outcome>  <result>
+```
+
+- **flags** — comma-separated active flags (`yes`, `force`, `dry-run`, `smoke`); `-` if none.
+- **restart-kind** — `restart`, `firmware_restart`, or `none` (not yet determined).
+- **drift-outcome** — `none` (no drift found), `captured:<branch>` (drift captured, deploy refused), or `forced:<branch>` (drift captured, deploy continued under `--force`).
+- **result** — `success`, `refused:<reason>` (e.g. `refused:pi-drift`, `refused:cant-verify`), or `failed:<stage>` (e.g. `failed:capture-scp`).
+
+The log is world-readable on the Pi and visible in Mainsail's log view. Logging is best-effort — a logging failure never fails the deploy.
 
 ## Layer 6 post-deploy smoke (`--smoke`)
 
@@ -82,7 +98,7 @@ scripts/deploy_to_pi.sh --yes --smoke     # both
 scripts/deploy_to_pi.sh --force           # bypass the all-files drift gate (#105)
 ```
 
-**`--force`** — bypasses the extended drift check (Pi-side edits to files like `mmu_parameters.cfg`). Use only when you specifically want to overwrite Pi-side state with the repo's version (e.g., reverting a Pi-side experiment without round-tripping through `/sync-from-pi`). The script still prints which files would be overwritten before proceeding.
+**`--force`** — overrides the fail-closed drift gate when the gate cannot verify Pi state, and proceeds after drift capture when Pi-side edits are found. In both cases drift capture runs first, so `--force` can **never cause data loss**: Pi-only edits are always committed to a `pi-drift-capture-<timestamp>` branch before anything is overwritten. Use when you want to push the repo's version onto the Pi without first round-tripping through `/sync-from-pi` (e.g., reverting a Pi-side experiment), or on a genuine first deploy where no marker exists yet.
 
 Or, from a Claude session, invoke the skill explicitly: `/deploy-to-pi`.
 
