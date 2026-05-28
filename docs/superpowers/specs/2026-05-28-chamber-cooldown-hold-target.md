@@ -36,10 +36,17 @@ then turn everything off.**
   steady circulation through the under-bed carbon filter, not a 100% spike.
 - After the 5-minute `G4` (`print_end_cooldown_seconds`), `OFF` zeroes the
   chamber → BedFans stop.
-- `chamber_control_loop` and `_CHAMBER_CONTROL.user_target` are **removed**.
-  The `[heater_generic chamber]` PID is the entire chamber controller.
-  `SET_CHAMBER_TARGET` just clamps to `[0, chamber_max_target]` and sets the
-  heater directly for all targets.
+- `chamber_control_loop` is **removed**. The `[heater_generic chamber]` PID is
+  the entire chamber controller. `SET_CHAMBER_TARGET` just clamps to
+  `[0, chamber_max_target]` and sets the heater directly for all targets.
+- `_CHAMBER_CONTROL` shrinks to a **single `active_target` variable**:
+  `SET_CHAMBER_TARGET` records each clamped setpoint there. Nothing polls it —
+  it exists only so the cancel path can restore the target (below).
+- **Cancel parity.** On a mid-print `CANCEL_PRINT`, upstream zeroes all heaters
+  (incl. the chamber) before `_CANCEL_PRINT_HOOK` runs, so the hook re-asserts
+  `active_target` before `MMU_END`. Cancel then gets the same cooldown VOC
+  circulation as a normal `PRINT_END`; `_PRINT_END_CLEANUP`'s `OFF` zeroes it.
+  If `active_target` is 0 (PLA) the re-assert is skipped.
 - **PLA/PETG** (print target 0) get no cooldown circulation — correct (see
   proxy below). The PID is simply off whenever the target is 0.
 
@@ -72,12 +79,15 @@ remains the real overtemp guard.
 
 ## Files
 
-- `config/macros/chamber_control.cfg` — remove `chamber_control_loop` +
-  `_CHAMBER_CONTROL`; simplify `SET_CHAMBER_TARGET`.
+- `config/macros/chamber_control.cfg` — remove `chamber_control_loop`; shrink
+  `_CHAMBER_CONTROL` to `active_target`; `SET_CHAMBER_TARGET` clamps, records
+  `active_target`, sets the heater.
 - `config/macros/print_start.cfg` — `PRINT_END` holds the chamber target
   (bed+hotend off only); fix stale loop/VOC comments in steps 4/6/9/13.
-- `config/macros/macros.cfg` — `OFF` drops the loop-cancel + user_target lines.
-- `config/client_hooks.cfg` — `_CANCEL_PRINT_HOOK` chamber sync simplified.
+- `config/macros/macros.cfg` — `OFF` drops the loop-cancel line; resets
+  `active_target` to 0.
+- `config/client_hooks.cfg` — `_CANCEL_PRINT_HOOK` re-asserts `active_target`
+  for cooldown VOC parity with PRINT_END.
 - `config/macros/bedfans.cfg` — chamber routing comment updated.
 - `config/macros/_user_variables.cfg` — remove `voc_baseline_temp`,
   `voc_cooldown_threshold`.
