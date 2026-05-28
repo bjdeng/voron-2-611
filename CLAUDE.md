@@ -234,7 +234,7 @@ Full pyramid table, what each layer catches, ALLOWLIST coupling rules, .dict reg
 
 These have already tripped someone up — flag them when relevant.
 
-- **MMU `config/mmu/base/*.cfg` are symlinks on the Pi** to `~/Happy-Hare/config/base/*`. In this repo they're files (dereferenced by `tar -h` on pull). If you push this repo back to the Pi without preserving symlinks, you'll break Happy-Hare's update model.
+- **MMU `config/mmu/base/*.cfg` are *mostly* symlinks on the Pi** to `~/Happy-Hare/config/base/*` (two real-file exceptions: `mmu_parameters.cfg` and `mmu_hardware.cfg` — see below). In this repo they're files (dereferenced by `tar -h` on pull). If you push this repo back to the Pi without preserving symlinks, you'll break Happy-Hare's update model.
 - **`config/mainsail.cfg` is a symlink** to `~/mainsail-config/mainsail.cfg`. Same caveat. (The upstream repo ships both `client.cfg` and `mainsail.cfg` as identical copies; the symlink target is the latter — verify with `ls -l` on the Pi.)
 - **`config/timelapse.cfg` is a symlink** to `~/moonraker-timelapse/klipper_macro/timelapse.cfg`. Same caveat. Component installed 2026-05-18 (closes [#26](https://github.com/bjdeng/voron-2-611/issues/26)); usage is opt-in per print.
 - **`mmu/addons/mmu_erec_cutter*.cfg` and `mmu_eject_buttons*.cfg` are NOT included** from `printer.cfg` but the files remain (likely symlinked from `~/Happy-Hare/config/addons/`). Don't move them to `archive/` — HH install would recreate them. Toolhead cutter is **Filametrix**, not EREC. Eject buttons are not installed.
@@ -250,6 +250,7 @@ These have already tripped someone up — flag them when relevant.
 - **The 2-pass `QUAD_GANTRY_LEVEL` override is load-bearing and will stay that way.** A/B motor weight sags the rear when motors are off; a single-pass QGL would fail. First pass uses `METHOD=default` (descend) because `horizontal_move_z=8` is outside the eddy cal range, which is hardcoded to Z≤4 mm in Klipper (see Klipper gotchas). Second pass uses `METHOD=scan` at `horizontal_move_z=2`. See `memory/qgl-two-pass-intentional.md`. ([#22](https://github.com/bjdeng/voron-2-611/issues/22) closed won't-fix 2026-05-19.)
 - **`config/mainsail.cfg` is "read-only" upstream.** mainsail-config's file header says don't edit. We've been pulling Ben's customizations through `[gcode_macro _CLIENT_VARIABLE]` instead. The refactor spec (Phase 2) plans to break the symlink and slim the file locally — when that happens, future mainsail-config updates won't auto-apply.
 - **`config/mmu/base/mmu_parameters.cfg` is NOT a Pi-side symlink** — unique exception among the otherwise-symlinked `mmu/base/*.cfg` files. HH copies it from its template at install time so users can hold per-printer customizations (Ben's toolhead distances live here). Verified 2026-05-19 by `ls -l ~/printer_data/config/mmu/base/mmu_parameters.cfg` showing a different inode from `~/Happy-Hare/config/base/mmu_parameters.cfg`. Edit on the Pi at `~/printer_data/config/mmu/base/mmu_parameters.cfg` directly, then RESTART + `/sync-from-pi` to update the repo snapshot.
+- **`config/mmu/base/mmu_hardware.cfg` is also NOT a Pi-side symlink** — like `mmu_parameters.cfg`, HH writes it as a real file at install and never wholesale-overwrites it on update (`install.sh`'s `upgrade_mmu_hardware()` only applies targeted `sed` migrations). So TMC edits (`run_current`, `stealthchop_threshold`, etc.) deploy via the normal repo→PR→`/deploy-to-pi` flow and survive HH updates. Verified 2026-05-28 by `ls -l` on the Pi showing a regular file. (Corrects an earlier claim that all `mmu/base/*.cfg` are symlinked.) One residual risk: a *fresh* HH reinstall would regenerate this file from template, silently reverting the edit — `/sync-from-pi` drift detection is the backstop.
 - **`BLOBIFIER` requires `QUAD_GANTRY_LEVEL` first.** The macro parks at the purge tower at specific bed coords and won't proceed if the gantry isn't trammed — fails with a quiet `Purging...` log line but no actual extrusion. Also: a manual `G1 E30` after `MMU_LOAD` won't push filament out the nozzle — `toolhead_sensor_to_nozzle` is ~85 mm on this build, so the load ends with filament at the sensor but ~85 mm short of the nozzle. Use `BLOBIFIER PURGE_LENGTH=200` (or higher) to actually purge through the melt zone.
 
 ---
@@ -346,6 +347,7 @@ Reference docs are pinned to versions matching the Pi. Always grep these first b
 | `vendor/mainsail-config` | mainsail-crew/mainsail-config | `ff3869a` (v1.2.1-1) | Source of `mainsail.cfg` (the actual symlink target on the Pi) |
 | `vendor/moonraker` | Arksine/moonraker | `1ed102e` (v0.10.0-19) | Moonraker `docs/` |
 | `vendor/btt-docs` | bigtreetech/docs | shallow `main` | BTT hardware reference (sparse: text only, no images) |
+| `vendor/klipper-tmc-autotune` | andrewmcgr/klipper_tmc_autotune | `57eda7f` (v0.2.0-363) | TMC autotune extension — source of `[autotune_tmc]` blocks + `motor_database.cfg` (used by `config/motion.cfg`) |
 
 Bump deliberately with `git submodule update --remote vendor/<name>` — pin updates are PRs, not auto-pulled in CI.
 
@@ -422,5 +424,5 @@ voron-2-611/
 │   ├── hardware-changes.md
 │   └── decisions.md
 │
-└── vendor/                      # 7 git submodules — see ## Vendor / submodules
+└── vendor/                      # 8 git submodules — see ## Vendor / submodules
 ```
