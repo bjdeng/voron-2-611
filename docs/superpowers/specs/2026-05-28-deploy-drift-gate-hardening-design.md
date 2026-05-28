@@ -38,10 +38,11 @@ The design brings the script to the safety bar of established tools, not a novel
 
 ### 1. Fail closed on can't-verify
 
-Every `return 0` skip path in `check_no_pi_drift_all_files` (and the marker-resolution skips in `check_no_pi_drift`) becomes a **refusal** unless `--force` is given. Concretely, when the gate cannot verify Pi state — marker missing, marker SHA not in git history, `git archive` failure, no `config/` in snapshot, no local hasher, or hash-enumeration failure on either side — it prints a specific reason and `exit 1`.
+The high-value `return 0` skip paths in `check_no_pi_drift_all_files` (and the marker-resolution skips in `check_no_pi_drift`) become a **refusal** unless `--force` is given. Concretely, when the gate cannot verify Pi state — marker missing, marker SHA not in git history, `git archive` failure, no `config/` in snapshot, or no local hasher — it prints a specific reason and `exit 1`.
 
 - `--force` overrides each (proceeds with a logged warning).
 - **No first-deploy exception**: a genuine first-ever deploy (no marker) also refuses and requires a one-time `--force`. Chosen for simplicity and strictness — a missing marker is indistinguishable from a lost/corrupt one, so both fail closed.
+- **Exception — empty enumeration is NOT a refusal.** The "either hash enumeration came back empty" case stays a skip (proceed), unlike the others. It's the lowest-value conversion (a real Pi-side edit surfaces as a hash *mismatch* → drift, §2, not as empty output) and the highest-friction (empty `pi_hashes` is the normal state for tooling/tests that aren't exercising drift). Refusing on it gave no incident protection — the original clobber was a missing-marker + undetected-drift failure, both still caught — and broke the test harness across platforms (`git archive` snapshot emptiness varies). So this one branch reverts to skip-on-either-empty.
 
 ### 2. Auto-capture Pi drift before overwrite
 
