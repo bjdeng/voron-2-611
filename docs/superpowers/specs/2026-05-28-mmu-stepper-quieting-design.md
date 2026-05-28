@@ -1,7 +1,7 @@
 # MMU stepper quieting — design
 
 **Date:** 2026-05-28
-**Status:** approved (brainstorming)
+**Status:** Phase 1 shipped 2026-05-28 (PR #120); Phase 2 (gear autotune) deferred — see `memory/tuning-log.md`. Acoustic result: modest (only slow homing audibly quieter); gear + servo are the real noise sources.
 **Scope:** quieter Happy-Hare MMU operation, minimal reliability risk, speeds unchanged.
 
 ## Goal

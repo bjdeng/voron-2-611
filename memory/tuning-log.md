@@ -4,6 +4,22 @@ Running record of calibration runs (input shaper, PID, pressure advance, flow, E
 
 ---
 
+## 2026-05-28 — MMU selector stealthChop (#120)
+
+PR [#120](https://github.com/bjdeng/voron-2-611/pull/120). `stepper_mmu_selector` `stealthchop_threshold` 0 → 250 in `config/mmu/base/mmu_hardware.cfg`. Goal: quieter selector gate-change moves at zero torque cost (selector carries no filament load, homes on the physical `mmu_sel_home` microswitch). Gear left in spreadCycle. Spec + plan: `docs/superpowers/{specs,plans}/2026-05-28-mmu-*`.
+
+**Driver state confirmed** (`DUMP_TMC STEPPER=stepper_mmu_selector`): `TPWMTHRS=38` (computed from the 250 mm/s threshold; was 0/disabled), `GCONF` `en_spreadcycle` clear, `DRV_STATUS stealth=1`. No `otpw`.
+
+**Reliability — PASS.** 24 full gate-change moves (`MMU_SELECT` sweep across all 6 gates ×4) + 2 bracketing `MMU_HOME` at the configured `selector_move_speed: 200` / `selector_max_accel: 1200`. 0 non-ok responses, 0 missed steps, no selector-recovery / "did not home" / out-of-range lines in klippy.log. Final `is_homed=True`.
+
+**Acoustic — modest.** Real-time A/B via `SET_TMC_FIELD STEPPER=stepper_mmu_selector FIELD=en_spreadcycle VALUE=1` (spreadCycle/old) vs `VALUE=0` (stealthChop/new), same 6-gate sweep back-to-back. Ben's verdict: little audible difference on the 200 mm/s gate traverses; **only the slow homing move (`selector_homing_speed: 60`, ~90 RPM) was noticeably quieter.** Consistent with stealthChop helping most at low speed/load. Kept — small, free, zero-risk win.
+
+**Takeaway for Phase 2:** the selector traverse is a *minor* MMU noise source. Load/unload noise is dominated by the gear (filament through the bowden at ~1000 RPM) and the servo — neither touched here. Gear autotune (Phase 2, deferred pending motor ID) and the servo are the higher-impact levers if more quieting is wanted.
+
+**Restart class:** RESTART (TMC UART register, not FIRMWARE_RESTART). The deploy used `firmware_restart` anyway via `deploy_to_pi.sh`'s conservative heuristic (`mmu/` is outside the soft-restart allowlist); the MCU watchdog recovered cleanly and Klipper was `ready` in ~7s.
+
+---
+
 ## 2026-05-20 — CRT chopper tuning, all 6 mainboard steppers (#98 Session 1)
 
 PR [#99](https://github.com/bjdeng/voron-2-611/pull/99) + [#100](https://github.com/bjdeng/voron-2-611/pull/100). First successful empirical TMC2209 chopper tune via MRX8024/chopper-resonance-tuner. LIS2DW toolhead-mounted. All 6 mainboard steppers (X, Y, Z, Z1, Z2, Z3) on motor `omc-17hs19-2004s1` (17HS19-2004S1 hardware).
