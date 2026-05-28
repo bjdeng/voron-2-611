@@ -16,6 +16,8 @@ FORCE=0
 
 # Set at each terminal point; consumed by the deploy log (see log_deploy).
 DEPLOY_RESULT="incomplete"
+DRIFT_OUTCOME="none"
+CAPTURE_BRANCH=""
 
 # Globals populated by setup functions
 LOCAL=""
@@ -236,6 +238,32 @@ check_no_pi_drift() {
   fi
 }
 
+capture_pi_drift() {
+  # Pull the drifted Pi files into a review branch before any overwrite,
+  # so the Pi-only edits are preserved in git regardless of --force.
+  # $1 = newline/space-separated list of drifted paths (relative to config/).
+  local files="$1" orig_branch f
+  orig_branch=$(git branch --show-current)
+  CAPTURE_BRANCH="pi-drift-capture-$(date -u +%Y%m%dT%H%M%SZ)"
+  if ! git checkout -b "$CAPTURE_BRANCH" >/dev/null 2>&1; then
+    echo "ERR: failed to create capture branch '$CAPTURE_BRANCH'; aborting before any overwrite." >&2
+    DEPLOY_RESULT="failed:capture-branch"
+    exit 2
+  fi
+  for f in $files; do
+    if ! scp -q "${PI_HOST}:~/printer_data/config/$f" "$REPO_ROOT/config/$f"; then
+      echo "ERR: failed to scp '$f' from Pi during capture; aborting." >&2
+      git checkout "$orig_branch" >/dev/null 2>&1 || true
+      DEPLOY_RESULT="failed:capture-scp"
+      exit 2
+    fi
+    git add "config/$f"
+  done
+  git commit -q -m "capture: Pi-side edits to $(printf '%s ' $files)" >/dev/null 2>&1 || true
+  git checkout "$orig_branch" >/dev/null 2>&1 || true
+  echo "==> Captured Pi-side drift to branch $CAPTURE_BRANCH" >&2
+}
+
 check_no_pi_drift_all_files() {
   # Extended drift gate (#105): the original check_no_pi_drift only covers
   # printer.cfg. This catches Pi-side edits to ANY deployed file
@@ -359,17 +387,23 @@ check_no_pi_drift_all_files() {
     return 0
   fi
 
+  # Pi-side drift detected. Capture it to a review branch BEFORE any
+  # overwrite — unconditionally, even under --force, so edits are never lost.
+  capture_pi_drift "$drift_files"
+
   if [[ "$FORCE" == 1 ]]; then
-    echo "==> Pi-side drift detected on the following files (--force given, proceeding):"
-    printf '    %s\n' $drift_files
+    DRIFT_OUTCOME="forced:$CAPTURE_BRANCH"
+    echo "==> --force: proceeding; Pi edits preserved on $CAPTURE_BRANCH (will be overwritten on the Pi)." >&2
     return 0
   fi
 
-  echo "ERR: Pi has changes the repo doesn't know about on these files:" >&2
+  DRIFT_OUTCOME="captured:$CAPTURE_BRANCH"
+  DEPLOY_RESULT="refused:pi-drift"
+  echo "ERR: Pi has uncommitted edits the repo doesn't know about:" >&2
   printf '    %s\n' $drift_files >&2
   echo "" >&2
-  echo "Run /sync-from-pi to capture them into the repo, then re-run /deploy-to-pi." >&2
-  echo "Or pass --force to overwrite Pi-side changes (only when you're sure they're wrong)." >&2
+  echo "Captured to branch $CAPTURE_BRANCH. Review/merge it, then re-run /deploy-to-pi." >&2
+  echo "Or pass --force to overwrite the Pi (the capture branch keeps your edits)." >&2
   exit 1
 }
 

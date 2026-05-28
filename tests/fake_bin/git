@@ -60,5 +60,8 @@ case "$1 $2" in
     # Diagnostic call from check_tree_clean after detecting a dirty tree.
     # Real git would print the dirty files; the fake just needs to not blow up.
     exit 0 ;;
+  "checkout "*)  exit 0 ;;
+  "add "*)       exit 0 ;;
+  "commit "*)    exit 0 ;;
   *) echo "fake git: unhandled args: $*" >&2; exit 99 ;;
 esac

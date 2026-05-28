@@ -394,9 +394,9 @@ def test_drift_all_gate_fires_when_pi_has_modified_file(tmp_path):
         ),
     )
     assert r.returncode == 1, _diag(r)
-    assert "Pi has changes the repo doesn't know about" in r.stderr, _diag(r)
+    assert "Pi has uncommitted edits the repo doesn't know about" in r.stderr, _diag(r)
     assert "mmu/base/mmu_parameters.cfg" in r.stderr, _diag(r)
-    assert "/sync-from-pi" in r.stderr, _diag(r)
+    assert "pi-drift-capture-" in r.stderr, _diag(r)
     assert "--force" in r.stderr, _diag(r)
 
 
@@ -426,7 +426,7 @@ def test_drift_all_gate_lists_all_drifted_files(tmp_path):
 
 
 def test_drift_all_gate_bypassed_by_force(fake_log, tmp_path):
-    """--force overrides the drift-all gate; deploy proceeds with a warning."""
+    """--force overrides the drift-all gate; capture happens and deploy proceeds."""
     files = {"mmu/base/mmu_parameters.cfg": "ooze: 0\n"}
     tar_path, _ = _build_marker_tar(tmp_path, files)
     pi_block = "ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00  mmu/base/mmu_parameters.cfg"
@@ -440,10 +440,11 @@ def test_drift_all_gate_bypassed_by_force(fake_log, tmp_path):
         ),
         args=["--yes", "--force"],
     )
-    assert "Pi has changes the repo doesn't know about" not in r.stderr, _diag(r)
-    assert "--force given, proceeding" in r.stdout, _diag(r)
-    assert "mmu/base/mmu_parameters.cfg" in r.stdout, _diag(r)
-    # Real deploy rsync ran
+    # Capture branch must have been created (--force still captures first)
+    assert "pi-drift-capture-" in r.stderr, _diag(r)
+    assert "--force: proceeding" in r.stderr, _diag(r)
+    # Deploy must have proceeded
+    assert r.returncode in (0, 2, 3, 4), _diag(r)
     log_contents = fake_log.read_text()
     assert "rsync -av --delete" in log_contents, log_contents
 
@@ -1020,3 +1021,45 @@ def test_drift_all_refuses_when_marker_sha_unknown(tmp_path):
     )
     assert r.returncode == 1, _diag(r)
     assert "cannot verify Pi state" in r.stderr, _diag(r)
+
+
+def test_drift_captures_to_branch_then_aborts(tmp_path, fake_log):
+    """Detected drift, no --force → capture to branch, commit, then abort."""
+    files = {"mmu/base/mmu_parameters.cfg": "x: 0\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = "00" * 32 + "  mmu/base/mmu_parameters.cfg"
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        )
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "Captured" in r.stderr and "pi-drift-capture-" in r.stderr, _diag(r)
+    log = fake_log.read_text()
+    assert "git checkout -b pi-drift-capture-" in log, log
+    assert "scp" in log and "mmu/base/mmu_parameters.cfg" in log, log
+    assert "git commit" in log, log
+
+
+def test_drift_captures_then_proceeds_with_force(tmp_path, fake_log):
+    """Detected drift WITH --force → capture happens AND deploy proceeds."""
+    files = {"mmu/base/mmu_parameters.cfg": "x: 0\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = "00" * 32 + "  mmu/base/mmu_parameters.cfg"
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        ),
+        args=["--yes", "--force"],
+    )
+    log = fake_log.read_text()
+    assert "git checkout -b pi-drift-capture-" in log, log
+    assert r.returncode in (0, 2, 3, 4), _diag(r)
