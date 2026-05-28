@@ -95,8 +95,7 @@ Every active macro and where it lives. One-liner per macro; deeper context belon
 - `COMPUTE_FLOW_MULTIPLIER` — accepts caliper measurement, prints the new multiplier
 - `_FLOW_CALIB_VARIABLES` — internal state holder
 
-### `config/macros/calibrate_pa.cfg` — Frix_x v1.2
-- `PRESSURE_ADVANCE_CALIBRATION` — bands of varying PA at different speeds
+(Pressure-advance calibration is slicer-side — OrcaSlicer Adaptive PA, see [`docs/slicer-templates/orcaslicer.md`](docs/slicer-templates/orcaslicer.md). The Frix_x `calibrate_pa.cfg` macro was removed 2026-05-28 per the [#31](https://github.com/bjdeng/voron-2-611/issues/31) survey — redundant with OrcaSlicer's pattern method.)
 
 ### `config/macros/lcd_tweaks.cfg` — Mini12864 customization
 - `[display_glyph chamber]` / `[display_glyph voron]` — custom icons
@@ -394,8 +393,7 @@ voron-2-611/
 │   │   ├── bedfans.cfg          # BedFans with M140/M190 overrides
 │   │   ├── lcd_tweaks.cfg       # Mini12864 display group (renders "V2.611")
 │   │   ├── test_speed.cfg
-│   │   ├── calibrate_flow.cfg   # Frix_x
-│   │   └── calibrate_pa.cfg     # Frix_x
+│   │   └── calibrate_flow.cfg   # Frix_x (PA calibration is slicer-side — OrcaSlicer Adaptive PA)
 │   ├── mmu/                     # Happy Hare configs (base/optional/addons)
 │   │   ├── base/                # symlinks-on-pi to ~/Happy-Hare/config/base/
 │   │   ├── optional/            # symlinks-on-pi to ~/Happy-Hare/config/optional/

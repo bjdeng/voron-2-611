@@ -10,6 +10,8 @@
 
 **Files separate future issues for:** first-layer squish CV (same hardware), nozzle-view die-swell flow pre-screen (same hardware, Phase 5+ stretch), DIY laser-triangulation lidar upgrade (different hardware, indefinite future).
 
+> **Update 2026-05-28 (per [#31](https://github.com/bjdeng/voron-2-611/issues/31)):** The `PRESSURE_ADVANCE_CALIBRATION` Frix_x macro (`config/macros/calibrate_pa.cfg`) referenced below has been **removed** — it was redundant with OrcaSlicer's Pattern PA test, and Adaptive PA supersedes a single static value for this high-flow setup. When this spec is implemented, the PA leg should drive OrcaSlicer's PA workflow or rebuild a minimal banded test from git history, not assume the macro exists. The flow macro (`FLOW_MULTIPLIER_CALIBRATION` / `calibrate_flow.cfg`) is unaffected and still present.
+
 ---
 
 ## 1. Problem
