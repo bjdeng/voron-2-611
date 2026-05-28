@@ -1063,3 +1063,36 @@ def test_drift_captures_then_proceeds_with_force(tmp_path, fake_log):
     log = fake_log.read_text()
     assert "git checkout -b pi-drift-capture-" in log, log
     assert r.returncode in (0, 2, 3, 4), _diag(r)
+
+
+def test_deploy_log_written_on_success(tmp_path, fake_log):
+    """A clean deploy appends a 'success' line to the Pi deploy log."""
+    files = {"mmu/base/mmu_parameters.cfg": "x: 0\n"}
+    tar_path, hashes = _build_marker_tar(tmp_path, files)
+    _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": _pi_hash_block(hashes),
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        ),
+        args=["--yes"],
+    )
+    log = fake_log.read_text()
+    assert "deploy-to-pi.log" in log, log
+    assert "success" in log, log
+
+
+def test_deploy_log_written_on_cant_verify_refusal(tmp_path, fake_log):
+    """A fail-closed refusal still records 'refused:cant-verify'."""
+    _run(
+        env=_common_drift_env(
+            {
+                "FAKE_LAST_DEPLOY_SHA": "",
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        )
+    )
+    log = fake_log.read_text()
+    assert "deploy-to-pi.log" in log and "refused:cant-verify" in log, log

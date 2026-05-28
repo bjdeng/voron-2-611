@@ -191,6 +191,7 @@ cant_verify_or_force() {
   echo "ERR: drift gate cannot verify Pi state: $1" >&2
   echo "Refusing to deploy (fail-closed). Fix the cause, or pass --force to override." >&2
   DEPLOY_RESULT="refused:cant-verify"
+  log_deploy "refused:cant-verify"
   exit 1
 }
 
@@ -234,6 +235,7 @@ check_no_pi_drift() {
   if ! diff -q -w -B <(printf '%s\n' "$pi_body") <(printf '%s\n' "$reference_body") >/dev/null; then
     echo "ERR: Pi printer.cfg body has drifted from the last-deployed commit ($deploy_marker_raw). Run sync-from-pi to capture changes, then re-run deploy-to-pi." >&2
     DEPLOY_RESULT="refused:pi-drift"
+    log_deploy "refused:pi-drift"
     exit 1
   fi
 }
@@ -404,6 +406,7 @@ check_no_pi_drift_all_files() {
   echo "" >&2
   echo "Captured to branch $CAPTURE_BRANCH. Review/merge it, then re-run /deploy-to-pi." >&2
   echo "Or pass --force to overwrite the Pi (the capture branch keeps your edits)." >&2
+  log_deploy "refused:pi-drift"
   exit 1
 }
 
@@ -641,6 +644,23 @@ cleanup() {
   rm -f "$SAVE_CONFIG_PI" "$STAGED_PRINTER_CFG"
 }
 
+log_deploy() {
+  # Append one line to the Pi's deploy log. $1 = result string.
+  # Best-effort: never fail the deploy on a logging error.
+  local ts flags line
+  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  flags=""
+  [[ "$YES" == 1 ]] && flags+="yes,"
+  [[ "$FORCE" == 1 ]] && flags+="force,"
+  [[ "$DRY_RUN" == 1 ]] && flags+="dry-run,"
+  [[ "$SMOKE" == 1 ]] && flags+="smoke,"
+  flags="${flags%,}"; flags="${flags:--}"
+  printf -v line '%s\t%s\t%s\t%s\t%s\t%s' \
+    "$ts" "${LOCAL:--}" "$flags" "${RESTART_KIND:-none}" "${DRIFT_OUTCOME:-none}" "$1"
+  # shellcheck disable=SC2029 # $line intentionally expands on the client side
+  ssh "$PI_HOST" "printf '%s\n' '$line' >> ~/printer_data/logs/deploy-to-pi.log" 2>/dev/null || true
+}
+
 # ---------------------------------------------------------------------------
 
 main() {
@@ -674,6 +694,7 @@ main() {
     run_post_deploy_smoke
   fi
   cleanup
+  log_deploy "success"
   echo
   echo "==> Deploy complete. Verify printer state in Mainsail."
 }
