@@ -4,6 +4,18 @@ Why things are the way they are. Use this to capture context that won't be obvio
 
 ---
 
+## 2026-05-28 — MMU servo noise is hardware-bound (no software fix)
+
+Investigated as a follow-on to the MMU stepper quieting work (spec `docs/superpowers/specs/2026-05-28-mmu-stepper-quieting-design.md`). Ben reported the MMU servo is loud.
+
+**Finding: the loud part is the SAVOX SH0255MG's own slew, not anything software-tunable.** Live A/B on 2026-05-28: 3 servo engagements with the gear buzz (`servo_buzz_gear_on_down: 1`) vs 3 with it disabled (`MMU_TEST_CONFIG SERVO_BUZZ_GEAR_ON_DOWN=0`). Ben's verdict: **identical volume**; the no-buzz set was only *faster* (skips the gear jiggle + dwell), not quieter.
+
+**Software levers ruled out:** `servo_buzz_gear_on_down` (gear ±0.8 mm jiggle on engagement — aids tooth bite), `servo_duration`/`servo_dwell` (PWM burst/settle timing). None touch the slew sound. Klipper just commands a target angle; HH drives the servo from Python (`mmu_selector.py` `servo_up/down/move` call `servo.set_position` directly), so there's no clean way to ramp the angle gently — and a fast digital servo would snap between ramp steps anyway. **Real lever = a quieter servo (hardware swap).**
+
+**Do NOT set `servo_buzz_gear_on_down: 0` for the speed gain.** The A/B ran with filament *unloaded*, so the buzz's actual job (helping the gear teeth grab the filament) wasn't exercised. Disabling it trades engagement reliability for ~0.5 s/toolchange — off Ben's "minimal risk" line and not where load/unload time is actually spent.
+
+**How to apply:** if MMU servo noise comes up again, it's a hardware question (quieter servo), not config. The remaining *software* MMU-quieting lever is the gear (Phase 2 autotune, deferred — see the spec). Note: a future Bondtech INDX retrofit (long-term plan) would replace this servo/selector mechanism entirely, so don't over-invest in servo hardware.
+
 ## 2026-05-16 — Phase 2 refactor (Mainsail/HH cleanup)
 
 ### Mainsail config slim — defer PAUSE/RESUME/CANCEL_PRINT to upstream
