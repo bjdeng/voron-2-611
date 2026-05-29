@@ -112,3 +112,15 @@ def test_set_bad_format_errors(tmp_path):
     r = run("--set", "nozzle_temperature", "--file", str(path), env=env)
     assert r.returncode == 1, _diag(r)
     assert "KEY=VALUE" in r.stderr, _diag(r)
+
+
+def test_set_refused_when_orca_running(tmp_path):
+    path = _copy_fixture(tmp_path)
+    env = _fake_pgrep(tmp_path, found=True)  # simulate OrcaSlicer running
+    r = run("--set", "nozzle_temperature=205", "--file", str(path), env=env)
+    assert r.returncode == 3, _diag(r)
+    assert "OrcaSlicer is running" in r.stderr, _diag(r)
+    # file unchanged
+    import json as _j
+
+    assert _j.loads(path.read_text())["nozzle_temperature"] == ["210"], "must not edit"
