@@ -53,7 +53,7 @@ Verify with `--get` before and after to show the diff.
    ```
    FLOW_MULTIPLIER_CALIBRATION EXTRUSION_MULTIPLIER=<current_ratio>
    ```
-4. Ben prints the thin-wall test shell and measures it with calipers (target wall thickness = 2 × nozzle diameter = 0.80 mm for 0.4 mm nozzle).
+4. Ben prints the thin-wall test shell and measures the wall with calipers. Don't aim for a fixed number — the macro prints its own `THEORIC SHELL THICKNESS` (it depends on the perimeter count, default 2), and `COMPUTE_FLOW_MULTIPLIER` compares your measured value against that theoretical one to derive the new ratio. Just record what the calipers read.
 5. Run the compute macro:
    ```
    COMPUTE_FLOW_MULTIPLIER MEASURED_THICKNESS=<caliper_reading>
