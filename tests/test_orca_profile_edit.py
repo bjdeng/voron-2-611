@@ -1,5 +1,6 @@
 """Integration tests for scripts/orca_profile_edit.py."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -84,9 +85,7 @@ def test_set_preserves_array_container(tmp_path):
     env = _fake_pgrep(tmp_path, found=False)
     r = run("--set", "nozzle_temperature=205", "--file", str(path), env=env)
     assert r.returncode == 0, _diag(r)
-    import json as _j
-
-    data = _j.loads(path.read_text())
+    data = json.loads(path.read_text())
     assert data["nozzle_temperature"] == ["205"], data
     # untouched keys preserved
     assert data["filament_flow_ratio"] == ["0.95"], data
@@ -99,9 +98,7 @@ def test_set_writes_backup(tmp_path):
     assert r.returncode == 0, _diag(r)
     bak = path.with_suffix(".json.bak")
     assert bak.is_file(), "expected .bak file"
-    import json as _j
-
-    assert _j.loads(bak.read_text())["filament_flow_ratio"] == [
+    assert json.loads(bak.read_text())["filament_flow_ratio"] == [
         "0.95"
     ], "bak holds old value"
 
@@ -121,6 +118,6 @@ def test_set_refused_when_orca_running(tmp_path):
     assert r.returncode == 3, _diag(r)
     assert "OrcaSlicer is running" in r.stderr, _diag(r)
     # file unchanged
-    import json as _j
-
-    assert _j.loads(path.read_text())["nozzle_temperature"] == ["210"], "must not edit"
+    assert json.loads(path.read_text())["nozzle_temperature"] == [
+        "210"
+    ], "must not edit"
