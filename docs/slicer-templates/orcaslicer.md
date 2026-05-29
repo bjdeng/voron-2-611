@@ -254,8 +254,8 @@ Tracked in [#79](https://github.com/bjdeng/voron-2-611/issues/79) — a planned 
 
 1. Pick the existing brand profile in OrcaSlicer (NOT `Generic @System` — that bypasses your calibration)
 2. Run temp tower in OrcaSlicer Calibration menu → update `nozzle_temperature` / `_initial_layer`
-3. Run flow Pass 1 + Pass 2 → update `filament_flow_ratio`
-4. Run `PRESSURE_ADVANCE_CALIBRATION` (Frix_x macro) → update `pressure_advance`
+3. Run flow Pass 1 + Pass 2 → update `filament_flow_ratio`. (For an objective cross-check, run the `FLOW_MULTIPLIER_CALIBRATION` Klipper macro instead — caliper-measured shell thickness, more precise than Orca's visual pass.)
+4. Run **Pressure Advance** in OrcaSlicer Calibration menu (Pattern method — it's the Ellis pattern test; pick the direct-drive variant in the DDE/Bowden dialog) → update `pressure_advance`. *Optional upgrade:* OrcaSlicer **Adaptive PA** builds a PA-vs-(flow × acceleration) model that you paste into the filament profile — worth it for this high-flow Galileo G2E / CoreXY setup, but note it's still a configured calibration (run the cal, set `enable_pressure_advance` + the adaptive-model fields per profile), not an automatic/live feature. (The old Frix_x `PRESSURE_ADVANCE_CALIBRATION` macro was removed 2026-05-28 — redundant with Orca's pattern test; see [#31](https://github.com/bjdeng/voron-2-611/issues/31).)
 5. Run Max Volumetric Speed → confirm `filament_max_volumetric_speed` (should be at or below the per-material default)
 
 Anomaly currently flagged (kept as-is pending re-cal): **`Inland PLA+.json: filament_flow_ratio=1.1`** — unusually high; verify via flow Pass 2.
