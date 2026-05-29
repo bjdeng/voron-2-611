@@ -38,3 +38,22 @@ def test_find_missing_errors():
     r = run("--find", "No Such Filament")
     assert r.returncode == 2, _diag(r)
     assert "not found" in r.stderr, _diag(r)
+
+
+def test_get_scalar_from_array_value():
+    r = run("--get", "nozzle_temperature", "--profile", "Inland PLA")
+    assert r.returncode == 0, _diag(r)
+    assert r.stdout.strip() == "210", _diag(r)
+
+
+def test_get_via_file():
+    path = ORCA_DIR / "000" / "filament" / "Inland PLA.json"
+    r = run("--get", "filament_flow_ratio", "--file", str(path))
+    assert r.returncode == 0, _diag(r)
+    assert r.stdout.strip() == "0.95", _diag(r)
+
+
+def test_get_missing_key_errors():
+    r = run("--get", "no_such_key", "--profile", "Inland PLA")
+    assert r.returncode == 2, _diag(r)
+    assert "key not found" in r.stderr, _diag(r)

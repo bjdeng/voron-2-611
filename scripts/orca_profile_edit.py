@@ -26,6 +26,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -56,6 +57,32 @@ def find_profile(name: str) -> Path:
     return matches[0]
 
 
+def resolve_target(args) -> Path:
+    if args.file:
+        p = Path(args.file)
+        if not p.is_file():
+            sys.stderr.write(f"file not found: {p}\n")
+            sys.exit(2)
+        return p
+    return find_profile(args.profile)
+
+
+def load(p: Path) -> dict:
+    return json.loads(p.read_text())
+
+
+def scalar(val):
+    return (val[0] if val else "") if isinstance(val, list) else val
+
+
+def do_get(p: Path, key: str) -> None:
+    data = load(p)
+    if key not in data:
+        sys.stderr.write(f"key not found: {key}\n")
+        sys.exit(2)
+    print(scalar(data[key]))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Read/edit OrcaSlicer filament profile scalars"
@@ -71,8 +98,20 @@ def main() -> None:
         print(find_profile(args.find))
         return
 
-    sys.stderr.write("nothing to do: pass --find, --get, or --set\n")
-    sys.exit(1)
+    if not (args.get or args.set):
+        sys.stderr.write("nothing to do: pass --find, --get, or --set\n")
+        sys.exit(1)
+    if args.file and args.profile:
+        sys.stderr.write("use only one of --file / --profile\n")
+        sys.exit(1)
+    if not (args.file or args.profile):
+        sys.stderr.write("--get/--set require --file or --profile\n")
+        sys.exit(1)
+
+    target = resolve_target(args)
+
+    if args.get:
+        do_get(target, args.get)
 
 
 if __name__ == "__main__":
