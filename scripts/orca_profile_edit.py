@@ -28,7 +28,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 DEFAULT_ORCA_DIR = (
@@ -83,6 +86,44 @@ def do_get(p: Path, key: str) -> None:
     print(scalar(data[key]))
 
 
+def is_orca_running() -> bool:
+    try:
+        r = subprocess.run(
+            ["pgrep", "-i", "orcaslicer"], capture_output=True, text=True
+        )
+        return r.returncode == 0
+    except FileNotFoundError:
+        return False
+
+
+def do_set(p: Path, key: str, value: str) -> None:
+    if is_orca_running():
+        sys.stderr.write("refused: OrcaSlicer is running; quit it first\n")
+        sys.exit(3)
+    data = load(p)
+    old = data.get(key)
+    data[key] = [value] if isinstance(old, list) else value
+    backup = p.with_suffix(p.suffix + ".bak")
+    shutil.copy2(p, backup)
+    fd, tmp = tempfile.mkstemp(dir=str(p.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+            f.write("\n")
+        os.replace(tmp, p)
+    except Exception:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+    try:
+        json.loads(p.read_text())
+    except json.JSONDecodeError:
+        shutil.copy2(backup, p)
+        sys.stderr.write("write failed: result did not re-parse; restored from .bak\n")
+        sys.exit(4)
+    print(f"{key}: {scalar(old)!r} -> {value!r}  ({p})")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Read/edit OrcaSlicer filament profile scalars"
@@ -112,6 +153,13 @@ def main() -> None:
 
     if args.get:
         do_get(target, args.get)
+
+    if args.set:
+        if "=" not in args.set:
+            sys.stderr.write("--set must be KEY=VALUE\n")
+            sys.exit(1)
+        key, _, value = args.set.partition("=")
+        do_set(target, key, value)
 
 
 if __name__ == "__main__":
