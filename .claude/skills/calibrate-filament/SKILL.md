@@ -74,10 +74,10 @@ OrcaSlicer's Adaptive PA calibration builds a flow × acceleration grid model fo
 4. **Guided paste** — the Adaptive PA model field is a structured blob that the helper does not edit directly. Guide Ben to:
    - Open the filament profile in OrcaSlicer's UI.
    - Paste the model into the Adaptive PA field.
-   - Enable pressure advance (`enable_pressure_advance = 1`).
-   - Set the fallback/median PA value in `filament_pa_flowrate` or equivalent scalar.
+   - Enable pressure advance (`enable_pressure_advance = 1`) and adaptive PA (`adaptive_pressure_advance = 1`).
+   - Set the fallback/median PA value in the `pressure_advance` scalar (used when the adaptive model can't interpolate).
 
-   The helper can write the scalar fallback PA value if it is exposed as a simple field, but the model paste must be done manually in the OrcaSlicer UI.
+   The helper can write the `pressure_advance` scalar fallback (`--set pressure_advance=<value>`), but the adaptive-model paste must be done manually in the OrcaSlicer UI.
 
 ### Close-out
 
