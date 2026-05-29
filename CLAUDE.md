@@ -331,6 +331,8 @@ Browsing the full label view in GitHub is the authoritative way to see what's op
 
 **After every merge to `main`:** run `/deploy-to-pi` to sync the Pi. The skill refuses if CI isn't green, the printer is busy, or the Pi has drift; it tells you what to do next. See [`.claude/skills/deploy-to-pi/SKILL.md`](.claude/skills/deploy-to-pi/SKILL.md) for the full contract (gates, flags, exit codes).
 
+**Filament calibration:** `/calibrate-filament` walks temp → flow → Adaptive PA for one filament (brand+material), writes scalars into the OrcaSlicer profile via `scripts/orca_profile_edit.py`, and logs to `memory/filaments/`. Spec: [`docs/superpowers/specs/2026-05-28-calibrate-filament-skill-design.md`](docs/superpowers/specs/2026-05-28-calibrate-filament-skill-design.md). Never auto-commits or deploys.
+
 ---
 
 ## Vendor / submodules

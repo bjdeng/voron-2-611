@@ -250,7 +250,7 @@ All deletions are preserved in `docs/orcaslicer-archive/2026-05-19-pre-rewrite/`
 
 ## Calibration workflow (per spool)
 
-Tracked in [#79](https://github.com/bjdeng/voron-2-611/issues/79) — a planned skill that walks through temp → flow → PA per spool with logging. Until that ships, manual workflow:
+Use the **`/calibrate-filament`** skill (`.claude/skills/calibrate-filament/`) — it walks this cascade interactively and logs results to `memory/filaments/`. The manual steps below are what it automates / the fallback if you run it by hand:
 
 1. Pick the existing brand profile in OrcaSlicer (NOT `Generic @System` — that bypasses your calibration)
 2. Run temp tower in OrcaSlicer Calibration menu → update `nozzle_temperature` / `_initial_layer`
