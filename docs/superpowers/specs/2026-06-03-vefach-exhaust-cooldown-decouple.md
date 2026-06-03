@@ -201,6 +201,18 @@ no exhaust, identical to today.
 kinematic, or sensor-type changes; the `[fan_generic chamber_exhaust]` section
 (`z:P2.7`) already exists.
 
+## Follow-up (out of scope here)
+
+- **Interruptible cooldown.** Today the cooldown is a *blocking* `G4` in
+  `_PRINT_END_CLEANUP`, so the printer is held "busy" for the full dwell — a
+  cancel right after print start still makes you wait out the whole cooldown
+  before you can do anything. The fix is to make the cooldown non-blocking
+  (schedule `OFF` + exhaust-stop via a `[delayed_gcode]`, like the existing
+  `DELAYED_OFF`, so the printer returns to idle immediately and a new print or a
+  manual `OFF` can abort the pending cooldown). This restructures the cleanup
+  control-flow (and the `in_cleanup` re-entry guard), so it's its own
+  issue/PR, not folded in here.
+
 ## Out of scope
 
 - Temperature-threshold or VOC-sensor exhaust control (revisit only if a VOC
