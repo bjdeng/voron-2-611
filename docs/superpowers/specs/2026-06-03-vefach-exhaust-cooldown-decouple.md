@@ -210,8 +210,9 @@ kinematic, or sensor-type changes; the `[fan_generic chamber_exhaust]` section
   (schedule `OFF` + exhaust-stop via a `[delayed_gcode]`, like the existing
   `DELAYED_OFF`, so the printer returns to idle immediately and a new print or a
   manual `OFF` can abort the pending cooldown). This restructures the cleanup
-  control-flow (and the `in_cleanup` re-entry guard), so it's its own
-  issue/PR, not folded in here.
+  control-flow (and the `in_cleanup` re-entry guard), so it's its own issue/PR
+  ([#126](https://github.com/bjdeng/voron-2-611/issues/126)), not folded in here.
+  (Predates this work — it's a property of the blocking dwell itself.)
 
 ## Out of scope
 
