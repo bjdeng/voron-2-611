@@ -4,6 +4,18 @@ Running record of calibration runs (input shaper, PID, pressure advance, flow, E
 
 ---
 
+## 2026-06-03 — extruder heater swap + PID recal (#125)
+
+Original **24 V 40 W** extruder cartridge failed **open-circuit** ~36 min into an ASA print (`1_hepa_ASA_2h58m.gcode`). Diagnosed from klippy.log: PWM pegged at 100% with a smooth, monotonic ~0.8 °C/s thermal decay (237 → 220 °C) while melt load was trivial (volumetric flow ~1.5 mm³/s median, ~13 max; part fan off) → `verify_heater` "not heating at expected rate" shutdown. Healthy baseline earlier in the same print held 240 °C at ~40% PWM, confirming the cartridge degraded mid-print rather than the printer being driven too fast. Confirmed dead by reheat test (zero thermal response). Not a comms/USB or thermistor fault — EBB comms clean, thermistor readings sane.
+
+**Fix:** new **24 V 40 W** cartridge installed on EBB HE0 (`heater_pin: EBB:gpio7`), `PID_CALIBRATE HEATER=extruder` re-run + `SAVE_CONFIG`. Replaces the stale hotend PID (`Kp=23.507, Ki=1.059, Kd=130.460`) from the 2026-05-13 snapshot.
+
+**⚠️ New PID values live in the Pi's SAVE_CONFIG block only** — repo snapshot in `config/printer.cfg` is stale until `/sync-from-pi` is run. Record the recalibrated `Kp/Ki/Kd` here once synced.
+
+Follow-up: [#125](https://github.com/bjdeng/voron-2-611/issues/125) — upgrade to 24 V 50 W for higher volumetric flow once tuning + filament calibration is complete. Hardware spec: [`docs/hardware.md`](../docs/hardware.md) (Toolhead → heater cartridge).
+
+---
+
 ## 2026-05-28 — MMU selector stealthChop (#120)
 
 PR [#120](https://github.com/bjdeng/voron-2-611/pull/120). `stepper_mmu_selector` `stealthchop_threshold` 0 → 250 in `config/mmu/base/mmu_hardware.cfg`. Goal: quieter selector gate-change moves at zero torque cost (selector carries no filament load, homes on the physical `mmu_sel_home` microswitch). Gear left in spreadCycle. Spec + plan: `docs/superpowers/{specs,plans}/2026-05-28-mmu-*`.
