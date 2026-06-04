@@ -174,6 +174,45 @@ def test_aborts_when_printer_paused():
     assert "printer is not idle" in r.stderr.lower(), _diag(r)
 
 
+def test_allows_deploy_when_print_complete(fake_log):
+    """Klipper holds 'complete' after a normal print (it never auto-returns to
+    'standby'), so the idle gate must treat it as deployable, not busy. A clean
+    dry-run must reach rc=0 without the idle gate firing."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "FAKE_PRINT_STATS_JSON": '{"result":{"status":{"print_stats":{"state":"complete"}}}}',
+    }
+    r = _run(env=env, args=["--dry-run"])
+    assert r.returncode == 0, _diag(r)
+    assert "printer is not idle" not in r.stderr.lower(), _diag(r)
+
+
+def test_allows_deploy_when_print_cancelled(fake_log):
+    """A cancelled print is likewise a terminal/idle state, not busy."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "FAKE_PRINT_STATS_JSON": '{"result":{"status":{"print_stats":{"state":"cancelled"}}}}',
+    }
+    r = _run(env=env, args=["--dry-run"])
+    assert r.returncode == 0, _diag(r)
+    assert "printer is not idle" not in r.stderr.lower(), _diag(r)
+
+
+def test_allows_deploy_when_print_error(fake_log):
+    """A Klipper print 'error' state is deployable on purpose: pushing a config
+    fix + restart is a common reason to deploy out of an errored state."""
+    env = {
+        "FAKE_PI_PRINTER_CFG": _matching_pi_cfg(),
+        "FAKE_LOG_DIR": str(fake_log),
+        "FAKE_PRINT_STATS_JSON": '{"result":{"status":{"print_stats":{"state":"error"}}}}',
+    }
+    r = _run(env=env, args=["--dry-run"])
+    assert r.returncode == 0, _diag(r)
+    assert "printer is not idle" not in r.stderr.lower(), _diag(r)
+
+
 def test_aborts_when_print_stats_malformed():
     """Moonraker returns JSON without the expected key path -- defensive fallback."""
     r = _run(env={"FAKE_PRINT_STATS_JSON": '{"result":{"status":{}}}'})
