@@ -165,10 +165,18 @@ check_printer_idle() {
   state=$(printf '%s' "$resp" | python3 -c \
     "import json,sys; d=json.load(sys.stdin); print(d['result']['status']['print_stats']['state'])" \
     2>/dev/null) || { echo "ERR: could not parse print_stats response from Moonraker. Is Klippy running?" >&2; exit 1; }
-  if [[ "$state" != "standby" ]]; then
-    echo "ERR: printer is not idle (state=$state). Deploy aborted; wait for print to finish or cancel it." >&2
-    exit 1
-  fi
+  # Only an active or paused print is "busy". Klipper holds the last print's
+  # terminal state (complete / cancelled / error) until the next print or a
+  # SDCARD_RESET_FILE — it never auto-returns to "standby" — so requiring
+  # "standby" would block every deploy after a normal print until the operator
+  # manually cleared it. complete / cancelled / error / standby are all safe to
+  # deploy (the deploy restarts Klipper anyway); only printing / paused block.
+  case "$state" in
+    printing|paused)
+      echo "ERR: printer is not idle (state=$state). Deploy aborted; wait for print to finish or cancel it." >&2
+      exit 1
+      ;;
+  esac
 }
 
 capture_save_config() {
