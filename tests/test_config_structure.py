@@ -26,13 +26,16 @@ def _cfg_files() -> list[Path]:
 
     Excludes:
     - config/archive/ — historical configs not in active use
-    - config/mmu/base/, mmu/optional/, mmu/addons/ — symlinked from Happy Hare
-      install. Editing these requires HH-side changes; structural checks here
-      would catch HH issues we don't own.
+    - config/mmu/ — Happy Hare v4 owns the whole tree: base/*.cfg are generated
+      by its installer from the Kconfig fragment, macros/ and optional/ are
+      symlinks into ~/Happy-Hare. Structural checks here would catch HH issues
+      we don't own. (Matched by path, not part name — config/macros/ is ours.)
     """
-    excluded_path_parts = {"archive", "base", "optional", "addons"}
+    excluded_dirs = (CONFIG_DIR / "archive", CONFIG_DIR / "mmu")
     return [
-        p for p in CONFIG_DIR.rglob("*.cfg") if not (set(p.parts) & excluded_path_parts)
+        p
+        for p in CONFIG_DIR.rglob("*.cfg")
+        if not any(p.is_relative_to(d) for d in excluded_dirs)
     ]
 
 

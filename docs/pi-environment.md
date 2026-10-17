@@ -2,19 +2,24 @@
 
 Ben's note: *"on the machine some updates to klipper, happy hare and others occasionally require running ./setup.sh in their home directories and klipper configs rely on other scripts on the machine sometimes."* The config tree alone is not the whole story — this doc inventories the Pi-side state that this repo's configs depend on.
 
-## Repos installed on the Pi (as of 2026-05-13)
+## Repos installed on the Pi (as of 2026-05-13; Klipper / Happy-Hare / Moonraker / TMC autotune updated 2026-10-17)
+
+OS: **MainsailOS 1.0.0 (Debian 11 bullseye, EOL 2026-08-31)**, kernel 6.1.21-v8+, Raspberry Pi 4 Model B Rev 1.2. System `apt` updates need the bullseye-security line pointed at `archive.debian.org` (see CLAUDE.md known quirks); reflash planned.
 
 | Path | Version | Upstream | Notes |
 |---|---|---|---|
-| `~/klipper` | `v0.13.0-649-g4767a8ed` (master) | Klipper3d/klipper | **Has uncommitted local files** from `eddy-ng/install.sh` and `Happy-Hare/install.sh` (symlinks into `klippy/extras/`). |
-| `~/Happy-Hare` | `v3.4.2-22-ga880ac0a` | moggieuk/Happy-Hare | Has `install.sh`. Owns `~/printer_data/config/mmu/base/*` (those files in this repo are dereferenced copies of symlinks). |
+| `~/klipper` | `v0.13.0-800-g9cb99754` (master) | Klipper3d/klipper | **Has uncommitted local files** from `Happy-Hare/install.sh`, `klipper_tmc_autotune`, ShakeTune, `gcode_shell_command` (symlinks into `klippy/extras/`). MCU firmware is older (SKRs + EASY-BRD -375, EBB -688, eddy -649). |
+| `~/Happy-Hare` | `v4.1.0-16-gf96cd374` (`main`) | moggieuk/Happy-Hare | v4 since 2026-10-17. Has `install.sh` (Kconfig installer). Generates `~/printer_data/config/mmu/base/*` from `mmu/hh-v4.fragment`; `mmu/macros/*` + `mmu/optional/*` are symlinks into this dir. v3 backup at `~/printer_data/config/mmu.V3/`. |
 | `~/eddy-ng` | `v0.1-73-gc7ca62e` | vvuk/eddy-ng | Has `install.sh`. **Migrated off to native `[probe_eddy_current]` in PR #17, 2026-05-15.** Install dir retained for rollback; eventual cleanup TBD. |
-| `~/moonraker` | `v0.10.0-19-g1ed102e` | Arksine/moonraker | Standard. |
+| `~/moonraker` | `v0.11.0-3-g9e676eb` | Arksine/moonraker | Standard. |
+| `~/klipper_tmc_autotune` | `v0.2.0-385-gb6c7cfa` | andrewmcgr/klipper_tmc_autotune | Symlinked into `klippy/extras/` (relative links — survived the Klipper bump). |
+| `~/usb-rca-monitor` | (local script) | — | `usb-rca-monitor.service` (root): passive USB incident recorder for the toolhead hub 1-1.4 → `~/printer_data/logs/usb-rca/incident-*`. **Not in this repo** — copy it in before any reflash. |
+| `~/backups/` | — | — | `config-20261017-hhv3-pre-v4.tgz` + `mmu-symlinks-…tgz`: full config snapshot taken right before the HH v4 install. |
 | `~/moonraker-timelapse` | `v0.0.1-143-gc7fff11` | mainsail-crew/moonraker-timelapse | Installed via `make install` 2026-05-18 (closes #26). Opt-in per print; needs webcam (#27). |
 | `~/mainsail` | (web release) | mainsail-crew/mainsail | Static UI files served by nginx. |
 | `~/mainsail-config` | `v1.2.1-1-gff3869a` | mainsail-crew/mainsail-config | Owns `mainsail.cfg` (the actual symlink target — `client.cfg` in the same dir is an identical copy, unused by us). |
 | `~/kiauh` | `v6.0.6` | dw-0/kiauh | Klipper installer/manager (interactive helper). |
-| `~/crowsnest` | `v4.2.0-1-gcf936da` | mainsail-crew/crowsnest | Webcam stack. Daemon runs even though webcam is unplugged. |
+| `~/crowsnest` | `v4.2.0-1-gcf936da` | mainsail-crew/crowsnest | Webcam stack. Webcam (HP HD 5210) is plugged in again as of 2026-08 at the latest. |
 | `~/sonar` | `v0.2.0-1-g0d1d7c8` | mainsail-crew/sonar | Network keepalive. Daemon runs. |
 | `~/katapult` | `v0.0.1-64-g3e23332` | Arksine/katapult | MCU bootloader for safe re-flashing. |
 | `~/BOSSA` | (present) | shumatech/BOSSA | SAM-BA flasher, likely used to flash the EASY-BRD SAMD21. |
@@ -32,7 +37,7 @@ Running: `klipper`, `klipper_mcu`, `moonraker`, `nginx`, `sonar`, plus the OS-le
 ## Install scripts that may need re-running after upgrades
 
 - `~/eddy-ng/install.sh` — after any `~/klipper` update that might break the symlinks into `klippy/extras/`
-- `~/Happy-Hare/install.sh` — same, for the `klippy/extras/mmu/` and `klippy/extras/mmu_*` files
+- `~/Happy-Hare/install.sh` — same, for the `klippy/extras/mmu/` and `klippy/extras/mmu_*` files. **Also after every Happy-Hare pull** (Moonraker's update manager tracks `main`) — v4 needs its installer to rebuild configs/links. Non-interactive: `./install.sh -y -z -s ~/printer_data/config/mmu/hh-v4.fragment`.
 
 ## Moonraker update_manager
 

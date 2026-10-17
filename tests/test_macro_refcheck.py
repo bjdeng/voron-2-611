@@ -116,7 +116,7 @@ def test_real_repo_passes():
         ]
         + sorted(glob.glob("config/macros/*.cfg"))
         + sorted(glob.glob("config/mmu/base/*.cfg"))
-        + sorted(glob.glob("config/mmu/addons/*.cfg"))
+        + sorted(glob.glob("config/mmu/macros/*.cfg"))
         + sorted(glob.glob("config/mmu/optional/*.cfg"))
     )
     assert any(

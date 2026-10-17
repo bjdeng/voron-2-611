@@ -6,6 +6,15 @@ Symptoms encountered, root cause when found, and the fix that worked. Newest at 
 
 ## Open
 
+### Toolhead USB hub drops → "Lost communication with MCU 'EBB'/'eddy'" (recurring since 2026-08-17)
+- **Symptom:** Klipper emergency-shuts down with `Lost communication with MCU 'EBB'` (or `'eddy'`), including when completely idle (heaters off, no motion).
+- **Kernel signature:** a burst of `usb 1-1.4: clear tt 1 (90x1) error -71` (EPROTO) within ~20 ms, then `usb 1-1.4: USB disconnect` of the **hub itself**, re-enumerating ~250 ms later. 1-1.4 is the EBB SB2209's onboard FE1.1s hub (`1a40:0101`); eddy = 1-1.4.3, EBB = 1-1.4.4, so both MCUs drop together. Often a second clean (no `-71`) hub disconnect follows 14–16 s later.
+- **Ruled out (2026-10-17):** the EBB board (swapped 2026-06, drops persisted in Aug + Oct); Pi power (`vcgencmd get_throttled` = `0x0` throughout); Pi CPU load; `klipper-mcu-watchdog` (logged no rebinds — `recover_once` returns early when all MCUs are present); `usb-rca-monitor` (read-only); USB autosuspend (`runtime_status=active`); cable flex from motion (drops happen idle).
+- **Key observation:** drops only occur **while Klipper is talking to the toolhead MCUs**. With Klipper down (HH v4 import failure, 21:10–21:51 BST) there were zero drops in ~45 min; within seconds of Klipper reconnecting (21:51:18) the hub dropped again. Interval with Klipper connected: ~2–10 min. EBB_NTC ~36–39 °C at drop time (rises ~8 °C after cold power-on — weak, unproven correlation).
+- **Tonight's drops (BST):** 20:50:01 (+20:52:02), 20:59:52 (+21:00:08), 21:05:26 (+21:05:40), 21:51:18 (during Klipper connect — also triggered the HH v4 `mmu_buffer` startup race, see CLAUDE.md quirks), 21:57:38.
+- **Remaining suspects, test in order (one change at a time, 30 min with Klipper `ready`):** (1) unplug HP HD 5210 webcam on Pi port 1-1.2; (2) reseat/inspect + wiggle-test XT30 2+2 USB cable both ends and adapter-board USB cable; (3) move adapter board to another Pi port; (4) run eddy direct to the Pi to unload the EBB hub; (5) replace the XT30 USB cable.
+- **Evidence:** `usb-rca-monitor.service` on the Pi (`/home/pi/usb-rca-monitor/usb_rca_monitor.py`, **not in this repo**) writes per-incident captures (kernel log, usbmon, power, `lsusb -t`) to `~/printer_data/logs/usb-rca/incident-*` — readable over Moonraker at `/server/files/logs/usb-rca/...`. Live watch used: `sudo journalctl -k -f` filtered to `usb 1-1\.[34]:` hub-level events.
+
 ### moonraker-timelapse — never functional
 - **Symptom:** Ben has never gotten timelapse to record/produce video.
 - **Status:** unconfirmed root cause. Could be ffmpeg config, camera path, frame-trigger, or upstream bug.
@@ -15,6 +24,7 @@ Symptoms encountered, root cause when found, and the fix that worked. Newest at 
 ### Webcam timing issues
 - **Symptom:** webcam streaming was interfering with print timing.
 - **Mitigation:** Ben unplugged the webcam. Crowsnest + Sonar services still run with nothing to serve.
+- **Update 2026-10-17:** the webcam (HP HD 5210, `03f0:cf07`, Pi hub port 1-1.2) is plugged back in and streaming — present in every USB-RCA capture since 2026-08-17. Now a suspect in the toolhead USB hub drops above.
 - **Plan:** re-enable after `eddy-ng` → native Klipper Eddy migration (the suspicion is the eddy-ng polling loop conflicts with the webcam pipeline).
 
 ### CI klippy-smoke job is disabled
