@@ -9,7 +9,7 @@ OS: **MainsailOS 1.0.0 (Debian 11 bullseye, EOL 2026-08-31)**, kernel 6.1.21-v8+
 | Path | Version | Upstream | Notes |
 |---|---|---|---|
 | `~/klipper` | `v0.13.0-800-g9cb99754` (master) | Klipper3d/klipper | **Has uncommitted local files** from `Happy-Hare/install.sh`, `klipper_tmc_autotune`, ShakeTune, `gcode_shell_command` (symlinks into `klippy/extras/`). MCU firmware is older (SKRs + EASY-BRD -375, EBB -688, eddy -649). |
-| `~/Happy-Hare` | `v4.1.0-16-gf96cd374` (`main`) | moggieuk/Happy-Hare | v4 since 2026-10-17. Has `install.sh` (Kconfig installer). Generates `~/printer_data/config/mmu/base/*` from `mmu/hh-v4.fragment`; `mmu/macros/*` + `mmu/optional/*` are symlinks into this dir. v3 backup at `~/printer_data/config/mmu.V3/`. |
+| `~/Happy-Hare` | `v4.1.0-16-gf96cd374` (`main`) | moggieuk/Happy-Hare | v4 since 2026-10-17. Has `install.sh` (Kconfig installer). Generates `~/printer_data/config/mmu/base/*` from `mmu/.mmu_config`; `mmu/macros/*` + `mmu/optional/*` are symlinks into this dir. v3 backup at `~/printer_data/config/mmu.V3/`. |
 | `~/eddy-ng` | `v0.1-73-gc7ca62e` | vvuk/eddy-ng | Has `install.sh`. **Migrated off to native `[probe_eddy_current]` in PR #17, 2026-05-15.** Install dir retained for rollback; eventual cleanup TBD. |
 | `~/moonraker` | `v0.11.0-3-g9e676eb` | Arksine/moonraker | Standard. |
 | `~/klipper_tmc_autotune` | `v0.2.0-385-gb6c7cfa` | andrewmcgr/klipper_tmc_autotune | Symlinked into `klippy/extras/` (relative links — survived the Klipper bump). |
@@ -37,7 +37,7 @@ Running: `klipper`, `klipper_mcu`, `moonraker`, `nginx`, `sonar`, plus the OS-le
 ## Install scripts that may need re-running after upgrades
 
 - `~/eddy-ng/install.sh` — after any `~/klipper` update that might break the symlinks into `klippy/extras/`
-- `~/Happy-Hare/install.sh` — same, for the `klippy/extras/mmu/` and `klippy/extras/mmu_*` files. **Also after every Happy-Hare pull** (Moonraker's update manager tracks `main`) — v4 needs its installer to rebuild configs/links. Non-interactive: `./install.sh -y -z -s ~/printer_data/config/mmu/hh-v4.fragment`.
+- `~/Happy-Hare/install.sh` — same, for the `klippy/extras/mmu/` and `klippy/extras/mmu_*` files. **Also after every Happy-Hare pull** (Moonraker's update manager tracks `main`) — v4 needs its installer to rebuild configs/links. Non-interactive + replace mode — see CLAUDE.md MMU section (a bare `./install.sh` refresh ignores Kconfig edits).
 
 ## Moonraker update_manager
 

@@ -484,8 +484,9 @@ build_rsync_excludes() {
   #   mmu.V3/              — Happy Hare v3→v4 upgrade backup of the whole v3
   #                         mmu/ dir (incl. its mmu_vars.cfg calibration).
   #                         Pi-only reference; git history has the v3 files.
-  #   *.old-<timestamp>    — Happy Hare installer backups of printer.cfg /
-  #                         moonraker.conf, written on every install.sh run.
+  #   *.old-<timestamp>    — Happy Hare installer backups written on every
+  #                         install.sh run: printer.cfg.old-*, moonraker.conf.old-*
+  #                         and the whole mmu/ dir as mmu.old-*/.
   #
   # Plus the dynamic symlink list from discover_pi_symlinks (those are
   # symlinks pointing into upstream install dirs like ~/Happy-Hare/ and

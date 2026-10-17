@@ -27,7 +27,7 @@ def _cfg_files() -> list[Path]:
     Excludes:
     - config/archive/ — historical configs not in active use
     - config/mmu/ — Happy Hare v4 owns the whole tree: base/*.cfg are generated
-      by its installer from the Kconfig fragment, macros/ and optional/ are
+      by its installer from mmu/.mmu_config, macros/ and optional/ are
       symlinks into ~/Happy-Hare. Structural checks here would catch HH issues
       we don't own. (Matched by path, not part name — config/macros/ is ours.)
     """
