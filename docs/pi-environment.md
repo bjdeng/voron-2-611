@@ -20,7 +20,7 @@ Previous install (MainsailOS 1.0.0 / bullseye, kernel 6.1) is preserved as a ful
 | `~/chopper-resonance-tuner` | `V1.2.0-58` | **Do not run its `install.sh` on trixie** — it prompts y/n and requests `libatlas-base-dev`, which no longer exists. Manual steps: copy `gcode_shell_command.py` into `klippy/extras/`, `ln -srf chopper_tune.cfg ~/printer_data/config/`, `apt install python3-venv libopenblas-dev`, `python3 -m venv --system-site-packages .venv`, `.venv/bin/pip install -r wiki/requirements.txt`. The `[include chopper_tune.cfg]` + update_manager block come from this repo. |
 | `~/moonraker-timelapse` | `v0.0.1-143` | Shipped with the image. Opt-in per print. |
 | `~/crowsnest` | `v5.0.12` (**v5** branch) | Shipped with the image. `camera-streamer` mode, Mainsail uses its MJPEG stream (WebRTC not working yet) — see CLAUDE.md webcam quirk. |
-| `~/sonar` | `v0.2.0-2` | Shipped with the image. Network keepalive. |
+| `~/sonar` | `v0.2.0-2` | Shipped with the image. **Disabled** via `config/sonar.conf` (`enable: false`) — it restart-looped NetworkManager (see CLAUDE.md). |
 | `~/mainsail`, `~/mainsail-config` | Mainsail `v2.19.0`; config `v1.2.1-1` | `config/mainsail.cfg` is a symlink into mainsail-config. |
 | `~/kiauh`, `~/katapult` | `v6.3.2`; `v0.0.1-115` | Tools only (install/flash). BOSSA not reinstalled — fetch again if the EASY-BRD needs reflashing. |
 | `~/klippy-env`, `~/moonraker-env`, `~/crowsnest-env` | venvs | Python 3.13. |
@@ -75,6 +75,6 @@ There's no `[update_manager klipper]` block in `config/moonraker.conf`, **and th
 | `mainsail-config` | Upstream mainsail-config (`~/mainsail-config/`) | Active. Our `config/mainsail.cfg` is symlinked to it on the Pi. |
 | `timelapse` | moonraker-timelapse | Active; opt-in per print. |
 | `crowsnest` | Webcam stack | **v5**: `primary_branch: v5` + venv/requirements (copied from the MainsailOS 3.0.0 stock block). Without `primary_branch: v5` Moonraker reports "Repo not on official remote/branch". |
-| `sonar` | Network keepalive daemon | `system_dependencies` form (MainsailOS 3.0.0 stock block). |
+| `sonar` | Network keepalive daemon | `system_dependencies` form (MainsailOS 3.0.0 stock block). Daemon disabled by its own config. |
 | `happy-hare` | HH Klipper extension (`~/Happy-Hare/`) | Active |
 | `TMC_Autotune`, `Klippain-ShakeTune`, `chopper-resonance-tuner` | add-ons | Active |
