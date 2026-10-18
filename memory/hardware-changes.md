@@ -4,6 +4,12 @@ Chronological record of physical changes to the printer: mods installed, parts s
 
 ---
 
+## 2026-10-18 — Toolhead XT30 USB cable replaced; Pi reflashed to MainsailOS 3.0.0
+
+- **XT30 2+2 USB/power cable to the EBB replaced with an unspliced one.** The old cable had been hand-spliced at the 2026-06 board swap and was the prime suspect for the recurring `usb 1-1.4 … error -71` toolhead hub drops (see `memory/troubleshooting-log.md`). Fully seated at both ends. Soak test (Klipper `ready`, idle) started 2026-10-18 ~11:52 MDT; old-cable baseline was a drop every 25–45 min.
+- **Pi SD card reflashed** from MainsailOS 1.0.0 / bullseye (EOL) to **MainsailOS 3.0.0 / Debian 13 trixie** (kernel 6.18, Python 3.13). Same card; a full image of the old one is kept off-Pi. Rebuild procedure + OS tweaks: `docs/pi-environment.md`. MCU firmware unchanged (no reflash needed for Klipper v0.13.0-800).
+- **Printer was laid on its side** for the cable work; no mechanical changes beyond the cable.
+
 ## 2026-06-04 — EBB toolhead board replaced (RP2040 USB serial changed)
 
 The EBB SB v1.0 toolhead board was swapped for a new one after the original's RP2040 began coming up in **BOOTSEL/DFU mode on every boot** (kernel saw it as "RP2 Boot", VID 2e8a / PID 0003, on hub 1-1.4) instead of running Klipper. Suspected root cause: a cable physically pressing the BOOTSEL/DFU button after the 2026-06-03 hotend cartridge swap — it stayed invisible until the board's first reboot (a `firmware_restart` during the #126 deploy), which surfaced it. Replaced rather than debugged in place.

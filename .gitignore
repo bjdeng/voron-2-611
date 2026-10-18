@@ -20,6 +20,8 @@ sonar.log
 
 # Per-run output from chopper-resonance-tuner (~700 MB possible per session)
 config/adxl_results/
+# Klippain Shake&Tune graphs — generated on the Pi, also excluded from deploy
+config/ShakeTune_results/
 
 # Experiment / data output (e.g., park-sag CSVs from scripts/park_sag_experiment.py)
 data/

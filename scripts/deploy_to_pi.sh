@@ -366,6 +366,8 @@ check_no_pi_drift_all_files() {
     -path './.moonraker.conf.bkp' -o
     -path './adxl_results' -o
     -path './adxl_results/*' -o
+    -path './ShakeTune_results' -o
+    -path './ShakeTune_results/*' -o
     -path './mmu.V3' -o
     -path './*.old-[0-9]*'
   )
@@ -481,7 +483,11 @@ build_rsync_excludes() {
   #                         output PNGs/CSVs. .gitignored, generated on Pi
   #                         only. Deleting them on every deploy loses hours
   #                         of calibration history (closes #101).
-  #   mmu.V3/              — Happy Hare v3→v4 upgrade backup of the whole v3
+  #   ShakeTune_results/   — Klippain Shake&Tune graphs (input shaper, belts,
+  #                         vibrations). Same failure mode as adxl_results: the
+  #                         first deploy onto the reflashed Pi (2026-10-18)
+  #                         deleted the (then empty) dir.
+  #   mmu.V3/            — Happy Hare v3→v4 upgrade backup of the whole v3
   #                         mmu/ dir (incl. its mmu_vars.cfg calibration).
   #                         Pi-only reference; git history has the v3 files.
   #   *.old-<timestamp>    — Happy Hare installer backups written on every
@@ -501,6 +507,7 @@ build_rsync_excludes() {
     --exclude='/.last-deploy-sha'
     --exclude='/.moonraker.conf.bkp'
     --exclude='/adxl_results/'
+    --exclude='/ShakeTune_results/'
     --exclude='/mmu.V3/'
     --exclude='/*.old-[0-9]*'
   )
