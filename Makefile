@@ -10,7 +10,7 @@ PRECOMMIT   := .venv/bin/pre-commit
 CFGS        := $(filter-out config/chopper_tune.cfg, $(wildcard config/*.cfg)) \
                $(wildcard config/macros/*.cfg) \
                $(wildcard config/mmu/base/*.cfg) \
-               $(wildcard config/mmu/addons/*.cfg) \
+               $(wildcard config/mmu/macros/*.cfg) \
                $(wildcard config/mmu/optional/*.cfg)
 
 # Layer 7 (one-shot) snapshots run inside a Linux Docker image because

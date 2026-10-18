@@ -28,6 +28,10 @@ data/
 config/.last-deploy-sha
 config/.moonraker.conf.bkp
 
+# Happy Hare installer artifacts on the Pi (Pi-only; also excluded from deploy)
+config/mmu.V3/
+config/*.old-[0-9]*
+
 # Local working scratch
 _pull_staging/
 /tmp_*

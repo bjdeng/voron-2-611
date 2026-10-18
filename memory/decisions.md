@@ -4,6 +4,22 @@ Why things are the way they are. Use this to capture context that won't be obvio
 
 ---
 
+## 2026-10-17 — Happy Hare v3 → v4: carry hardware facts only, take v4 defaults for everything else
+
+Moonraker's "Update all" pulled HH `main`, which upstream had moved to v4 (a Kconfig-installer rework; v3 configs can't load). Ben chose to migrate rather than roll back to the `v3` branch.
+
+**Decision (Ben): don't reproduce the v3 config value-for-value.** v4 ships sensible defaults that are probably better than years of accumulated v3 tweaks, so `config/mmu/.mmu_config` (the HH Kconfig file) overrides only what v4 can't know: board/serial/pins (incl. the PA7 tension switch, `z:` pre-gate sensors, `EBB:` toolhead sensors), motor facts (gear ratio, rotation distances, sense resistor, run current), servo angles/pulse widths, measured toolhead distances, gate parking distance (-18 — v4 inverted the sign), Filametrix cutter geometry, parking XY near the cutter/purge tower, Blobifier hardware + `BLOBIFIER_PARK`, Spoolman push, sync-to-extruder (v4 default is off for ERCF, which would orphan the tension switch).
+
+**Notable v3 values deliberately dropped** (v3 → v4 default): selector stealthchop 250 → 100; `simple_tip_forming` False → True (watch first cuts with the Filametrix); `default_extruder_temp` 240 → 200; `retry_tool_change_on_error` / `strict_filament_recovery` 1 → 0; `show_error_dialog` 0 → 1; Blobifier purge tuning (min length 100 → 30, addition 75 → 0); `toolhead_ooze_reduction` 2.5 → 0. If print quality or tool-change reliability regresses, these are the first suspects — revert individually in the fragment.
+
+**Calibration was carried over by hand** (v4 doesn't migrate `mmu_vars.cfg`): bowden lengths 1066.2, gear rotation distances, selector offsets/bypass, encoder resolution 0.9699 + clog length 8.4, rewritten under v4's unit-namespaced keys (`mmu_mmu_*`). Confirmed loaded via `mmu.log` ("Loaded saved bowden lengths for mmu …").
+
+**Cancel/pause regression, fixed same night.** The v4 installer includes HH's `client_macros.cfg` last, so HH's PAUSE/RESUME/CANCEL_PRINT replaced Mainsail's (which v3 effectively ran, include order reversed). Cancel silently stopped calling `_CANCEL_PRINT_HOOK` (no MMU unload, no `_PRINT_END_CLEANUP`) and pause parked at 50,50. Kept HH's client macros (HH: "STRONGLY recommended" — they integrate MMU toolhead moves) and wired ours into them: `CONFIG_VAR_CLIENT_USER_CANCEL_EXTENSION="_CANCEL_PRINT_HOOK"`, `CONFIG_VAR_SEQUENCE_PARK_PAUSE="10, 340, 5, 0, 2"`. Applied via installer replace mode; `diff -r` of generated cfgs showed exactly those two lines. Not yet live-tested with a real cancel/pause.
+
+**Calibration source note:** values were taken from the Pi's `mmu.V3/mmu_vars.cfg` (bowden 1066.2, clog 8.4), which was newer than the repo's last v3 snapshot (1060.8 / 8.1).
+
+**Not carried over yet:** `endless_spool_groups 0,0,1,1,2,2` has no Kconfig symbol in v4 — set it live with `MMU_ENDLESS_SPOOL GROUPS=0,0,1,1,2,2` (persists to `mmu_vars.cfg`).
+
 ## 2026-05-28 — MMU servo noise is hardware-bound (no software fix)
 
 Investigated as a follow-on to the MMU stepper quieting work (spec `docs/superpowers/specs/2026-05-28-mmu-stepper-quieting-design.md`). Ben reported the MMU servo is loud.

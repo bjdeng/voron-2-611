@@ -33,6 +33,8 @@ tar \
   --exclude='printer-2*.cfg' \
   --exclude='mmu-2*' \
   --exclude='__pycache__' \
+  --exclude='./mmu.V3' \
+  --exclude='*.old-[0-9]*' \
   -czhf /tmp/voron-pi-sync.tar.gz .
 REMOTE
 

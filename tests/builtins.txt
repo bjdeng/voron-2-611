@@ -1,6 +1,6 @@
 # Auto-generated list of Klipper built-in gcode commands.
 # Source: cmd_<NAME>_help = ... declarations across vendor/klipper/klippy/
-# Regenerate: `make builtins` (see Makefile)
+# Regenerate: `make builtins`
 ABORT
 ACCELEROMETER_DEBUG_READ
 ACCELEROMETER_DEBUG_WRITE
@@ -131,8 +131,8 @@ TEMPERATURE_PROBE_COMPLETE
 TEMPERATURE_PROBE_ENABLE
 TEMPERATURE_PROBE_NEXT
 TEMPERATURE_WAIT
-TEST_RESONANCES
 TESTZ
+TEST_RESONANCES
 TUNING_TOWER
 TURN_OFF_HEATERS
 UPDATE_DELAYED_GCODE

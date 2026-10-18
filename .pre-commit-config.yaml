@@ -3,21 +3,16 @@
 # CI: same hooks run in .github/workflows/ci.yml
 #
 # Exclude pattern: vendor, tests/dict, tests/snapshots, firmware are sources we
-# don't own. config/mainsail.cfg, config/timelapse.cfg, config/chopper_tune.cfg,
-# everything under config/mmu/base/, and the two optional Happy-Hare files are
-# dereferenced from third-party symlinks on the Pi (mainsail-config,
-# moonraker-timelapse, chopper-resonance-tuner, Happy-Hare) — see CLAUDE.md
-# "Four classes of file on the Pi". The deploy script excludes them from push,
-# so whitespace normalization here would create perpetual sync churn without
-# any benefit.
+# don't own. config/mainsail.cfg, config/timelapse.cfg, config/chopper_tune.cfg
+# are dereferenced from third-party symlinks on the Pi (mainsail-config,
+# moonraker-timelapse, chopper-resonance-tuner) — see CLAUDE.md "Four classes
+# of file on the Pi". Normalizing them here would create perpetual sync churn.
 #
-# config/mmu/mmu_vars.cfg is not symlinked but Klipper rewrites it on every
-# MMU operation as the [save_variables] target — Pi is canonical, normalizing
-# here would also create perpetual sync churn.
-#
-# Note: config/mmu/base/mmu_parameters.cfg is NOT a symlink (per CLAUDE.md
-# Known quirks) but is excluded along with the rest of mmu/base/ for pattern
-# simplicity. Whitespace in it doesn't affect Klipper parsing.
+# All of config/mmu/ is Happy Hare v4's: macros/ + optional/ are symlinks into
+# ~/Happy-Hare, base/*.cfg + .mmu_config are written by its installer, and
+# mmu_vars.cfg is Klipper's live [save_variables] file (Pi is canonical). Any
+# normalization would make the repo differ from the Pi and trip the deploy
+# drift check.
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -31,9 +26,7 @@ repos:
             tests/snapshots/|
             firmware/|
             config/(mainsail|timelapse|chopper_tune)\.cfg|
-            config/mmu/base/|
-            config/mmu/mmu_vars\.cfg|
-            config/mmu/optional/(client_macros|mmu_menu)\.cfg
+            config/mmu/
           )
       - id: end-of-file-fixer
         exclude: |
@@ -44,9 +37,7 @@ repos:
             firmware/|
             tests/builtins\.txt|
             config/(mainsail|timelapse|chopper_tune)\.cfg|
-            config/mmu/base/|
-            config/mmu/mmu_vars\.cfg|
-            config/mmu/optional/(client_macros|mmu_menu)\.cfg
+            config/mmu/
           )
       - id: mixed-line-ending
         args: ['--fix=lf']
@@ -57,9 +48,7 @@ repos:
             tests/snapshots/|
             firmware/|
             config/(mainsail|timelapse|chopper_tune)\.cfg|
-            config/mmu/base/|
-            config/mmu/mmu_vars\.cfg|
-            config/mmu/optional/(client_macros|mmu_menu)\.cfg
+            config/mmu/
           )
       - id: check-yaml
         files: \.(yaml|yml)$
