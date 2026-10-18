@@ -522,15 +522,19 @@ def test_adxl_results_in_rsync_excludes(fake_log):
 
 
 def test_happy_hare_upgrade_backups_in_rsync_excludes(fake_log):
-    """HH v3→v4 left Pi-only state that --delete must not remove: mmu.V3/
-    (whole v3 mmu dir incl. its mmu_vars.cfg calibration) and the installer's
-    printer.cfg/moonraker.conf .old-<timestamp> backups."""
+    """Pi-only state that --delete must not remove: mmu.V3/ (HH v3→v4 backup
+    incl. its mmu_vars.cfg calibration), the HH installer's .old-<timestamp>
+    backups, and ShakeTune_results/ (Shake&Tune graphs)."""
     r = _run(
         env=_common_drift_env({"FAKE_LOG_DIR": str(fake_log)}),
         args=["--yes"],
     )
     log_contents = fake_log.read_text()
-    for exclude in ("--exclude=/mmu.V3/", "--exclude=/*.old-[0-9]*"):
+    for exclude in (
+        "--exclude=/mmu.V3/",
+        "--exclude=/*.old-[0-9]*",
+        "--exclude=/ShakeTune_results/",
+    ):
         assert exclude in log_contents, (
             f"{exclude} missing from rsync calls.\nrc={r.returncode}\n"
             f"--- log ---\n{log_contents}\n--- stderr ---\n{r.stderr}"
