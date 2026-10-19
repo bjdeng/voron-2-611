@@ -45,7 +45,7 @@ Symptoms encountered, root cause when found, and the fix that worked. Newest at 
 - **Looked like:** encoder misreading after the HH v4 migration; selector seemed misaligned.
 - **Ruled out, in order:** HH settings (39/41 overrides verified live via `configfile.settings`; the 2 "mismatches" were formatting + `selector_touch_enabled`, inert without a stall-detect endstop); phantom encoder counts (0.0 mm at rest, during selector-only moves, and while spinning the gear on an empty gate); encoder hardware (hand-pushed filament counted continuously); selector calibration (re-measured gate 0/5 = identical v3 offsets 2.2/119.2).
 - **Proof:** `MMU_TEST_MOVE MOVE=50` → measured 8.7 mm; same move with `MMU_TEST_CONFIG UNIT=0 servo_active_down=1` → 50.4 mm. The servo arm only held while powered.
-- **Root cause / fix:** worn selector servo arm no longer reached its detent → replaced with a spare; servo pulse range reset to HH default (0.00240) and angles re-calibrated (down 65 / move 126 / up 138). See `memory/hardware-changes.md` 2026-10-18 and CLAUDE.md servo-calibration notes.
+- **Root cause / fix:** worn selector servo arm no longer reached its detent → replaced with a spare; servo pulse range reset to HH default (0.00240) and angles re-calibrated (down 65 / move 118 / up 130). See `memory/hardware-changes.md` 2026-10-18 and CLAUDE.md servo-calibration notes.
 - **Also noted:** the 154 mm the encoder "counted" during an earlier `MMU_CALIBRATE_SELECTOR GATE=5` was never explained (could not be reproduced); don't chase it unless it recurs.
 
 ### 2026-05-28 — MMU gate-entry sensors + endless-spool grouping wiped by a deploy
