@@ -4,6 +4,14 @@ Chronological record of physical changes to the printer: mods installed, parts s
 
 ---
 
+## 2026-10-18 — ERCF selector servo arm replaced; servo pulse range reset to HH default; angles re-calibrated
+
+- **Symptom:** gate loads failing with "Couldn't pick up filament at gate (encoder didn't report enough movement)"; looked like an encoder problem.
+- **Root cause:** the worn servo arm no longer reached the recess (detent) that locks it in the down position. Happy Hare drops the servo PWM after positioning (`servo_active_down: 0`), so the lever relaxed and the gear slipped: `MMU_TEST_MOVE MOVE=50` measured **8.7 mm**. With `servo_active_down=1` (runtime test) it measured 50.4 — proving encoder, gear calibration and selector were fine. Replaced the arm with a spare.
+- **Servo pulse range:** `maximum_pulse_width` 0.00215 (written by the HH v3 installer years ago, never deliberately set) → **0.00240, the HH v4 default for the SAVOX SH0255MG**. One "degree" is a different physical rotation between the two ranges, so angles were converted by pulse width (µs) to keep physical positions.
+- **New angles (on the 0.00240 range):** **down 65**, move 126, up 138 — in `config/mmu/.mmu_config`, no `mmu_vars.cfg` overrides. Down sweep with filament present: 63–67 all gave 100% grip on 100 mm moves; 65 chosen as the centre (margin both ways, least arm travel). Move/up were set by eye (150/165 on the old range); their thresholds weren't swept.
+- **After:** `MMU_TEST_MOVE MOVE=100` → 99.9 / 100.9 mm with the servo unpowered after positioning.
+
 ## 2026-10-18 — Toolhead XT30 USB cable replaced; Pi reflashed to MainsailOS 3.0.0
 
 - **XT30 2+2 USB/power cable to the EBB replaced with an unspliced one.** The old cable had been hand-spliced at the 2026-06 board swap and was the prime suspect for the recurring `usb 1-1.4 … error -71` toolhead hub drops (see `memory/troubleshooting-log.md`). Fully seated at both ends. Soak test (Klipper `ready`, idle) started 2026-10-18 ~11:52 MDT; old-cable baseline was a drop every 25–45 min.
