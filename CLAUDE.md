@@ -104,7 +104,7 @@ Every active macro and where it lives. One-liner per macro; deeper context belon
 
 ### `config/eddy.cfg` — probe + bed mesh + homing_override + force_move
 - `[probe_eddy_current btt_eddy]` — native Klipper Eddy probe with `descend_z: 0.5`, `reg_drive_current: 15`
-- `[temperature_probe btt_eddy]` — drift compensation (calibration_position 175,175,3; bed/extruder targets pre-configured for `TEMPERATURE_PROBE_CALIBRATE`)
+- `[temperature_probe btt_eddy]` — drift compensation (calibration_position 175,175,5 + `resting_z: 5`; bed/extruder targets pre-configured for `TEMPERATURE_PROBE_CALIBRATE`). The 5 mm heights make `TEMPERATURE_PROBE_CALIBRATE ... MANUAL_METHOD=tap` safe: tap has no pre-lift (`probe_eddy_current.py:893-903`) and needs a 3–20 mm start, but the defaults would re-tap from 0.4 mm.
 - `[bed_mesh]` — 9×9 grid over (15, 21.42) → (335, 330), `fade_target: 0`, `zero_reference_position: 175, 175`, `adaptive_margin: 5`, `scan_overshoot: 8`
 - `[force_move] enable_force_move: True` (needed when Eddy is both probe and Z endstop; also for circular-dep bootstrap)
 - `SET_Z_FROM_PROBE` / `_RELOAD_Z_OFFSET_FROM_PROBE` — doc-blessed split-macro pattern from `vendor/klipper/docs/Eddy_Probe.md:379-389`. Auto-applied via `[homing_override] axes: z` (below) on every `G28 Z`.
