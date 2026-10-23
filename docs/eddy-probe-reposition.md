@@ -178,36 +178,52 @@ Hard-won lessons that aren't obvious from the source or doc:
 - **`LIFT_SPEED` on `PROBE METHOD=tap` is a red herring.** Bumping `LIFT_SPEED=20` changes the apparent failure mode from "insufficient lift" to "insufficient slope delta" but doesn't fix the root cause (descent room). Default `LIFT_SPEED=5` is fine.
 - **`No trigger on probe after full movement` during QGL** means a corner can't descend enough to reach bed. Either gantry tilt is large (rare without manual asymmetric FORCE_MOVE), or `position_min` is too tight relative to sag — second is far more common.
 
-## Phase 7 — Drift calibration (optional, ~1.5 hr)
+## Phase 7 — Drift calibration (optional, ~1.5–2 hr, unattended)
 
 **Skip if:** the existing drift polynomials cover your operating range and Phase 6 tap cal succeeded cleanly.
 
 **Run if:** you want to operate the probe at temps outside the current 38–66 °C training range (e.g., post-print homing at coil 75–95 °C), or Phase 6 tap cal is failing due to thermal-drift sensitivity.
 
+This is **unattended** on Klipper ≥ v0.13.0-800: `MANUAL_METHOD=tap` takes each sample's Z with a nozzle tap instead of a paper test. The safety prerequisite is in `config/eddy.cfg`: `[temperature_probe btt_eddy]` has `calibration_position` Z = 5 and `resting_z: 5`. Tap has no pre-lift and needs a ~3–20 mm start, and the defaults would re-tap from 0.4 mm. Check that both are live on the Pi before starting.
+
+**Before starting:**
+- Start with the printer **cold**: the coil should be near its idle floor (~37–39 °C), with bed and chamber at ambient. The first sample anchors the low end.
+- Unload filament (`MMU_UNLOAD`) and make sure the nozzle tip and the bed at 175,175 are clean. The run holds the nozzle at `calibration_extruder_temp` (200 °C) throughout, and an ooze bead under it skews every tap.
+- Use lowercase `MANUAL_METHOD=tap`. `manual_probe.py` doesn't lowercase it, so `TAP` fails with "Not supported manual method" after calibration has already started, and `TEMPERATURE_PROBE_COMPLETE` is the only exit.
+
 ```gcode
-G28
-G0 Z5 F600
 SET_IDLE_TIMEOUT TIMEOUT=36000
-M104 S220       ; hotend hot helps drive coil temp up
-TEMPERATURE_PROBE_CALIBRATE PROBE=btt_eddy TARGET=90 STEP=4
+G28                   ; homing_override taps at 175,175 → Z0 = nozzle contact
+TEMPERATURE_PROBE_CALIBRATE PROBE=btt_eddy TARGET=90 STEP=2 MANUAL_METHOD=tap
 ```
 
-`TARGET=90` extends training above the prior 66 °C ceiling to cover ABS-regime post-print operation (the original failure scenario today was at coil 95 °C — well outside the old training range). `STEP=4` gives ~13 samples; default `STEP=2` doubles the count and slightly improves fit at the cost of doubling the runtime.
+What happens:
+1. The nozzle parks at Z30 while the hotend heats to 200 °C. It then moves to 175,175,5 and taps.
+2. The probe moves over the contact spot and samples 9 heights, then rests at contact + 5 mm.
+3. The bed heater turns on to 110 °C after the first sample.
+4. Each time the coil rises another `STEP` °C, the next sample runs on its own: `TEMPERATURE_PROBE_NEXT` → tap → sample.
 
-Klipper heats the bed to maximum, samples freq at 9 z-positions for each STEP °C interval, and pops a paper-test prompt at every step. Plan for ~15 paper tests over ~1.5 hours. Use the same paper-test press every time.
-
-Caveats from CLAUDE.md "Klipper gotchas":
-- Extruder temperature must be ≤ 70 °C between probe samples (the macro turns it off and waits — don't override)
-- Use the same paper-test pinch press consistently across samples
-- Don't end the session early unless absolutely necessary; partial cals are less accurate than no cal
-
-When all samples complete:
+Once the first sample is in, add chamber heat so the coil can climb past the old 66 °C ceiling:
 
 ```gcode
+SET_CHAMBER_TARGET TARGET=60   ; chamber_max_target clamps here
+```
+
+`TARGET=90` covers ABS-regime post-print operation; the incident that prompted this doc was at coil 95 °C. `STEP=2` costs only time in tap mode, with ~26 samples from a ~38 °C start. Watch the console for `collected sample n/m` and Mainsail for `temperature_probe btt_eddy`.
+
+**Watch-outs:**
+- **One failed tap aborts the whole run and discards every sample.** `AutoProbeHelper.callback` swallows the error and finalizes with no position. The heaters then switch off, so let the printer cool to idle before retrying.
+- **Don't jog Z mid-run.** `TEMPERATURE_PROBE_NEXT` taps from the current Z, so a jog defeats `resting_z`.
+- **If the coil plateaus below TARGET**, nothing times out: the next sample just never triggers. Once it has clearly stopped climbing, run `TEMPERATURE_PROBE_COMPLETE`, which needs at least 3 samples.
+
+When it finishes (the heaters switch off on their own; the chamber doesn't):
+
+```gcode
+SET_CHAMBER_TARGET TARGET=0
 SAVE_CONFIG
 ```
 
-After Phase 7, redo Phase 6 (tap cal) since the cal_temp anchor may have shifted slightly during the drift sweep.
+Drift cal writes only `drift_calibration` + `drift_calibration_min_temp` (`temperature_probe.py` `finish_calibration`). The main cal's `calibration_temp` and `tap_threshold` are untouched, so **no tap re-cal is needed afterwards**.
 
 ---
 
@@ -254,5 +270,5 @@ Or, more rigorously, open a PR documenting what changed and why. The history wil
 - Trigger mechanism source: `vendor/klipper/klippy/extras/probe_eddy_current.py:578-585`
 - Drift compensation source: `vendor/klipper/klippy/extras/temperature_probe.py:680-714`
 - FORCE_MOVE bootstrap pattern: `vendor/klipper/docs/Eddy_Probe.md:402-450`
-- Prior tap-failure incident: CLAUDE.md "Klipper gotchas" → "Native Klipper's tap detection has NO signal filtering"
+- Prior tap-failure incident: CLAUDE.md "Klipper gotchas" → "Native tap failures after a main re-cal at a different coil temp"
 - Open work on extending drift training range: issue #25
