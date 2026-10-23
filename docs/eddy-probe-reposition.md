@@ -187,7 +187,7 @@ Hard-won lessons that aren't obvious from the source or doc:
 This is **unattended** on Klipper ≥ v0.13.0-800: `MANUAL_METHOD=tap` takes each sample's Z with a nozzle tap instead of a paper test. The safety prerequisite is in `config/eddy.cfg`: `[temperature_probe btt_eddy]` has `calibration_position` Z = 5 and `resting_z: 5`. Tap has no pre-lift and needs a ~3–20 mm start, and the defaults would re-tap from 0.4 mm. Check that both are live on the Pi before starting.
 
 **Before starting:**
-- Start with the printer **cold**: the coil should be near its idle floor (~37–39 °C), with bed and chamber at ambient. The first sample anchors the low end.
+- Start with the printer **as cold as possible**: bed, chamber and hotend at ambient, and the coil at its idle floor (~37–39 °C; the EBB keeps it above room temperature). The first sample anchors the low end of the training range, so **don't preheat anything, and don't set a chamber target before the command.** The only unavoidable warm-up is the hotend heating to 200 °C at Z30 just before sample 1, which takes a minute or two and adds a little coil heat.
 - Unload filament (`MMU_UNLOAD`) and make sure the nozzle tip and the bed at 175,175 are clean. The run holds the nozzle at `calibration_extruder_temp` (200 °C) throughout, and an ooze bead under it skews every tap.
 - Use lowercase `MANUAL_METHOD=tap`. `manual_probe.py` doesn't lowercase it, so `TAP` fails with "Not supported manual method" after calibration has already started, and `TEMPERATURE_PROBE_COMPLETE` is the only exit.
 
@@ -203,7 +203,7 @@ What happens:
 3. The bed heater turns on to 110 °C after the first sample.
 4. Each time the coil rises another `STEP` °C, the next sample runs on its own: `TEMPERATURE_PROBE_NEXT` → tap → sample.
 
-Once the first sample is in, add chamber heat so the coil can climb past the old 66 °C ceiling:
+**Only after sample 1 is collected** (console shows `collected sample 1/…`), add chamber heat so the coil can climb past the old 66 °C ceiling:
 
 ```gcode
 SET_CHAMBER_TARGET TARGET=60   ; chamber_max_target clamps here
