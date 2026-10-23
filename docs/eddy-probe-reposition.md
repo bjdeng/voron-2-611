@@ -135,7 +135,7 @@ G28 Z          ; re-home after QGL (sequence per [homing_override] in eddy.cfg)
 
 ## Phase 6 — Tap calibration (3-step, ~10 min)
 
-The existing drift polynomials should still be valid — they describe the coil's freq-vs-temperature behavior, which is a property of the coil itself rather than the mounting position. As long as the new cal anchor temp falls within the polynomial training range (currently ~38–66 °C, per `drift_calibration_min_temp = 38.43`), you can skip a fresh drift cal here. If you anchored Phase 3 outside that range, do the optional drift cal in Phase 7 first.
+The existing drift polynomials should still be valid — they describe the coil's freq-vs-temperature behavior, which is a property of the coil itself rather than the mounting position. As long as the new cal anchor temp falls within the polynomial training range (39–90 °C since the 2026-10-23 tap-mode run; `drift_calibration_min_temp = 39.24`), you can skip a fresh drift cal here. If you anchored Phase 3 outside that range, do the optional drift cal in Phase 7 first.
 
 ```gcode
 G28
@@ -182,7 +182,7 @@ Hard-won lessons that aren't obvious from the source or doc:
 
 **Skip if:** the existing drift polynomials cover your operating range and Phase 6 tap cal succeeded cleanly.
 
-**Run if:** you want to operate the probe at temps outside the current 38–66 °C training range (e.g., post-print homing at coil 75–95 °C), or Phase 6 tap cal is failing due to thermal-drift sensitivity.
+**Run if:** you want to operate the probe at temps outside the current 39–90 °C training range, or Phase 6 tap cal is failing due to thermal-drift sensitivity. The 2026-10-23 run took 22 min, 20 samples, zero failed taps, bed heat only (see `memory/tuning-log.md`).
 
 This is **unattended** on Klipper ≥ v0.13.0-800: `MANUAL_METHOD=tap` takes each sample's Z with a nozzle tap instead of a paper test. The safety prerequisite is in `config/eddy.cfg`: `[temperature_probe btt_eddy]` has `calibration_position` Z = 5 and `resting_z: 5`. Tap has no pre-lift and needs a ~3–20 mm start, and the defaults would re-tap from 0.4 mm. Check that both are live on the Pi before starting.
 
@@ -205,7 +205,7 @@ What happens:
 
 **Ramp rate.** The cal sets the bed to 110 °C right after sample 1; that's the main heat source, and it's all the ramp you get at first. In tap mode, each sample runs as soon as the coil crosses the next `STEP`. Its temperature is the coil reading averaged over its ~5 s sweep (`collect_sample`), and that's what the fit uses. Ramp rate only hurts if the coil climbs more than ~`STEP` °C in the ~20 s a sample takes, which bed heat alone won't do. In paper mode (default `MANUAL_METHOD`), a fast ramp *does* widen per-sample spread, because the coil keeps climbing while you do the paper test.
 
-**Don't add chamber heat until the coil plateaus on bed heat alone** (the temperature stops rising for several minutes, probably somewhere around the old ~66 °C ceiling). Only then use the chamber to extend the top end:
+**Don't add chamber heat until the coil plateaus on bed heat alone** (the temperature stops rising for several minutes). On 2026-10-23 it never plateaued: bed heat alone took the coil past 90 °C. If it does stall short of TARGET, use the chamber to extend the top end:
 
 ```gcode
 SET_CHAMBER_TARGET TARGET=60   ; chamber_max_target clamps here

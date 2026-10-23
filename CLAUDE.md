@@ -157,7 +157,7 @@ From the SAVE_CONFIG block at the bottom of `config/printer.cfg`. Per Ben: **ass
 | Pressure advance | 0.05 (smooth time 0.040) | from `pressure_advance` in `[extruder]` defaults |
 | Bed mesh `default` | 9×9, (15, 21.42) → (335, 334.94) | bicubic, full bed |
 | Bed mesh `Default2` | 5×5, (30, 30) → (320, 320) | smaller fallback |
-| Eddy native | freq range ~31607 Hz, Z range 0.05–4.05 mm (101 samples × 40 µm — Klipper hardcoded, see Klipper gotchas), `tap_threshold: 2711.866`, `calibration_temp: 57.92 °C` | tap_threshold from 2026-05-19 refine+verify session. Cal anchor rolled back to May-15 SAVE_CONFIG state (commit 0e48365) after re-running PROBE_EDDY_CURRENT_CALIBRATE at a different coil temp broke tap — see Klipper gotchas on native-tap drift sensitivity. Drift cal still pending — [#25](https://github.com/bjdeng/voron-2-611/issues/25). [#22](https://github.com/bjdeng/voron-2-611/issues/22) (widening cal range to cover QGL first pass at z=8) closed as won't-fix — Klipper caps cal at z=4. |
+| Eddy native | freq range ~31607 Hz, Z range 0.05–4.05 mm (101 samples × 40 µm — Klipper hardcoded, see Klipper gotchas), `tap_threshold: 2711.866`, `calibration_temp: 57.92 °C` | tap_threshold from 2026-05-19 refine+verify session. Cal anchor rolled back to May-15 SAVE_CONFIG state (commit 0e48365) after re-running PROBE_EDDY_CURRENT_CALIBRATE at a different coil temp broke tap — see Klipper gotchas on native-tap drift sensitivity. Drift cal: 39–90 °C, tap-automated run 2026-10-23 (`memory/tuning-log.md`). [#22](https://github.com/bjdeng/voron-2-611/issues/22) (widening cal range to cover QGL first pass at z=8) closed as won't-fix — Klipper caps cal at z=4. |
 
 Update [`memory/tuning-log.md`](memory/tuning-log.md) whenever you re-run a calibration.
 
