@@ -488,6 +488,148 @@ def test_drift_all_gate_bypassed_by_force(fake_log, tmp_path):
     assert "rsync -av --delete" in log_contents, log_contents
 
 
+def _repo_file_hash(path):
+    import hashlib
+
+    return hashlib.sha256((REPO / "config" / path).read_bytes()).hexdigest()
+
+
+def test_drift_all_gate_skips_pi_edits_already_in_repo(tmp_path, fake_log):
+    """Pi differs from the marker but matches the repo → already synced, not drift.
+
+    Real case (2026-10-23): servo/sonar edits made on the Pi after the last
+    deploy were synced back into main by PR. Capturing them made an empty
+    commit, which aborted every deploy (even --dry-run and --force).
+    """
+    files = {"eddy.cfg": "stale marker content\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = _pi_hash_block({"eddy.cfg": _repo_file_hash("eddy.cfg")})
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        ),
+        args=["--yes"],
+    )
+    assert r.returncode in (0, 2, 3, 4), _diag(r)
+    assert "Pi has uncommitted edits" not in r.stderr, _diag(r)
+    assert "already in the repo" in r.stderr and "eddy.cfg" in r.stderr, _diag(r)
+    log = fake_log.read_text()
+    assert "pi-drift-capture-" not in log, log
+    assert "rsync -av --delete" in log, log
+
+
+def test_drift_all_gate_dry_run_with_only_synced_files(tmp_path, fake_log):
+    """The live 2026-10-23 failure: --dry-run with only already-synced drift."""
+    files = {"eddy.cfg": "stale\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = _pi_hash_block({"eddy.cfg": _repo_file_hash("eddy.cfg")})
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        ),
+        args=["--dry-run"],
+    )
+    assert r.returncode == 0, _diag(r)
+    assert "already in the repo" in r.stderr, _diag(r)
+    log = fake_log.read_text()
+    assert "pi-drift-capture-" not in log and "git commit" not in log, log
+
+
+def test_drift_all_gate_captures_file_deleted_from_repo(tmp_path, fake_log):
+    """File in the marker and on the Pi but gone from the repo → still drift."""
+    files = {"gone_from_repo.cfg": "stale\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = _pi_hash_block({"gone_from_repo.cfg": "00" * 32})
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        )
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "Pi has uncommitted edits" in r.stderr, _diag(r)
+    assert "gone_from_repo.cfg" in r.stderr, _diag(r)
+
+
+def test_drift_all_gate_still_captures_real_drift_alongside_synced(tmp_path, fake_log):
+    """One synced file + one genuinely Pi-only edit → only the real one is captured."""
+    files = {"eddy.cfg": "stale\n", "toolhead.cfg": "stale\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = _pi_hash_block(
+        {"eddy.cfg": _repo_file_hash("eddy.cfg"), "toolhead.cfg": "00" * 32}
+    )
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        )
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "Pi has uncommitted edits" in r.stderr, _diag(r)
+    log = fake_log.read_text()
+    assert "toolhead.cfg" in log and "git commit" in log, log
+    scp_lines = [ln for ln in log.splitlines() if ln.startswith("scp")]
+    assert not any("eddy.cfg" in ln for ln in scp_lines), log
+
+
+def test_drift_all_gate_captures_untracked_copy_matching_pi(tmp_path, fake_log):
+    """Pi file matches a local copy that is NOT tracked at HEAD → still drift.
+
+    E.g. a PR git-rm'd the file, then /sync-from-pi restored the Pi's edited
+    copy as an untracked file. The clean-tree preflight ignores untracked
+    files, so only comparing against the HEAD blob keeps this edit captured.
+    """
+    files = {"eddy.cfg": "stale\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = _pi_hash_block({"eddy.cfg": _repo_file_hash("eddy.cfg")})
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_GIT_HEAD_MISSING": "eddy.cfg",
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        )
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "already in the repo" not in r.stderr, _diag(r)
+    assert "Pi has uncommitted edits" in r.stderr, _diag(r)
+    assert "git checkout -b pi-drift-capture-" in fake_log.read_text()
+
+
+def test_drift_all_gate_synced_files_recorded_in_deploy_log(tmp_path, fake_log):
+    """The 'already synced' decision lands in the Pi deploy log, not just stderr."""
+    files = {"eddy.cfg": "stale\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = _pi_hash_block({"eddy.cfg": _repo_file_hash("eddy.cfg")})
+    _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        ),
+        args=["--yes"],
+    )
+    assert "synced:eddy.cfg" in fake_log.read_text()
+
+
 def test_drift_all_refuses_when_marker_unknown_to_git():
     """Marker SHA exists on Pi but isn't in local git → refuse (fail closed)."""
     r = _run(

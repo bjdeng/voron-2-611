@@ -416,6 +416,29 @@ check_no_pi_drift_all_files() {
     { if ($2 in snap && snap[$2] != $1) print $2 }
   ' <(printf '%s\n' "$snapshot_hashes") <(printf '%s\n' "$pi_hashes"))
 
+  # Drop files whose Pi content already matches the committed HEAD blob. They
+  # changed on the Pi after the last deploy but were synced back by PR, so
+  # overwriting loses nothing; capturing them would make an empty commit and
+  # abort every deploy (2026-10-23). Compare the HEAD blob, not the working
+  # tree: an untracked copy (e.g. /sync-from-pi restoring a file a PR git-rm'd)
+  # is not "in the repo" and must still be captured. Any failure here — path
+  # not at HEAD, git or hasher error — keeps the file as drift (fail-closed).
+  local f pi_h repo_h synced="" real_drift=""
+  for f in $drift_files; do
+    pi_h=$(awk -v p="$f" '$2 == p { print $1 }' <<<"$pi_hashes")
+    if repo_h=$(git show "HEAD:config/$f" 2>/dev/null | $hasher | cut -d' ' -f1) \
+        && [[ -n "$repo_h" && "$pi_h" == "$repo_h" ]]; then
+      synced+="$f "
+    else
+      real_drift+="$f "
+    fi
+  done
+  if [[ -n "$synced" ]]; then
+    DRIFT_OUTCOME="synced:${synced% }"
+    echo "==> Pi edits since last deploy already in the repo (not drift): $synced" >&2
+  fi
+  drift_files="$real_drift"
+
   if [[ -z "$drift_files" ]]; then
     return 0
   fi

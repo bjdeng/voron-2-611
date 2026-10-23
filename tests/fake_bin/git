@@ -42,6 +42,16 @@ case "$1 $2" in
     if [[ "${FAKE_GIT_DIFF_ERROR:-0}" == "1" ]]; then exit 128; fi
     printf '%s\n' "${FAKE_GIT_DIFF_FILES:-config/macros/macros.cfg}"
     exit 0 ;;
+  "show HEAD:config/"*)
+    # `git show HEAD:config/<path>` — drift gate's "already synced" check
+    # hashes the committed blob. Serves the real repo file; paths listed in
+    # FAKE_GIT_HEAD_MISSING (space-separated, relative to config/) simulate
+    # a file not tracked at HEAD.
+    _p="${2#HEAD:config/}"
+    case " ${FAKE_GIT_HEAD_MISSING:-} " in *" $_p "*) exit 128 ;; esac
+    _repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+    cat "$_repo_root/config/$_p" 2>/dev/null || exit 128
+    exit 0 ;;
   "show "*)
     # `git show <sha>:config/printer.cfg` — used by check_no_pi_drift to
     # compare Pi's body to the last-deployed commit's printer.cfg body.
