@@ -203,7 +203,9 @@ What happens:
 3. The bed heater turns on to 110 °C after the first sample.
 4. Each time the coil rises another `STEP` °C, the next sample runs on its own: `TEMPERATURE_PROBE_NEXT` → tap → sample.
 
-**Only after sample 1 is collected** (console shows `collected sample 1/…`), add chamber heat so the coil can climb past the old 66 °C ceiling:
+**Ramp rate.** The cal sets the bed to 110 °C right after sample 1; that's the main heat source, and it's all the ramp you get at first. In tap mode, each sample runs as soon as the coil crosses the next `STEP`. Its temperature is the coil reading averaged over its ~5 s sweep (`collect_sample`), and that's what the fit uses. Ramp rate only hurts if the coil climbs more than ~`STEP` °C in the ~20 s a sample takes, which bed heat alone won't do. In paper mode (default `MANUAL_METHOD`), a fast ramp *does* widen per-sample spread, because the coil keeps climbing while you do the paper test.
+
+**Don't add chamber heat until the coil plateaus on bed heat alone** (the temperature stops rising for several minutes, probably somewhere around the old ~66 °C ceiling). Only then use the chamber to extend the top end:
 
 ```gcode
 SET_CHAMBER_TARGET TARGET=60   ; chamber_max_target clamps here
