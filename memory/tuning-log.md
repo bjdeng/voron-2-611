@@ -4,16 +4,16 @@ Running record of calibration runs (input shaper, PID, pressure advance, flow, E
 
 ---
 
-## 2026-10-23 — Eddy thermal drift cal, tap-automated, 39–90 °C
+## 2026-10-23 — Eddy thermal drift cal, tap-automated, 39 to ~90 °C
 
 `TEMPERATURE_PROBE_CALIBRATE PROBE=btt_eddy TARGET=90 STEP=2 MANUAL_METHOD=tap` on Klipper v0.13.0-800. This is the first unattended drift cal: each sample took its Z from a nozzle tap instead of a paper test. It needed `resting_z: 5` and `calibration_position` Z 5 first (PR #144), because tap has no pre-lift and would otherwise re-tap from 0.4 mm. Procedure: `docs/eddy-probe-reposition.md` Phase 7.
 
-- **Start:** fully cold after `G28` + QGL, coil at 39.24 °C, no preheat.
-- **Bed:** the calibration set it to 110 °C after sample 1. **No chamber heat needed**: bed alone took the coil past 90 °C.
+- **Start:** printer at ambient after `G28` + QGL, no preheat and no chamber target. The calibration itself heats the hotend to 200 °C at Z30 before sample 1; the coil was 39.24 °C at sample 1.
+- **Heat:** the calibration's own 110 °C bed (switched on after sample 1) and 200 °C hotend (held for the whole run). **No chamber heat needed** to get the coil past 90 °C.
 - **Run:** 14:47:41 → 15:09:55, about **22 min**, **20 samples** at roughly 2.7 °C apart (39.24, 42.12, 45.01 … 87.81, ~90). **Zero failed taps.**
 - **Ramp:** about 1 sample/min. Each sample landed ~0.9 °C past its scheduled threshold (tap + sweep take ~10 s).
-- **Tap contact Z climbed 0.073 → 0.27 mm** as the machine heated, flattening above ~78 °C coil. That's ~0.2 mm of cold-to-hot Z shift from thermal expansion, which the hot tap in `PRINT_START` corrects for.
-- **Result:** 9 polynomials. Klipper's `_check_calibration` passed. `drift_calibration_min_temp` went 38.43 → **39.24**. **The training range went from ~38–66 °C (2026-05-20 paper run) to 39–90 °C.** `calibration_temp` (main-cal anchor, 64.41 °C) and `tap_threshold` are unchanged, because drift cal doesn't write them.
+- **Tap contact Z climbed 0.073 → 0.27 mm** as the machine heated (console `probe: … bed will contact at z=`), roughly flat from the 77.66 °C sample on (0.263, 0.262, 0.266, 0.269, 0.269, 0.265). That ~0.2 mm cold-to-hot shift is consistent with thermal expansion, which the hot tap in `PRINT_START` corrects for.
+- **Result:** 9 polynomials. Klipper's `_check_calibration` passed. `drift_calibration_min_temp` went 38.43 → **39.24**. **The training range went from ~38–66 °C (the drift cal synced 2026-05-20) to 39 to about 90 °C.** Only the lower bound is stored in config; the top end is the last sample, which the loop takes at or above `TARGET`. `calibration_temp` (main-cal anchor, 64.41 °C) and `tap_threshold` are unchanged, because drift cal doesn't write them.
 - **Rollback:** the Pi has the pre-cal config as `printer-20261023_153654.cfg`.
 
 ---
