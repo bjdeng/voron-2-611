@@ -416,6 +416,28 @@ check_no_pi_drift_all_files() {
     { if ($2 in snap && snap[$2] != $1) print $2 }
   ' <(printf '%s\n' "$snapshot_hashes") <(printf '%s\n' "$pi_hashes"))
 
+  # Drop files whose Pi content already matches the repo (HEAD — preflight
+  # requires a clean tree). They changed on the Pi after the last deploy but
+  # were synced back by PR, so overwriting loses nothing. Capturing them
+  # would make an empty commit and abort every deploy (2026-10-23).
+  local f pi_h repo_h synced="" real_drift=""
+  for f in $drift_files; do
+    pi_h=$(awk -v p="$f" '$2 == p { print $1 }' <<<"$pi_hashes")
+    repo_h=""
+    if [[ -f "$REPO_ROOT/config/$f" ]]; then
+      repo_h=$($hasher "$REPO_ROOT/config/$f" | cut -d' ' -f1)
+    fi
+    if [[ -n "$repo_h" && "$pi_h" == "$repo_h" ]]; then
+      synced+="$f "
+    else
+      real_drift+="$f "
+    fi
+  done
+  if [[ -n "$synced" ]]; then
+    echo "==> Pi edits since last deploy already in the repo (not drift): $synced" >&2
+  fi
+  drift_files="$real_drift"
+
   if [[ -z "$drift_files" ]]; then
     return 0
   fi

@@ -488,6 +488,63 @@ def test_drift_all_gate_bypassed_by_force(fake_log, tmp_path):
     assert "rsync -av --delete" in log_contents, log_contents
 
 
+def _repo_file_hash(path):
+    import hashlib
+
+    return hashlib.sha256((REPO / "config" / path).read_bytes()).hexdigest()
+
+
+def test_drift_all_gate_skips_pi_edits_already_in_repo(tmp_path, fake_log):
+    """Pi differs from the marker but matches the repo → already synced, not drift.
+
+    Real case (2026-10-23): servo/sonar edits made on the Pi after the last
+    deploy were synced back into main by PR. Capturing them made an empty
+    commit, which aborted every deploy (even --dry-run and --force).
+    """
+    files = {"eddy.cfg": "stale marker content\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = _pi_hash_block({"eddy.cfg": _repo_file_hash("eddy.cfg")})
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        ),
+        args=["--yes"],
+    )
+    assert "Pi has uncommitted edits" not in r.stderr, _diag(r)
+    assert "already in the repo" in r.stderr and "eddy.cfg" in r.stderr, _diag(r)
+    log = fake_log.read_text()
+    assert "pi-drift-capture-" not in log, log
+    assert "rsync -av --delete" in log, log
+
+
+def test_drift_all_gate_still_captures_real_drift_alongside_synced(tmp_path, fake_log):
+    """One synced file + one genuinely Pi-only edit → only the real one is captured."""
+    files = {"eddy.cfg": "stale\n", "toolhead.cfg": "stale\n"}
+    tar_path, _ = _build_marker_tar(tmp_path, files)
+    pi_block = _pi_hash_block(
+        {"eddy.cfg": _repo_file_hash("eddy.cfg"), "toolhead.cfg": "00" * 32}
+    )
+    r = _run(
+        env=_common_drift_env(
+            {
+                "FAKE_MARKER_TAR_PATH": str(tar_path),
+                "FAKE_PI_FILE_HASHES": pi_block,
+                "FAKE_LOG_DIR": str(fake_log),
+            }
+        )
+    )
+    assert r.returncode == 1, _diag(r)
+    assert "Pi has uncommitted edits" in r.stderr, _diag(r)
+    log = fake_log.read_text()
+    assert "toolhead.cfg" in log and "git commit" in log, log
+    scp_lines = [ln for ln in log.splitlines() if ln.startswith("scp")]
+    assert not any("eddy.cfg" in ln for ln in scp_lines), log
+
+
 def test_drift_all_refuses_when_marker_unknown_to_git():
     """Marker SHA exists on Pi but isn't in local git → refuse (fail closed)."""
     r = _run(
