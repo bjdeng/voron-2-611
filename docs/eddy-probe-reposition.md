@@ -124,9 +124,9 @@ SAVE_CONFIG    ; auto-restarts Klipper; new cal table is live after restart
 After the restart, G28 Z should work normally:
 
 ```gcode
-G28 Z          ; descends, triggers smoothly at ~0.5 mm, lifts, retries, settles
+G28 Z          ; descends, triggers smoothly at ~0.5 mm (eddy only: no tap until QGL is applied)
 QUAD_GANTRY_LEVEL
-G28 Z          ; re-home after QGL (sequence per [homing_override] in eddy.cfg)
+G28 Z          ; re-home after QGL; [homing_override] taps now that the gantry is level
 ```
 
 **If G28 Z fails here**, STOP — the physical reposition didn't fully address the issue, and we go back to mount inspection. Don't push forward into tap cal until G28 Z is clean.
@@ -139,6 +139,7 @@ The existing drift polynomials should still be valid — they describe the coil'
 
 ```gcode
 G28
+QUAD_GANTRY_LEVEL ; calibrate tap on a level gantry (no G28 Z after: it would tap before tap_threshold exists)
 M104 S220       ; hot nozzle required for tap
 M109 S220
 BLOBIFIER_CLEAN ; clean tip so plastic doesn't dampen the inflection
@@ -193,7 +194,9 @@ This is **unattended** on Klipper ≥ v0.13.0-800: `MANUAL_METHOD=tap` takes eac
 
 ```gcode
 SET_IDLE_TIMEOUT TIMEOUT=36000
-G28                   ; homing_override taps at 175,175 → Z0 = nozzle contact
+G28                   ; cold home: eddy only (homing_override skips tap until QGL is applied)
+QUAD_GANTRY_LEVEL     ; level first; taps on the sagged gantry stall mid-air
+G28 Z                 ; now taps at 175,175 → Z0 = nozzle contact
 TEMPERATURE_PROBE_CALIBRATE PROBE=btt_eddy TARGET=90 STEP=2 MANUAL_METHOD=tap
 ```
 

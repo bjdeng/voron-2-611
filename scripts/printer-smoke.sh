@@ -28,13 +28,14 @@ PI_API="${PI_API:-http://mainsailos.local:7125}"
 # Gcode sequence — short on purpose so deploys finish in <90s. Each command
 # is sent as its own POST (see SMOKE_GCODE below for why) and exercises a
 # different surface:
-#   G28           — full home; runs safe_z_home → Eddy probe at runtime.
-#                   Catches probe-state regressions, missing tap_threshold
-#                   guards, kinematics misconfig. G28 alone exercises the
-#                   probe end-to-end (descend, measure, return), so a
-#                   separate QUERY_PROBE check is redundant — and native
+#   G28           — full home via [homing_override] → Eddy descend probe.
+#                   Catches probe-state regressions and kinematics
+#                   misconfig. Smoke runs right after a RESTART, so QGL is
+#                   not applied and the override skips its tap: this G28
+#                   does NOT exercise tap or tap_threshold. A separate
+#                   QUERY_PROBE check is not possible either — native
 #                   [probe_eddy_current] doesn't implement QUERY_PROBE
-#                   anyway ("Probe does not support QUERY_PROBE" at runtime).
+#                   ("Probe does not support QUERY_PROBE" at runtime).
 #   PARKCENTER    — exercises one of our custom park macros end-to-end.
 #                   Catches macro→macro reference rot at render time.
 #   OFF           — exercises the all-off shutdown sequence (heaters off,
@@ -43,8 +44,9 @@ PI_API="${PI_API:-http://mainsailos.local:7125}"
 #                   accidental removal of speed-management macros.
 #
 # Each command is POSTed separately (not as a single \n-joined batch) so
-# Klipper doesn't see queue-ahead pressure across G28's tap boundary.
-# G28 embeds PROBE METHOD=tap (via [homing_override]), which captures a
+# Klipper doesn't see queue-ahead pressure across a tap boundary. A G28
+# with QGL applied embeds PROBE METHOD=tap (via [homing_override]), which
+# captures a
 # fixed 160ms sample window relative to toolhead.get_last_move_time() when
 # planning the retract. With downstream commands already queued, look-ahead
 # can shift that timestamp vs the MCU's actual retract execution, producing
