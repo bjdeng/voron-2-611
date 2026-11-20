@@ -18,7 +18,7 @@ MMU_START_SETUP INITIAL_TOOL={initial_tool} REFERENCED_TOOLS=!referenced_tools! 
 
 MMU_START_CHECK
 
-PRINT_START EXTRUDER=[first_layer_temperature[initial_tool]] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature[initial_tool]] MATERIAL="[filament_type[initial_tool]]" TOTAL_LAYER=[total_layer_count]
+PRINT_START EXTRUDER=[first_layer_temperature[initial_tool]] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature[initial_tool]] MATERIAL="[filament_type[initial_tool]]" TOTAL_LAYER=[total_layer_count] TAP_AFTER_LOAD=1
 
 MMU_START_LOAD_INITIAL_TOOL
 
@@ -35,7 +35,7 @@ The six sequential calls split responsibility cleanly:
 | `MMU_START_CHECK` | HH's gate-availability check. Verifies the gates the print needs have filament loaded. Fails fast (with operator prompt) if a gate is empty. |
 | `PRINT_START` | Our macro. Tap-threshold guard, max-temp guard, CLEAR_PAUSE, non-blocking bed+hotend heat, home+QGL during heat (eddy-only Z, no tap), chamber soak, mesh, final hotend heat. No final tap — that's `PRINT_START_TAP`. See `config/macros/print_start.cfg`. |
 | `MMU_START_LOAD_INITIAL_TOOL` | HH's "load the first filament" step. Runs AFTER PRINT_START so the hotend is at print temperature when filament gets pushed in. |
-| `PRINT_START_TAP` | Our macro. Sets the print Z reference: 1 mm retract, hot `BLOBIFIER_CLEAN`, then tap-corrected `G28 Z`. Must come **after** the initial load: tapping a hot nozzle that still holds the previous print's loose cut fragment failed ~1 in 4 prints (the fragment oozes during the taps). With the filament loaded and gripped, the tap was clean (26/26 samples, 2026-11-20). If this line is missing, the print runs on the eddy-only Z reference from QGL. |
+| `PRINT_START_TAP` | Our macro. Sets the print Z reference: 1 mm retract, hot `BLOBIFIER_CLEAN`, then tap-corrected `G28 Z`. Must come **after** the initial load: tapping a hot nozzle that still holds the previous print's loose cut fragment failed ~1 in 4 prints (the fragment oozes during the taps). With the filament loaded and gripped, the tap was clean (26/26 samples, 2026-11-20). Pair it with `TAP_AFTER_LOAD=1` on the `PRINT_START` line. Without that parameter (old gcode, or a profile not yet updated), `PRINT_START` taps at its end as before and prints a warning, so a file never runs on an untapped Z. |
 
 The Orca slicer-variable syntax:
 
@@ -208,7 +208,7 @@ MMU_START_SETUP INITIAL_TOOL={initial_tool} REFERENCED_TOOLS=!referenced_tools! 
 
 MMU_START_CHECK
 
-PRINT_START EXTRUDER=[first_layer_temperature[initial_tool]] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature[initial_tool]] MATERIAL="[filament_type[initial_tool]]" TOTAL_LAYER=[total_layer_count] Z_ADJUST=0.02
+PRINT_START EXTRUDER=[first_layer_temperature[initial_tool]] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature[initial_tool]] MATERIAL="[filament_type[initial_tool]]" TOTAL_LAYER=[total_layer_count] Z_ADJUST=0.02 TAP_AFTER_LOAD=1
 
 MMU_START_LOAD_INITIAL_TOOL
 
