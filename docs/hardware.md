@@ -24,7 +24,7 @@ For a one-screen orientation, see [CLAUDE.md → Build at a glance](../CLAUDE.md
 ## Probe
 
 - **BTT Eddy** running Klipper native `[probe_eddy_current]` (migrated from `vvuk/eddy-ng` in [PR #17](https://github.com/bjdeng/voron-2-611/pull/17), 2026-05-15). The native algorithm has stricter calibration requirements than eddy-ng's Butterworth-filtered tap — see [Klipper gotchas in CLAUDE.md](../CLAUDE.md#klipper-gotchas-general--apply-to-any-klipper-config-work).
-- Linked `[temperature_probe btt_eddy]` for thermal drift compensation (shares the postfix). Drift calibration itself still pending — [#25](https://github.com/bjdeng/voron-2-611/issues/25).
+- Linked `[temperature_probe btt_eddy]` for thermal drift compensation (shares the postfix). Drift calibration: 39 to about 90 °C, tap-automated run on 2026-10-23 (`memory/tuning-log.md`).
 - Tap-Z workflow + bed-mesh integration: see [`config/eddy.cfg`](../config/eddy.cfg).
 
 ## Bed
