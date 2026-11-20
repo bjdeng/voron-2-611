@@ -18,12 +18,14 @@ MMU_START_SETUP INITIAL_TOOL={initial_tool} REFERENCED_TOOLS=!referenced_tools! 
 
 MMU_START_CHECK
 
-PRINT_START EXTRUDER=[first_layer_temperature[initial_tool]] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature[initial_tool]] MATERIAL="[filament_type[initial_tool]]" TOTAL_LAYER=[total_layer_count]
+PRINT_START EXTRUDER=[first_layer_temperature[initial_tool]] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature[initial_tool]] MATERIAL="[filament_type[initial_tool]]" TOTAL_LAYER=[total_layer_count] TAP_AFTER_LOAD=1
 
 MMU_START_LOAD_INITIAL_TOOL
+
+PRINT_START_TAP
 ```
 
-The five sequential calls split responsibility cleanly:
+The six sequential calls split responsibility cleanly:
 
 | Call | What it does |
 |---|---|
@@ -31,8 +33,9 @@ The five sequential calls split responsibility cleanly:
 | `M104 S0` | Suppress OrcaSlicer's own synchronous hotend wait. PRINT_START handles hotend heat-overlap internally; a slicer-emitted `M109` here would block before our gantry can home. (No `M140 S0` — we want the bed warming, not zeroed.) |
 | `MMU_START_SETUP` | Happy-Hare's pre-print MMU init. Consumes slicer-injected vars (`!referenced_tools!`, `!colors!`, etc. are processed by HH's slicer hook, not by Orca). Tells HH which tools the print uses, their materials, purge volumes. |
 | `MMU_START_CHECK` | HH's gate-availability check. Verifies the gates the print needs have filament loaded. Fails fast (with operator prompt) if a gate is empty. |
-| `PRINT_START` | Our macro. Tap-threshold guard, max-temp guard, CLEAR_PAUSE, non-blocking bed+hotend heat, home+QGL during heat, chamber soak, tap-Z, mesh, final hotend heat, hot BLOBIFIER_CLEAN. See `config/macros/print_start.cfg`. |
+| `PRINT_START` | Our macro. Tap-threshold guard, max-temp guard, CLEAR_PAUSE, non-blocking bed+hotend heat, home+QGL during heat (eddy-only Z, no tap), chamber soak, mesh, final hotend heat. No final tap — that's `PRINT_START_TAP`. See `config/macros/print_start.cfg`. |
 | `MMU_START_LOAD_INITIAL_TOOL` | HH's "load the first filament" step. Runs AFTER PRINT_START so the hotend is at print temperature when filament gets pushed in. |
+| `PRINT_START_TAP` | Our macro. Sets the print Z reference: 1 mm retract, hot `BLOBIFIER_CLEAN`, then tap-corrected `G28 Z`. Must come **after** the initial load: tapping a hot nozzle that still holds the previous print's loose cut fragment failed ~1 in 4 prints (the fragment oozes during the taps). With the filament loaded and gripped, the tap was clean (26/26 samples, 2026-11-20). Pair it with `TAP_AFTER_LOAD=1` on the `PRINT_START` line. Without that parameter (old gcode, or a profile not yet updated), `PRINT_START` taps at its end as before and prints a warning, so a file never runs on an untapped Z. |
 
 The Orca slicer-variable syntax:
 
@@ -55,9 +58,9 @@ MMU_END
 PRINT_END
 ```
 
-`MMU_END` first: HH's end-of-print hook (default behavior — does NOT force unload, since the user might want filament loaded for the next print). Then `PRINT_END` for retract, lift, rear-left park, cooldown, OFF.
+`MMU_END` first: HH's end-of-print hook. On this printer it **cuts and unloads** the filament (`unload_tool: True`, `CONFIG_VAR_SOFTWARE_UNLOAD_TOOL` — HH's default, and v3 had the same), parking at `park_complete` (print height + 10 mm) for the cut, so the next print starts with an empty nozzle. Then `PRINT_END` for lift, rear-left park, cooldown, OFF (its 2 mm retract is skipped when the filament is already unloaded).
 
-The mid-print cancel path is separately wired via `_CANCEL_PRINT_HOOK` (in `config/client_hooks.cfg`) which DOES force `MMU_END UNLOAD=1` — different policy because cancel is a "stop everything cleanly" event whereas normal end-of-print may chain into another print.
+The mid-print cancel path is separately wired via `_CANCEL_PRINT_HOOK` (in `config/client_hooks.cfg`), which forces `MMU_END UNLOAD=1` because HH's `unload_tool_on_cancel` is False.
 
 ## Layer change G-code
 
@@ -80,7 +83,7 @@ Set `chamber_temperature` per filament in **Filament settings → [filament] →
 | Filament | chamber_temperature | Notes |
 |---|---|---|
 | PLA, PETG, TPU | 0 | No chamber soak — PRINT_START skips to a brief `bed_stabilization_soak_seconds` G4 (default 60s). Loop runs at VOC baseline throughout. |
-| ABS, ASA, PA-CF | 55 | Loop holds chamber at 55°C for the entire print: HEAT mode (BedFans=1.0, exhaust off) below 53°C, MAINTAIN/COOL above. PRINT_START waits for chamber ≥ 27°C before tap-Z, then the loop keeps driving heat as the print runs and part radiation accumulates. Clamped to `chamber_max_target` (60) inside `SET_CHAMBER_TARGET`. |
+| ABS, ASA, PA-CF | 55 | Loop holds chamber at 55°C for the entire print: HEAT mode (BedFans=1.0, exhaust off) below 53°C, MAINTAIN/COOL above. PRINT_START waits for chamber ≥ 27°C before the mesh, then the loop keeps driving heat as the print runs and part radiation accumulates. Clamped to `chamber_max_target` (60) inside `SET_CHAMBER_TARGET`. |
 
 For Ben's current filament profiles (post 2026-05-19 audit):
 
@@ -205,9 +208,11 @@ MMU_START_SETUP INITIAL_TOOL={initial_tool} REFERENCED_TOOLS=!referenced_tools! 
 
 MMU_START_CHECK
 
-PRINT_START EXTRUDER=[first_layer_temperature[initial_tool]] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature[initial_tool]] MATERIAL="[filament_type[initial_tool]]" TOTAL_LAYER=[total_layer_count] Z_ADJUST=0.02
+PRINT_START EXTRUDER=[first_layer_temperature[initial_tool]] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature[initial_tool]] MATERIAL="[filament_type[initial_tool]]" TOTAL_LAYER=[total_layer_count] Z_ADJUST=0.02 TAP_AFTER_LOAD=1
 
 MMU_START_LOAD_INITIAL_TOOL
+
+PRINT_START_TAP
 ```
 
 ### B — Inline `SET_GCODE_OFFSET` after PRINT_START (simpler)
