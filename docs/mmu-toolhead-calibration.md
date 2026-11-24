@@ -224,6 +224,6 @@ These are physical reality on this build, not errors — but the calibrated valu
 ## Related
 
 - HH wiki: [Calibration](https://github.com/moggieuk/Happy-Hare/wiki/Calibration), [Blobbing-and-Stringing](https://github.com/moggieuk/Happy-Hare/wiki/Blobbing-and-Stringing)
-- HH source: `vendor/happy-hare/extras/mmu/mmu.py:2717-2818` (`cmd_MMU_CALIBRATE_TOOLHEAD`)
-- Cut tip macro: `config/mmu/base/mmu_cut_tip.cfg`
+- HH source: `vendor/happy-hare/extras/mmu/commands/mmu_calibration_commands.py:463-621` (`MmuCalibrateToolheadCommand`)
+- Cut tip macro: `config/mmu/macros/mmu_cut_tip.cfg`
 - Cut tip variables: `config/mmu/base/mmu_macro_vars.cfg`, `[gcode_macro _MMU_CUT_TIP_VARS]` section

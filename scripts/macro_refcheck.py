@@ -123,6 +123,7 @@ ALLOWLIST.update(
         "MMU_CALIBRATE_BOWDEN",
         "MMU_CALIBRATE_GATES",
         "MMU_CALIBRATE_GATE",  # v4: called by v4's MMU_CALIBRATE_GATES macro wrapper
+        "MMU_ERROR_DIALOG",  # v4.2: extras/mmu/commands/mmu_error_dialog.py; called by MMU_START_SETUP / MMU_START_LOAD_INITIAL_TOOL
         "_MMU_SAVE_TOOLHEAD_POSITION",
         "_MMU_RESTORE_TOOLHEAD_POSITION",
         "_MMU_STEP_LOAD_GATE",

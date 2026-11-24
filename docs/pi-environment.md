@@ -14,7 +14,7 @@ Previous install (MainsailOS 1.0.0 / bullseye, kernel 6.1) is preserved as a ful
 |---|---|---|
 | `~/klipper` | `v0.13.0-800` (master) | Untracked files in `klippy/extras/` are add-on links (autotune, HH `mmu*`, shaketune, `gcode_shell_command.py`) — Moonraker shows them as an anomaly; expected. MCU firmware is older (SKRs + EASY-BRD -375, EBB -688, eddy -649) and still accepted. |
 | `~/moonraker` | `v0.11.0-3` (master) | Untracked `components/mmu_server.py` (HH) + `timelapse.py` — expected. |
-| `~/Happy-Hare` | `v4.1.0-16` (main) | Kconfig installer. Generates `config/mmu/base/*` from `config/mmu/.mmu_config`; `mmu/macros/*` + `mmu/optional/*` are symlinks into it. |
+| `~/Happy-Hare` | `v4.2.0-13` (main) | Kconfig installer. Generates `config/mmu/base/*` from `config/mmu/.mmu_config`; `mmu/macros/*` + `mmu/optional/*` are symlinks into it. |
 | `~/klipper_tmc_autotune` | `v0.2.0-385` | `./install.sh` (non-interactive) links into `klippy/extras/`. |
 | `~/klippain_shaketune` | `v6.0.0` | `./install.sh` (non-interactive; apt + venv; adds its own update_manager block — the deployed `moonraker.conf` already has it). Writes graphs to `config/ShakeTune_results/` (excluded from deploy). |
 | `~/chopper-resonance-tuner` | `V1.2.0-58` | **Do not run its `install.sh` on trixie** — it prompts y/n and requests `libatlas-base-dev`, which no longer exists. Manual steps: copy `gcode_shell_command.py` into `klippy/extras/`, `ln -srf chopper_tune.cfg ~/printer_data/config/`, `apt install python3-venv libopenblas-dev`, `python3 -m venv --system-site-packages .venv`, `.venv/bin/pip install -r wiki/requirements.txt`. The `[include chopper_tune.cfg]` + update_manager block come from this repo. |
